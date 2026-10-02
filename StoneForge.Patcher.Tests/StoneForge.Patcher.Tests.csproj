@@ -1,0 +1,28 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The patcher against real, unpatched VM game data (xUnit): loader patches, mod items/skills, mod GML and script
+       hooks, checked after saving and reading the data back. The data: STONEFORGE_TEST_DATA, or the Steam install's
+       dotnet\data_base.win (StoneForge's preserved copy); without either the tests are skipped. Never changes it. -->
+  <PropertyGroup>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <PlatformTarget>x64</PlatformTarget>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
+    <PackageReference Include="xunit" Version="2.9.3" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="3.1.4" />
+    <PackageReference Include="Xunit.SkippableFact" Version="1.5.23" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="../StoneForge.Patcher/StoneForge.Patcher.csproj" />
+    <Reference Include="UndertaleModLib"><HintPath>../lib/UndertaleModLib/UndertaleModLib.dll</HintPath></Reference>
+    <Reference Include="Underanalyzer"><HintPath>../lib/UndertaleModLib/Underanalyzer.dll</HintPath></Reference>
+    <None Include="../StoneForge.Patcher/GML/**/*.gml" Link="GML/%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="GmlFixture/**/*.gml" CopyToOutputDirectory="PreserveNewest" />
+    <Using Include="Xunit" />
+  </ItemGroup>
+</Project>

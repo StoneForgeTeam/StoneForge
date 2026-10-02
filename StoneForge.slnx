@@ -1,0 +1,17 @@
+<Solution>
+  <Configurations>
+    <Platform Name="Any CPU" />
+    <Platform Name="x64" />
+  </Configurations>
+  <Project Path="StoneForge.API/StoneForge.API.csproj" />
+  <Project Path="StoneForge.Bridge/StoneForge.Bridge.vcxproj" Id="9b1f7c22-5d3e-4a8f-b1c2-7e3d2a6f4c10">
+    <Platform Solution="*|Any CPU" Project="x64" />
+  </Project>
+  <Project Path="StoneForge.DataDump/StoneForge.DataDump.csproj" />
+  <Project Path="StoneForge.Generators/StoneForge.Generators.csproj" />
+  <Project Path="StoneForge.GmlGenerator/StoneForge.GmlGenerator.csproj" />
+  <Project Path="StoneForge.Loader/StoneForge.Loader.csproj" />
+  <Project Path="StoneForge.Patcher/StoneForge.Patcher.csproj" />
+  <Project Path="StoneForge.Patcher.Tests/StoneForge.Patcher.Tests.csproj" />
+  <Project Path="StoneForge.Tests/StoneForge.Tests.csproj" />
+</Solution>

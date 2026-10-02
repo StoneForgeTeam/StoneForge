@@ -1,0 +1,7 @@
+{
+  "id": "reliability_probe",
+  "name": "Reliability Probe",
+  "version": "1.0.0",
+  "author": "StoneForge",
+  "description": "Development-only lifetime and content tests"
+}

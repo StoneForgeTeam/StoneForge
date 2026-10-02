@@ -1,0 +1,22 @@
+# Build output and local IDE state
+**/bin/
+**/obj/
+**/.vs/
+**/TestResults/
+*.user
+*.suo
+*.VC.db
+*.VC.opendb
+/artifacts/
+/build/.thirdparty/
+# Local game data and diagnostics must not be published
+*.win
+*.win.*
+*.log
+/StoneForge.API/GameData/
+# Required pinned dependencies, even when a global Git ignore excludes binaries.
+!/lib/Aurie/AurieCore.dll
+!/lib/Aurie/AuriePatcher.exe
+!/lib/YYToolkit/YYToolkit.dll
+!/lib/UndertaleModLib/UndertaleModLib.dll
+!/lib/UndertaleModLib/Underanalyzer.dll

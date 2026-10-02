@@ -1,0 +1,55 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- StoneForge's mod API: what mods compile against (the game, UI, items, buffs, effects, their context) and the
+       typed game API generated from the game's data. The runtime that hosts the mods is StoneForge.Loader. -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <PlatformTarget>x64</PlatformTarget>
+    <RootNamespace>StoneForge</RootNamespace>
+    <!-- Its docs ship beside it, for mod authors' IDEs. -->
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- The loader drives the API's internals (its hooks, the game connection); the tests check them. -->
+    <InternalsVisibleTo Include="StoneForge.Loader" />
+    <InternalsVisibleTo Include="StoneForge.Tests" />
+  </ItemGroup>
+
+  <!-- The typed game API (GameObject, Sprite, Scripts, Events, Objects, GameItems, WeaponColumn...): made on every
+       build by the source generator (StoneForge.Generators) from the game's own data. StoneForge.DataDump reads that
+       from the Stoneshard install on this machine - StoneshardDir if set (or STONESHARD_DIR), else found through
+       Steam - into obj\GameData, again only when the game's data has changed. None of the game's data is in the
+       repository. -->
+  <PropertyGroup>
+    <StoneForgeGameData>$(MSBuildProjectDirectory)\obj\GameData</StoneForgeGameData>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\StoneForge.Generators\StoneForge.Generators.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+    <!-- (Built first, run by StoneForgeGameData below.) -->
+    <ProjectReference Include="..\StoneForge.DataDump\StoneForge.DataDump.csproj" ReferenceOutputAssembly="false" Private="false" />
+  </ItemGroup>
+
+  <Target Name="StoneForgeGameData" BeforeTargets="CoreCompile" DependsOnTargets="ResolveProjectReferences">
+    <MSBuild Projects="..\StoneForge.DataDump\StoneForge.DataDump.csproj" Targets="GetTargetPath" Properties="Configuration=$(Configuration)">
+      <Output TaskParameter="TargetOutputs" PropertyName="_StoneForgeDataDump" />
+    </MSBuild>
+    <PropertyGroup>
+      <_StoneForgeGameArg Condition="'$(StoneshardDir)' != ''">--game "$(StoneshardDir.TrimEnd('\'))"</_StoneForgeGameArg>
+    </PropertyGroup>
+    <Exec Command="dotnet &quot;$(_StoneForgeDataDump)&quot; &quot;$(StoneForgeGameData)&quot; $(_StoneForgeGameArg)" />
+    <ItemGroup>
+      <AdditionalFiles Include="$(StoneForgeGameData)\*.tsv;$(StoneForgeGameData)\*.txt" Exclude="$(StoneForgeGameData)\source.txt" />
+    </ItemGroup>
+  </Target>
+
+  <ItemGroup>
+    <!-- mod.json and content naming, shared with the patcher. -->
+    <Compile Include="..\Shared\ModIdentity.cs" Link="Mods\ModIdentity.cs" />
+  </ItemGroup>
+
+</Project>

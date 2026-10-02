@@ -1,0 +1,34 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <!-- Windows installer APIs; the patch engine itself has no WPF/launcher dependency. -->
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <PlatformTarget>x64</PlatformTarget>
+    <RollForward>Major</RollForward>
+    <RootNamespace>StoneForge.Patcher</RootNamespace>
+    <AssemblyName>StoneForge.Patcher</AssemblyName>
+    <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Reading the hooks mods declare from their C# source. -->
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="4.11.0" />
+    <Reference Include="UndertaleModLib"><HintPath>..\lib\UndertaleModLib\UndertaleModLib.dll</HintPath></Reference>
+    <Reference Include="Underanalyzer"><HintPath>..\lib\UndertaleModLib\Underanalyzer.dll</HintPath></Reference>
+    <InternalsVisibleTo Include="StoneForge.Patcher.Tests" />
+    <ProjectReference Include="..\StoneForge.GmlGenerator\StoneForge.GmlGenerator.csproj" />
+    <Compile Include="..\Shared\GmlCatalog.cs" Link="Mods\GmlCatalog.cs" />
+    <Compile Include="..\Shared\ModIdentity.cs" Link="Mods\ModIdentity.cs" />
+    <Compile Include="..\Shared\SteamLibrary.cs" Link="Steam\SteamLibrary.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The loader's own GML (the Mods window, the Draw GUI object, items, effects, buffs, the hotkey guard),
+         added to the game data by Patches\LoaderPatches - beside the exe, in the same folders. -->
+    <None Include="GML\**\*.gml" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,23 @@
+StoneForge's licences
+=====================
+
+StoneForge (StoneForge.API, StoneForge.Loader, StoneForge.Patcher and the rest) - MIT licence (StoneForge-MIT.txt),
+except:
+- StoneForge.Bridge (aurie\StoneForge.Bridge.dll) - GNU AGPL-3.0 (YYToolkit-AGPL-3.0.txt): it includes YYToolkit's
+  code.
+
+It ships with these components, each under its own licence:
+
+- Aurie (AurieCore.dll, dotnet\patcher\AuriePatcher.exe) - GNU AGPL-3.0 (Aurie-AGPL-3.0.txt). Built from
+  https://github.com/AurieFramework/Aurie at the commit in Aurie-SOURCE.md, with Aurie-stoneforge.patch applied
+  (modules load from <game>\aurie instead of <game>\mods\aurie).
+- YYToolkit (aurie\YYToolkit.dll) - GNU AGPL-3.0 (YYToolkit-AGPL-3.0.txt). Built, unmodified, from
+  https://github.com/AurieFramework/YYToolkit at the commit in YYToolkit-SOURCE.md.
+- Roslyn, the .NET compiler platform (dotnet\Microsoft.CodeAnalysis*.dll, and in dotnet\patcher\) - MIT licence.
+- UndertaleModLib 0.9.2.0 (dotnet\patcher\) - GNU GPL-3.0 (UndertaleModLib-GPL-3.0.txt).
+- Underanalyzer (dotnet\patcher\) - MPL-2.0 (Underanalyzer-MPL-2.0.txt).
+  Both are unmodified binaries; exact source revisions and checksums are in UndertaleModLib-SOURCE.md.
+
+The AGPL and GPL require the source of these components, and of works built on them, to be available to anyone
+who receives them: StoneForge's source is published with it, and Aurie's and YYToolkit's are their upstream
+repositories at the commits named above, plus Aurie-stoneforge.patch.

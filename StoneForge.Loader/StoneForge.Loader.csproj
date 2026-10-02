@@ -1,0 +1,30 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- StoneForge's runtime: started in the game by the native StoneForge.Bridge, it compiles, checks, loads and
+       switches the mods (StoneForge.API is what they see), and runs the Mods window. -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <PlatformTarget>x64</PlatformTarget>
+    <RootNamespace>StoneForge.Loader</RootNamespace>
+    <!-- Loaded by the native StoneForge.Bridge through hostfxr: needs its runtimeconfig.json. -->
+    <EnableDynamicLoading>true</EnableDynamicLoading>
+    <!-- (Roslyn's messages in English only: no satellite folders beside the loader.) -->
+    <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Mods are C# source, compiled and checked in the game (ModCompiler, ModSecurity). -->
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="4.11.0" />
+    <ProjectReference Include="..\StoneForge.API\StoneForge.API.csproj" />
+    <ProjectReference Include="..\StoneForge.GmlGenerator\StoneForge.GmlGenerator.csproj" />
+    <Compile Include="..\Shared\GmlCatalog.cs" Link="Loading\GmlCatalog.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="StoneForge.Tests" />
+  </ItemGroup>
+
+</Project>

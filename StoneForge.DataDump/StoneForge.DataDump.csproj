@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Reads the player's own Stoneshard game data and writes what the typed StoneForge API is generated from (object,
+       script, event and asset names, the item and skill tables). StoneForge.API runs it on every build (it skips the
+       work when the game data hasn't changed), so none of the game's data is kept in the repository. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RollForward>Major</RollForward>
+    <!-- (Windows only: it finds Stoneshard through Steam's registry key.) -->
+    <NoWarn>$(NoWarn);CA1416</NoWarn>
+  </PropertyGroup>
+  <ItemGroup>
+    <Reference Include="UndertaleModLib"><HintPath>..\lib\UndertaleModLib\UndertaleModLib.dll</HintPath></Reference>
+    <Reference Include="Underanalyzer"><HintPath>..\lib\UndertaleModLib\Underanalyzer.dll</HintPath></Reference>
+    <Compile Include="..\Shared\SteamLibrary.cs" Link="SteamLibrary.cs" />
+  </ItemGroup>
+</Project>
