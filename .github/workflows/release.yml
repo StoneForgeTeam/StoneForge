@@ -1,0 +1,81 @@
+# Builds, tests and publishes a StoneForge release when a version tag (v0.1.0) is pushed.
+#
+# StoneForge.API is generated from Stoneshard's own data, which can't be on GitHub's runners, so this runs on a
+# self-hosted Windows runner labelled "stoneshard": a machine with Stoneshard (VM modbranch, StoneForge installed
+# for the preserved unpatched data), Visual Studio's C++ tools (v145) and the .NET 10 SDK. Setup:
+# https://github.com/StoneForgeTeam/StoneForgeDocs/blob/main/docs/development/releasing.md
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: [self-hosted, windows, stoneshard]
+    defaults:
+      run:
+        shell: powershell
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check the tag matches the version
+        id: version
+        run: |
+          $version = ([xml](Get-Content Directory.Build.props)).Project.PropertyGroup.Version
+          if ("${{ github.ref_name }}" -ne "v$version") {
+              throw "Tag ${{ github.ref_name }} doesn't match Version $version in Directory.Build.props."
+          }
+          "version=$version" >> $env:GITHUB_OUTPUT
+
+      # The integration tests skip themselves without unpatched game data; a release must not.
+      - name: Check the integration tests have game data
+        run: |
+          $data = if ($env:STONEFORGE_TEST_DATA) { $env:STONEFORGE_TEST_DATA }
+                  else { "C:\Program Files (x86)\Steam\steamapps\common\Stoneshard\dotnet\data_base.win" }
+          if (-not (Test-Path $data)) {
+              throw "No unpatched game data at $data. Install StoneForge in Steam's Stoneshard, or set STONEFORGE_TEST_DATA on the runner."
+          }
+
+      - name: Build and package
+        run: |
+          powershell -NoProfile -ExecutionPolicy Bypass -File build\Package.ps1
+          if ($LASTEXITCODE -ne 0) { throw "Packaging failed" }
+
+      - name: Test
+        run: |
+          dotnet test StoneForge.Tests -c Release --no-build
+          if ($LASTEXITCODE -ne 0) { throw "StoneForge.Tests failed" }
+          dotnet test StoneForge.Patcher.Tests -c Release --no-build
+          if ($LASTEXITCODE -ne 0) { throw "StoneForge.Patcher.Tests failed" }
+
+      - name: Release notes from CHANGELOG.md
+        run: |
+          $version = "${{ steps.version.outputs.version }}"
+          $notes = @(); $inSection = $false
+          foreach ($line in Get-Content CHANGELOG.md -Encoding UTF8) {
+              if ($line -match '^## ') {
+                  if ($inSection) { break }
+                  $inSection = $line -match "^## $([regex]::Escape($version))(\s|$)"
+                  continue
+              }
+              if ($inSection) { $notes += $line }
+          }
+          if (-not $inSection) { throw "CHANGELOG.md has no '## $version' section." }
+          [IO.File]::WriteAllText((Join-Path $PWD artifacts/release-notes.md), ($notes -join "`n").Trim() + "`n")
+
+      - name: Publish
+        uses: softprops/action-gh-release@v2
+        with:
+          name: StoneForge ${{ steps.version.outputs.version }}
+          body_path: artifacts/release-notes.md
+          files: artifacts/StoneForge-${{ steps.version.outputs.version }}.zip
+          prerelease: ${{ contains(steps.version.outputs.version, '-') }}
+          fail_on_unmatched_files: true
