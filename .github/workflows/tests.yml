@@ -1,0 +1,30 @@
+# Runs the tests on GitHub's own Windows runners for every pull request and push to main.
+#
+# They have no Stoneshard, so StoneForge.API is built from build\StubGameData (StoneForgeStubGameData=true) - a
+# handful of names, just enough for StoneForge's own code and tests - and the patcher's integration tests, which
+# need the real game data, skip. The Release workflow runs everything against the real game.
+name: Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: StoneForge.Tests
+        run: dotnet test StoneForge.Tests -c Release -p:StoneForgeStubGameData=true
+
+      - name: StoneForge.Patcher.Tests (game-data tests skip)
+        run: dotnet test StoneForge.Patcher.Tests -c Release

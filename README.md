@@ -29,6 +29,15 @@ powershell -ExecutionPolicy Bypass -File build/Package.ps1 -NoBuild
 
 The API build discovers Stoneshard through Steam. To choose another install, set `STONESHARD_DIR` or pass `-p:StoneshardDir="C:\path\to\Stoneshard"`. DataDump writes generated game metadata under `StoneForge.API/obj/GameData`. Integration tests use `STONEFORGE_TEST_DATA` or Steam's preserved `dotnet/data_base.win`; they skip when no suitable data is available.
 
+Without Stoneshard, build the API from the small stand-in data in `build/StubGameData` instead. This is what the [Tests workflow](.github/workflows/tests.yml) does on GitHub for every pull request and push to `main`:
+
+```powershell
+dotnet test StoneForge.Tests -c Release -p:StoneForgeStubGameData=true
+dotnet test StoneForge.Patcher.Tests -c Release
+```
+
+The stand-in holds only the game names StoneForge's own code and tests use. If you reference another generated name (`GameObject.x`, `Scripts.x`, `Events.x.y`, an object's variable...), add it there, or the Tests workflow fails to build. An API built this way is for testing only: never package it.
+
 Pinned native binaries and their rebuild instructions are under `lib/Aurie`, `lib/YYToolkit` and `build/BuildThirdParty.ps1`. Library provenance and checksums are under `lib/UndertaleModLib`.
 
 ## Releases
