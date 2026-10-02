@@ -29,6 +29,8 @@ Each mod is a folder in Stoneshard's mods folder (<Stoneshard>\mods\<Mod>\) hold
 (and, if it has one, an icon.png) in an Assets folder inside it. Mods load when the game starts; the Mods
 window switches them on and off at once.
 
+Writing mods: https://github.com/StoneForgeTeam/StoneForgeDocs
+
 
 Steam updates
 -------------
