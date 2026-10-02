@@ -71,8 +71,6 @@ Get-ChildItem "$PSScriptRoot\release" -Recurse -File | ForEach-Object {
     [IO.File]::WriteAllText($target, $text)
 }
 Put "$root\LICENSE" "$out\LICENSES\StoneForge-MIT.txt"
-Put "$root\docs\GML.md" "$out\GML.md"
-Put "$root\docs\MODS.md" "$out\MODS.md"
 Put "$lib\Aurie\LICENSE" "$out\LICENSES\Aurie-AGPL-3.0.txt"
 Put "$lib\YYToolkit\LICENSE" "$out\LICENSES\YYToolkit-AGPL-3.0.txt"
 # (Where the AGPL binaries come from: upstream commits, and the patch for the modified Aurie.)

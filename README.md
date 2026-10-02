@@ -33,12 +33,15 @@ Pinned native binaries and their rebuild instructions are under `lib/Aurie`, `li
 
 ## Write a mod
 
-- [Mod manifests and content IDs](docs/MODS.md)
-- [GML bindings](docs/GML.md)
-- [Development tools, testing and lifetime rules](docs/DEVELOPMENT.md)
+The documentation lives in the [StoneForgeDocs](https://github.com/StoneForgeTeam/StoneForgeDocs) repository and is published with GitBook.
+
+- [Mod manifests and content IDs](https://github.com/StoneForgeTeam/StoneForgeDocs/blob/main/docs/modding/writing-a-mod.md)
+- [GML bindings](https://github.com/StoneForgeTeam/StoneForgeDocs/blob/main/docs/modding/gml-bindings.md)
+- [API lifetime rules](https://github.com/StoneForgeTeam/StoneForgeDocs/blob/main/docs/modding/api-lifetime-rules.md)
+- [Building, testing and the developer host](https://github.com/StoneForgeTeam/StoneForgeDocs/blob/main/docs/development/building-and-testing.md)
 - [Example Mod](https://github.com/StoneForgeTeam/ExampleMod): the separate sample repository for items, buffs, skills, UI and GML.
 
-The example builds against an installed StoneForge SDK and has its own release history. See [repository layout](docs/REPOSITORIES.md) for the organization and repository boundaries.
+The example builds against an installed StoneForge SDK and has its own release history. See [repository layout](https://github.com/StoneForgeTeam/StoneForgeDocs/blob/main/docs/development/repositories.md) for the organization and repository boundaries.
 
 ## License
 
