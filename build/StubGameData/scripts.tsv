@@ -1,0 +1,11 @@
+scr_atr	0
+scr_attack_result_block	0
+scr_attack_result_dodge	0
+scr_attack_result_fumble	0
+scr_attack_result_hit	0
+scr_audio_play_hover_pitch	0
+scr_drawBG	0
+scr_drawText	0
+scr_guiCreateInteractive	0
+scr_guiLayoutOffsetUpdate	0
+scr_hoversDrawBoard	0

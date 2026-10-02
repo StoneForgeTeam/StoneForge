@@ -1,0 +1,9 @@
+o_button		
+o_cameraController		
+o_inv_slot		
+o_loot		
+o_mainMenuButton	o_button	
+o_mainMenuNavContainer		buttonsContainer,buttonsOffset,height,logoHeight,logoTextHeight
+o_player		HP
+o_textLoader		
+o_weapon_loot		

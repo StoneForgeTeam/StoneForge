@@ -1,0 +1,1 @@
+id;;Price;EffPrice;tier;Cat;Weight;Health_Restoration
