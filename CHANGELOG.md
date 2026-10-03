@@ -1,6 +1,6 @@
 # StoneForge changes
 
-## Unreleased
+## 0.3.0 — Game values and off-screen instances
 
 - **A hook on a script that isn't hookable fails at once.** A mod's `Scripts.x.Before(...)` or `OnScript("x", ...)` on a script the game data doesn't hook would never be called, so it throws. The mod's `Load` fails, in the log and on its Mods page, with the attribute to add: `[assembly: HookScript(nameof(Scripts.x))]`.
   - The patcher records the scripts it made hookable (the loader's, and every mod's `[assembly: HookScript]`) in `dotnet\stoneforge-hooks.txt`, which the loader checks against. The game data is rebuilt once to write it.
