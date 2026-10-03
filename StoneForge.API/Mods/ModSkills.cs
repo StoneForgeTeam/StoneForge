@@ -8,5 +8,5 @@ public sealed class ModSkills
     internal ModSkills(ModContext context) => _context = context;
 
     /// <inheritdoc cref="StoneForge.Skills.Add"/>
-    public void Add(ModSkill skill) => StoneForge.Skills.Add(_context, skill);
+    public void Add(ModSkillBase skill) => StoneForge.Skills.Add(_context, skill);
 }

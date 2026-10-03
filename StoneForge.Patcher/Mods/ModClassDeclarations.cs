@@ -6,7 +6,7 @@ using Microsoft.CodeAnalysis.CSharp.Syntax;
 namespace StoneForge.Patcher;
 
 /// <summary>A class in a mod's source that may be one of its consumables or skills: a class over StoneForge's
-/// Consumable / ModSkill - <c>class Tonic : Consumable { public Tonic() : base("my_tonic", "wine") { } }</c> - or over
+/// Consumable / ModSkill / ModPassive - <c>class Tonic : Consumable { public Tonic() : base("my_tonic", "wine") { } }</c> - or over
 /// one of the game's (StoneForge.GameItems / GameSkills: <c>class Tonic : Wine { public Tonic() : base("my_tonic") { }
 /// }</c>), its key (and what it's based on) given as string literals. Which it is - if either - is told once the game
 /// data's read (<see cref="ConsumableObjects"/>, <see cref="SkillObjects"/>: by its base class), and each gets its

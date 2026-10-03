@@ -21,7 +21,7 @@ public class PatcherIntegrationTests : IClassFixture<PatchedGameData>
     {
         RequireData();
         Assert.Equal(1, _game.Consumables);
-        Assert.Equal(1, _game.Skills);
+        Assert.Equal(2, _game.Skills);
         Assert.Equal(ScriptHooks.LoaderHooks.Length, _game.Hooks);
     }
 
@@ -39,6 +39,7 @@ public class PatcherIntegrationTests : IClassFixture<PatchedGameData>
         RequireData();
         Assert.Equal("o_inv_wine", _game.Read.GetObject("o_inv_sf_test_tonic").ParentId.Name.Content);
         Assert.Equal("o_skill_" + _game.BaseSkill, _game.Read.GetObject("o_skill_sf_test_skill").ParentId.Name.Content);
+        Assert.Equal("o_skill_passive", _game.Read.GetObject("o_pass_skill_sf_test_passive").ParentId.Name.Content);
         Assert.Contains(_game.Read.GetObject("o_stonemod_gui").Events.SelectMany(e => e).SelectMany(e => e.Actions), a => a.CodeId != null);
     }
 

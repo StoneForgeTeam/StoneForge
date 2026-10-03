@@ -370,14 +370,21 @@ public static class Items
         return seen.Item;
     }
 
+    // Skills' passives (set by Skills): whether any could react to an attack, and their reactions to one.
+    internal static Func<bool> PassivesListening = () => false;
+    internal static Action<Attack>? PassiveAttack;
+
     // scr_attack_result_*(target, ...) runs as the attacker, deals the damage and returns it (hit: argument 6 is
-    // whether it's a crit). Only when the player and a mod's item are in it is the call taken over: the game's
-    // own version run, then the items told.
+    // whether it's a crit). Only when the player and a mod's item or passive are in it is the call taken over: the
+    // game's own version run, then the items and passives told.
     private static void HookAttack(ModContext loader, Script script, AttackResult result)
     {
         loader.OnScript(script.Name, call =>
         {
-            if (Seen.Count == 0 || call.Args.Length == 0)
+            if (call.Args.Length == 0)
+                return false;
+            bool passives = PassivesListening();
+            if (Seen.Count == 0 && !passives)
                 return false;
             Instance attacker = call.Self, target = call.Args[0];
             bool byPlayer = IsPlayer(attacker), onPlayer = IsPlayer(target);
@@ -386,7 +393,7 @@ public static class Items
             // (Dual wielding: only the hand attacking has its item "equipped" during the blow.)
             var weapons = byPlayer ? Equipped<Weapon>() : new();
             var armour = onPlayer ? Equipped<Armor>() : new();
-            if (weapons.Count == 0 && armour.Count == 0)
+            if (weapons.Count == 0 && armour.Count == 0 && !passives)
                 return false;
             GmValue damage = script.CallOriginal(call);
             call.Result = damage;
@@ -404,6 +411,8 @@ public static class Items
                 if (attack.IsHit)
                     Run(item, "OnHitTaken", t => ((Armor)t).OnHitTaken(item, attack));
             }
+            if (passives)
+                PassiveAttack?.Invoke(attack);
             return true;
         });
     }

@@ -26,7 +26,7 @@ internal static class ConsumableObjects
         var made = new List<ModClassDeclaration>();
         foreach (var declaration in declarations)
         {
-            if (declaration.BaseType == "ModSkill")
+            if (declaration.BaseType is "ModSkill" or "ModPassive")
                 continue;
             string? basedOn = declaration.BaseType == "Consumable" ? declaration.BasedOn : null;
             if (basedOn == null)

@@ -1,9 +1,10 @@
 namespace StoneForge;
 
-/// <summary>Mods' skills (<see cref="ModSkill"/>): added here, each is the game's own - its objects the patcher added
-/// (o_skill_&lt;key&gt; and its icon, children of the game skill's), its row of the skills table, its name, icon and
-/// effect (<see cref="ModSkill.OnCast"/>) from StoneForge - on its tab of the skills menu (its Tab, under its Group's header),
-/// learnt with ability points.</summary>
+/// <summary>Mods' skills - active (<see cref="ModSkill"/>) and passive (<see cref="ModPassive"/>): added here, each is the
+/// game's own - its objects the patcher added (an active's o_skill_&lt;key&gt; and its icon, children of the game skill's;
+/// a passive's o_pass_skill_&lt;key&gt;, one of the game's passives), an active's row of the skills table, its name, icon
+/// and effect (<see cref="ModSkill.OnCast"/>, a passive's stats and reactions) from StoneForge - on its tab of the skills
+/// menu (its Tab, in its Group), learnt with ability points.</summary>
 public static class Skills
 {
     // A page holds 9 (three rows of three, as the game's); a mod with more has more pages.
@@ -12,7 +13,7 @@ public static class Skills
     private sealed class Entry
     {
         public required ModContext Context;
-        public required ModSkill Skill;
+        public required ModSkillBase Skill;
         public int Object = -1, Icon = -1, Sprite = -1;
         public bool Defined;
     }
@@ -23,8 +24,8 @@ public static class Skills
     // The pages' backgrounds, by how many skills a page has (drawn once).
     private static readonly Dictionary<int, int> Backgrounds = new();
 
-    /// <summary>Adds a mod's skill. Call it from <see cref="IStoneMod.Load"/>.</summary>
-    public static void Add(ModContext context, ModSkill skill)
+    /// <summary>Adds a mod's skill, active or passive. Call it from <see cref="IStoneMod.Load"/>.</summary>
+    public static void Add(ModContext context, ModSkillBase skill)
     {
         if (ByKey.TryGetValue(context.GameKey(skill.Key), out var existing))
             throw new ArgumentException($"There's already a skill \"{context.ContentId(skill.Key)}\" (from {existing.Context.Name})");
@@ -39,6 +40,8 @@ public static class Skills
     {
         foreach (var (key, entry) in ByKey.Where(e => e.Value.Context.Id == mod).ToList())
         {
+            if (entry.Skill is ModPassive && Game.Running)
+                ClearStats(entry);
             ByKey.Remove(key);
             ByObject.Remove(entry.Object);
             ByObject.Remove(entry.Icon);
@@ -103,12 +106,24 @@ public static class Skills
             HookBirth(birth);
         loader.OnCode("gml_Object_o_skill_Alarm_3", before: (self, _) =>
         {
-            if (ByObject.Count == 0 || !ByObject.TryGetValue(self.Get("object_index").AsInt, out var entry))
+            if (ByObject.Count == 0 || !ByObject.TryGetValue(self.Get("object_index").AsInt, out var entry) || entry.Skill is not ModSkill active)
                 return false;
             GmValue owner = self.Get("owner");
             RunOnCast(entry, new SkillCast(self, Buffs.UnitOf(owner), Buffs.UnitOf(owner), self.Get("is_crit").AsBool));
-            return !entry.Skill.KeepGameEffect;
+            return !active.KeepGameEffect;
         });
+        // Passives' stats: in their data map when the game asks the passives for theirs (o_skill_passive's user event 7,
+        // when one's learnt or the stats are counted again) - from where it adds every learnt passive's to the player's.
+        loader.OnCode("gml_Object_o_skill_passive_Other_17", after: (self, _) =>
+        {
+            if (ByObject.Count > 0 && ByObject.TryGetValue(self.Get("object_index").AsInt, out var entry) && entry.Skill is ModPassive passive
+                && self.Get("is_open").AsBool && self.Get("data") is { Kind: GmKind.Real } data)
+                foreach (var (stat, value) in passive.Stats)
+                    Game.CallBuiltinTrusted("ds_map_replace", default, default, data, stat, value);
+        });
+        // Passives' reactions: the player's attacks and those on the player (Items' attack hooks).
+        Items.PassivesListening = () => ByKey.Values.Any(e => e.Skill is ModPassive && e.Icon >= 0);
+        Items.PassiveAttack = OnAttack;
         // The skills menu: the mods' groups and tabs.
         loader.OnCode("gml_Object_o_skillmenu_Create_0", after: (self, _) => AddPages(self));
     }
@@ -125,32 +140,45 @@ public static class Skills
         var skill = entry.Skill;
         try
         {
-            entry.Object = Gm.AssetGetIndex("o_skill_" + skill.GameKey);
-            entry.Icon = Gm.AssetGetIndex("o_skill_" + skill.GameKey + "_ico");
-            if (entry.Object < 0 || entry.Icon < 0)
+            if (skill is ModSkill active)
             {
-                entry.Context.Log($"skill \"{skill.Id}\": the game has no objects for it yet - they're added when the game starts (restart it)");
-                return;
+                entry.Object = Gm.AssetGetIndex("o_skill_" + skill.GameKey);
+                entry.Icon = Gm.AssetGetIndex("o_skill_" + skill.GameKey + "_ico");
+                if (entry.Object < 0 || entry.Icon < 0)
+                {
+                    entry.Context.Log($"skill \"{skill.Id}\": the game has no objects for it yet - they're added when the game starts (restart it)");
+                    return;
+                }
+                if (!Game.CallScript("scr_stonemod_skill_define", default, skill.GameKey, active.BasedOn, active.ColumnsText).AsBool)
+                {
+                    entry.Context.Log($"skill \"{skill.Id}\": the game has no skill \"{active.BasedOn}\" to base it on");
+                    return;
+                }
+                ByObject[entry.Object] = entry;
+                if (!active.KeepGameConditions)
+                {
+                    GmValue validators = Game.Global["skill_extra_validate_map"];
+                    if (validators.Kind == GmKind.Real)
+                        Game.CallBuiltinTrusted("ds_map_delete", default, default, validators, skill.GameKey);
+                }
+                HookConditions(active.BasedOn);
             }
-            if (!Game.CallScript("scr_stonemod_skill_define", default, skill.GameKey, skill.BasedOn, skill.ColumnsText).AsBool)
+            else
             {
-                entry.Context.Log($"skill \"{skill.Id}\": the game has no skill \"{skill.BasedOn}\" to base it on");
-                return;
+                // (A passive is its icon alone: o_pass_skill_<key>, as the game's are.)
+                entry.Icon = Gm.AssetGetIndex("o_pass_skill_" + skill.GameKey);
+                if (entry.Icon < 0)
+                {
+                    entry.Context.Log($"passive \"{skill.Id}\": the game has no object for it yet - it's added when the game starts (restart it)");
+                    return;
+                }
             }
-            ByObject[entry.Object] = entry;
             ByObject[entry.Icon] = entry;
-            if (!skill.KeepGameConditions)
-            {
-                GmValue validators = Game.Global["skill_extra_validate_map"];
-                if (validators.Kind == GmKind.Real)
-                    Game.CallBuiltinTrusted("ds_map_delete", default, default, validators, skill.GameKey);
-            }
-            HookConditions(skill.BasedOn);
             if (skill.Icon != null)
                 entry.Sprite = LoadLike(entry, skill.Icon, Game.CallBuiltinTrusted("object_get_sprite", default, default, entry.Icon).AsInt);
             if (NamesLoaded)
                 SetNames(entry);
-            entry.Context.Log($"skill \"{skill.Id}\" added (based on {skill.BasedOn})");
+            entry.Context.Log(skill is ModSkill based ? $"skill \"{skill.Id}\" added (based on {based.BasedOn})" : $"passive \"{skill.Id}\" added");
         }
         catch (Exception e)
         {
@@ -208,7 +236,7 @@ public static class Skills
 
     // The game skill's name in its tables ("Chain_Lightning"): its object's id ("chain_lightning") as the names
     // table spells it, matched without case.
-    private static string? BaseName(ModSkill skill) => TableName(skill.BasedOn);
+    private static string? BaseName(ModSkillBase skill) => skill is ModSkill active ? TableName(active.BasedOn) : null;
 
     private static readonly Dictionary<string, string> TableNames = new(StringComparer.OrdinalIgnoreCase);
 
@@ -258,7 +286,7 @@ public static class Skills
 
     // What a skill asks for that the player hasn't: as the tooltip says them ("level 8", "14 points in
     // Perception, Willpower", "Chain Lightning").
-    private static List<string> Unmet(ModSkill skill)
+    private static List<string> Unmet(ModSkillBase skill)
     {
         var unmet = new List<string>();
         if (skill.RequiredLevel > 0)
@@ -278,7 +306,7 @@ public static class Skills
         }
         foreach (string id in skill.RequiredSkills)
         {
-            int icon = Gm.AssetGetIndex("o_skill_" + id + "_ico");
+            int icon = IconOf(id);
             if (icon < 0)
                 continue;
             bool learnt = false;
@@ -289,6 +317,68 @@ public static class Skills
                 unmet.Add($"~sy~{SkillName(id)}~/~");
         }
         return unmet;
+    }
+
+    // A skill's icon object, by its id as the game knows it: a mod's (active or passive), a game skill's
+    // (o_skill_<id>_ico) or a game passive's (o_pass_skill_<id>). -1: none.
+    private static int IconOf(string id)
+    {
+        if (ByKey.TryGetValue(id, out var entry) && entry.Icon >= 0)
+            return entry.Icon;
+        int icon = Gm.AssetGetIndex("o_skill_" + id + "_ico");
+        return icon >= 0 ? icon : Gm.AssetGetIndex("o_pass_skill_" + id);
+    }
+
+    // Whether the player has learnt a mod's skill (any of its icon's instances open).
+    internal static bool IsLearnt(ModSkillBase skill)
+    {
+        if (!Game.Running || skill.GameKey.Length == 0 || !ByKey.TryGetValue(skill.GameKey, out var entry) || entry.Icon < 0)
+            return false;
+        int count = Game.CallBuiltinTrusted("instance_number", default, default, entry.Icon).AsInt;
+        for (int i = 0; i < count; i++)
+            if (Game.CallBuiltinTrusted("instance_find", default, default, entry.Icon, i).AsInstance.Get("is_open").AsBool)
+                return true;
+        return false;
+    }
+
+    // A passive's stats gone from the player's (its mod switched off): its data maps emptied, the stats counted again.
+    private static void ClearStats(Entry entry)
+    {
+        if (entry.Icon < 0)
+            return;
+        int count = Game.CallBuiltinTrusted("instance_number", default, default, entry.Icon).AsInt;
+        for (int i = 0; i < count; i++)
+            if (Game.CallBuiltinTrusted("instance_find", default, default, entry.Icon, i).AsInstance is { IsNone: false } icon
+                && icon.Get("data") is { Kind: GmKind.Real } data)
+                Game.CallBuiltinTrusted("ds_map_clear", default, default, data);
+        if (Game.CallBuiltinTrusted("instance_find", default, default, Gm.AssetGetIndex("o_player"), 0).AsInstance is { IsNone: false } player)
+            player.Set("stats_is_change", true);
+    }
+
+    // An attack the player made or took: each learnt passive's reactions, in its mod's name.
+    private static void OnAttack(Attack attack)
+    {
+        foreach (var entry in ByKey.Values.Where(e => e.Skill is ModPassive && e.Icon >= 0).ToList())
+        {
+            var passive = (ModPassive)entry.Skill;
+            if (!IsLearnt(passive))
+                continue;
+            void Run(string what, Action action) => Hooks.Invoke(entry.Context.Id, passive.Id + "." + what, () => { action(); return false; });
+            if (attack.ByPlayer)
+            {
+                Run("OnAttack", () => passive.OnAttack(attack));
+                if (attack.IsHit)
+                    Run("OnHit", () => passive.OnHit(attack));
+                if (attack.IsHit && attack.Killed)
+                    Run("OnKill", () => passive.OnKill(attack));
+            }
+            if (attack.OnPlayer)
+            {
+                Run("OnAttacked", () => passive.OnAttacked(attack));
+                if (attack.IsHit)
+                    Run("OnHitTaken", () => passive.OnHitTaken(attack));
+            }
+        }
     }
 
     // An attribute's name in the game's language (global.attribute), or in English.
@@ -324,8 +414,10 @@ public static class Skills
     {
         if (ByObject.Count == 0 || !ByObject.TryGetValue(call.Self.Get("object_index").AsInt, out var entry))
             return false;
+        if (entry.Skill is not ModSkill active)
+            return false;
         var cast = new SkillCast(call.Self, Buffs.UnitOf(Arg(call, 2)), Buffs.UnitOf(Arg(call, 1)), Arg(call, crit).AsBool);
-        if (entry.Skill.KeepGameEffect)
+        if (active.KeepGameEffect)
         {
             RunOnCast(entry, cast);
             return false;
@@ -385,7 +477,7 @@ public static class Skills
             return;
         _loader.OnCode("gml_Object_o_skill_" + basedOn + "_ico_Other_25", before: (self, _) =>
         {
-            if (!ByObject.TryGetValue(self.Get("object_index").AsInt, out var entry) || entry.Skill.KeepGameConditions
+            if (!ByObject.TryGetValue(self.Get("object_index").AsInt, out var entry) || entry.Skill is not ModSkill { KeepGameConditions: false }
                 || entry.Icon != self.Get("object_index").AsInt)
                 return false;
             Game.CallBuiltinTrusted("event_perform_object", self, self, Gm.AssetGetIndex("o_skill_ico"), 7, 25);
@@ -404,7 +496,8 @@ public static class Skills
 
     private static void RunOnCast(Entry entry, SkillCast cast)
     {
-        Hooks.Invoke(entry.Context.Id, entry.Skill.Id + ".OnCast", () => { entry.Skill.OnCast(cast); return false; });
+        if (entry.Skill is ModSkill active)
+            Hooks.Invoke(entry.Context.Id, active.Id + ".OnCast", () => { active.OnCast(cast); return false; });
     }
 
     // The player's turn ended, as the game's spell would have once it hit.

@@ -21,6 +21,20 @@ public class DeclarationTests
         finally { Directory.Delete(mods, true); }
     }
 
+    [Fact]
+    public void A_passive_is_declared_by_its_key_alone()
+    {
+        string mods = Path.Combine(Path.GetTempPath(), "StoneForgeDeclarations-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            Mod(mods, "Storm", """{ "id": "storm", "name": "Storm", "version": "1" }""",
+                "class Charge : ModPassive { public Charge() : base(\"static_charge\") { } }");
+            var passive = Assert.Single(ModClassDeclaration.Declared(mods));
+            Assert.Equal(("storm__static_charge", "ModPassive", (string?)null), (passive.Key, passive.BaseType, passive.BasedOn));
+        }
+        finally { Directory.Delete(mods, true); }
+    }
+
     private static void Mod(string mods, string folder, string? manifest, string source)
     {
         string dir = Path.Combine(mods, folder);

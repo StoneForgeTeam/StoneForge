@@ -28,10 +28,29 @@ internal static class SkillObjects
         }
         var made = new List<ModClassDeclaration>();
         var events = new List<(string Key, string BasedOn)>();
+        var passives = new List<string>();
+        var passiveParent = editor.GetObject("o_skill_passive");
+        // (A passive's icon until its mod gives it its own: one of the game's passives'.)
+        var passiveSprite = data.GameObjects.ByName("o_pass_skill_adaptability")?.Sprite
+            ?? data.GameObjects.FirstOrDefault(o => o.Name.Content.StartsWith("o_pass_skill_", StringComparison.Ordinal) && o.Sprite != null)?.Sprite;
         foreach (var declaration in declarations)
         {
             if (declaration.BaseType == "Consumable")
                 continue;
+            // A mod's passive: o_pass_skill_<key>, one of the game's passives (child of o_skill_passive).
+            if (declaration.BaseType == "ModPassive")
+            {
+                if (!Regex.IsMatch(declaration.Key, "^[A-Za-z0-9_]+$") || data.GameObjects.ByName("o_pass_skill_" + declaration.Key) != null)
+                {
+                    PatcherConsole.Log($"  passive \"{declaration.Key}\": not a key, or the game already has a passive called that - not added");
+                    continue;
+                }
+                var passive = Child(editor, "o_pass_skill_" + declaration.Key, passiveParent);
+                passive.Sprite = passiveSprite;
+                passives.Add(declaration.Key);
+                made.Add(declaration);
+                continue;
+            }
             string? basedOn = declaration.BaseType == "ModSkill" ? declaration.BasedOn : null;
             if (basedOn == null)
             {
@@ -69,6 +88,11 @@ internal static class SkillObjects
             editor.AddNewEvent("o_skill_" + key, Gml("skill_create").Replace("{key}", key), EventType.Create, 0);
             editor.AddNewEvent("o_skill_" + key + "_ico", Gml("skill_ico_create").Replace("{key}", key), EventType.Create, 0);
             PatcherConsole.Log($"  skill {key} (based on {basedOn}): added");
+        }
+        foreach (string key in passives)
+        {
+            editor.AddNewEvent("o_pass_skill_" + key, Gml("passive_create").Replace("{key}", key), EventType.Create, 0);
+            PatcherConsole.Log($"  passive {key}: added");
         }
         return made;
     }
