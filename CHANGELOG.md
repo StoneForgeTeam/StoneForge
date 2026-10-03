@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+- **Breaking: windows reworked to work with any frame.**
+  - `UIWindow` is now only the window: open/close, Escape, the dimmed screen and input blocking as before, a frame and a close button.
+    - The frame is any sprite (`FrameSprite`; the game's version for the resolution unless `AdaptiveSprite` is off), drawn at its size. Or 9-sliced to `FrameWidth` x `FrameHeight` with `Slice` borders, or a plain panel with no sprite.
+    - `Content` is the frame less `ContentInsets`, emptied and sized on each open; everything goes there.
+    - `CloseButton` is an element you can move or hide. `Title` has `TitleX`/`TitleY`, and `DimBackground` turns the dimming off.
+    - `OnFit()` adjusts insets and positions for the resolution.
+  - No tabs, page or button slots any more. They're layout pieces usable anywhere:
+    - `UITabStrip`: a column (scrolling when full) or a row of `UITab`s, with `TabOpened` and any tab sprite. `UITab.Window` becomes `UITab.Strip`.
+    - `UIButtonRow`: any number of buttons spread across its width, or packed left/right. For frames with button places drawn in, `Positions` sets them and `Pin(button, n)` keeps a button in one.
+    - `UIScrollArea`, as before.
+  - `UISettingsWindow` is the Settings-menu look built from those pieces: `Tabs`, `Page`, `Buttons`, `SetTabs`, `OnTabOpened`, and `AddButton(text)` / `AddCloseButton()` with no slot number. Its buttons sit in the four places its frame sprite has drawn for them, filling from the left, with Close in the last; more than four are spread along the row. The Mods window uses it.
+  - `Draw.SpriteNineSlice` and `UIInsets` are new.
 - Main menu layout:
   - `MainMenu.AddBefore` / `AddAfter(context, anchor, text, onClick)` place a button relative to any button. The anchor is a game button (`VanillaButton.Play`, or the names `"Play"`/`"Start"`, `"Settings"`, `"Credits"`, `"Exit"`), the text shown on a button (in the game's language), or another mod's button text.
   - The game's own buttons are added the same way: `AddButton(context, VanillaButton.Exit)`, `AddBefore` / `AddAfter(context, anchor, VanillaButton.Settings)`. One already in the menu is moved.

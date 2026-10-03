@@ -1,43 +1,42 @@
 namespace StoneForge;
 
-/// <summary>A tab down a <see cref="UIWindow"/>'s left (<see cref="UIWindow.SetTabs(string[])"/>), as the
-/// Settings menu's: clicked - or <see cref="Open"/>ed - it's shown as the open one, and its window's
-/// <c>OnTabOpened</c> and its <see cref="Opened"/> run, to fill the window's page.</summary>
+/// <summary>A tab in a <see cref="UITabStrip"/>: clicked - or <see cref="Open"/>ed - it's shown as the open one, and its
+/// strip's <see cref="UITabStrip.TabOpened"/> and its own <see cref="Opened"/> run.</summary>
 public class UITab : UIElement
 {
-    // The settings tab's sprite (its button's): frames 0 idle, 1 pressed, 2 lit - and open.
+    // A button sprite's rounded ends this wide; its frames 0 idle, 1 pressed, 2 lit - and open.
     private const double Cap = 10;
 
-    internal UITab(UIWindow window, string text, int index, double width)
+    internal UITab(UITabStrip strip, string text, int index)
     {
-        Window = window;
+        Strip = strip;
         Text = text;
         Index = index;
-        Width = width;
         Height = 26;
     }
 
-    public UIWindow Window { get; }
+    public UITabStrip Strip { get; }
     public string Text { get; set; }
-    /// <summary>Its place among the window's tabs (from 0).</summary>
+    /// <summary>Its place among its strip's tabs (from 0).</summary>
     public int Index { get; }
-    public bool IsOpen => Window.SelectedTab == this;
+    public bool IsOpen => Strip.Selected == this;
 
-    /// <summary>Opened: clicked, or <see cref="Open"/> (after its window's OnTabOpened).</summary>
+    /// <summary>Opened: clicked, or <see cref="Open"/> (after its strip's <see cref="UITabStrip.TabOpened"/>).</summary>
     public event Action<UITab>? Opened;
 
     /// <summary>Opens it (as a click, without the sound).</summary>
     public void Open()
     {
-        Window.Select(this);
-        Opened?.Invoke(this);
+        Strip.Select(this);
+        try { Opened?.Invoke(this); }
+        catch (Exception e) { Game.Log($"Tab \"{Text}\" Opened handler threw: {e}"); }
     }
 
     protected override void OnDraw(double x, double y)
     {
         bool pressed = !IsOpen && IsPressed && IsHovered;
         int frame = IsOpen ? 2 : pressed ? 1 : IsHovered ? 2 : 0;
-        Draw.SpriteSliced((int)Sprite.s_settings_button_down, frame, x, y, Width, Height, Cap);
+        Draw.SpriteSliced(Strip.TabSprite, frame, x, y, Width, Height, Cap);
         Draw.GameText(x + Width / 2, y + Height / 2 + (pressed ? 1 : 0), Text, Draw.White, Draw.AlignCenter, Draw.AlignMiddle, "f_digits", 0.5, pressed ? 0.5 : 1);
     }
 

@@ -1,20 +1,25 @@
 namespace StoneForge;
 
-// A UIWindow's close button, at its frame's top right: the game's (s_gui_close, small at 1280x720/800).
+// A UIWindow's close button (UIWindow.CloseButton): the game's - s_gui_close, small at 1280x720 / 1280x800 as the game's
+// windows have it (scr_adaptiveCloseButtonCreate) - placed where the window says (by default its frame's top right).
 internal sealed class WindowCloseButton : UIElement
 {
     private readonly UIWindow _window;
-    private readonly int _sprite;
+    private int _sprite = (int)Sprite.s_gui_close;
 
-    internal WindowCloseButton(UIWindow window, int sprite, double x, double y)
+    internal WindowCloseButton(UIWindow window)
     {
         _window = window;
-        _sprite = sprite;
-        X = x;
-        Y = y;
-        Width = Draw.SpriteWidth(sprite);
-        Height = Draw.SpriteHeight(sprite);
         Tooltip = "Close (Esc)";
+    }
+
+    // Its sprite for the game's resolution, and its size (when the window opens).
+    internal void Fit()
+    {
+        string resolution = Game.Global["resolution"].AsString;
+        _sprite = (int)(resolution is "1280x720" or "1280x800" ? Sprite.s_gui_close_small : Sprite.s_gui_close);
+        Width = Draw.SpriteWidth(_sprite);
+        Height = Draw.SpriteHeight(_sprite);
     }
 
     protected override void OnDraw(double x, double y)

@@ -1,10 +1,10 @@
 namespace StoneForge.Loader;
 
-/// <summary>The Mods window (a <see cref="UIWindow"/>, on the loader's main menu screen): a tab per mod and its
+/// <summary>The Mods window (a <see cref="UISettingsWindow"/>, on the loader's main menu screen): a tab per mod and its
 /// page (its name, Assets\icon.png, any errors, version, author, description, an Enabled checkbox that switches
 /// it on or off at once, and its settings - SettingsPage), with Mods folder, Enable all, Disable all and Close along the bottom. It opens
 /// on the mod open last time.</summary>
-internal sealed class ModsWindow : UIWindow
+internal sealed class ModsWindow : UISettingsWindow
 {
     private const string EnabledTooltip = "Switched on or off straight away. Switched off, its items are taken out of the game - load a save from before to get them back once it's on again.";
     private static readonly int ErrorColour = Draw.Rgb(200, 70, 60);
@@ -26,13 +26,13 @@ internal sealed class ModsWindow : UIWindow
         _mods = ModRegistry.All.OrderBy(m => m.Name, StringComparer.OrdinalIgnoreCase).ToList();
         SetTabs(_mods.Select(m => m.Name));
         if (_mods.Count > 0)
-            Tabs[Math.Clamp(_lastTab, 0, _mods.Count - 1)].Open();
+            Tabs.Tabs[Math.Clamp(_lastTab, 0, _mods.Count - 1)].Open();
         else
             Page.AddText("No mods installed.\n\nA mod goes in its own folder, Stoneshard\\mods\\<mod>\\: its C# source, and its pictures in Assets\\.", Draw.Muted);
-        AddButton(0, "Mods folder").Clicked += _ => OpenFolder();
-        AddButton(1, "Enable all").Clicked += _ => SetAll(true);
-        AddButton(2, "Disable all").Clicked += _ => SetAll(false);
-        AddCloseButton(3);
+        AddButton("Mods folder").Clicked += _ => OpenFolder();
+        AddButton("Enable all").Clicked += _ => SetAll(true);
+        AddButton("Disable all").Clicked += _ => SetAll(false);
+        AddCloseButton();
     }
 
     // A mod's page: as a settings tab's options.

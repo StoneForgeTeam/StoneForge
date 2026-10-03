@@ -147,6 +147,31 @@ public static class Draw
         Game.CallBuiltin("draw_sprite_part_ext", sprite, frame, spriteWidth - cap, 0, cap, spriteHeight, x + width - cap, y, 1, yScale, White, alpha);
     }
 
+    /// <summary>A sprite 9-sliced to <paramref name="width"/> x <paramref name="height"/>: its corners
+    /// (<paramref name="borders"/> in from each edge) stay their size, its edges stretch along, its middle both ways - a
+    /// window frame made any size.</summary>
+    public static void SpriteNineSlice(int sprite, int frame, double x, double y, double width, double height, UIInsets borders, double alpha = 1)
+    {
+        if (sprite < 0)
+            return;
+        double sw = SpriteWidth(sprite), sh = SpriteHeight(sprite);
+        double l = Math.Min(borders.Left, sw / 2), r = Math.Min(borders.Right, sw / 2);
+        double t = Math.Min(borders.Top, sh / 2), b = Math.Min(borders.Bottom, sh / 2);
+        // (Source columns / rows, and where and how big they're drawn.)
+        double[] srcX = { 0, l, sw - r }, srcW = { l, sw - l - r, r };
+        double[] dstX = { x, x + l, x + width - r }, dstW = { l, width - l - r, r };
+        double[] srcY = { 0, t, sh - b }, srcH = { t, sh - t - b, b };
+        double[] dstY = { y, y + t, y + height - b }, dstH = { t, height - t - b, b };
+        for (int row = 0; row < 3; row++)
+            for (int col = 0; col < 3; col++)
+            {
+                if (srcW[col] <= 0 || srcH[row] <= 0 || dstW[col] <= 0 || dstH[row] <= 0)
+                    continue;
+                Game.CallBuiltin("draw_sprite_part_ext", sprite, frame, srcX[col], srcY[row], srcW[col], srcH[row],
+                    dstX[col], dstY[row], dstW[col] / srcW[col], dstH[row] / srcH[row], White, alpha);
+            }
+    }
+
     // The game's text in one of its fonts (a global's name: "f_digits" for its buttons and titles) at a size.
     internal static void GameText(double x, double y, string text, int colour, int halign, int valign, string font, double scale, double alpha = 1)
         => Scripts.scr_drawText.Call(null, x, y, text, colour, halign, valign, Game.Global[font], scale, alpha);
