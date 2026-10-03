@@ -23,6 +23,8 @@ public abstract unsafe class FakeGame : IDisposable
     protected static FakeRandom? Rng;
     // The game's scripts, for the script hook tests (null: not modelled).
     protected static FakeScripts? GameScripts;
+    // What's on screen, for the busy / cutscene tests (null: not modelled).
+    protected static FakeScene? Scene;
 
     /// <summary>A room: instances (id -> object), which are active, object parents, and one culling controller whose
     /// deactivatedInstancesList holds the culled ones' ids - as the game keeps them.</summary>
@@ -352,6 +354,44 @@ public abstract unsafe class FakeGame : IDisposable
         }
     }
 
+    /// <summary>The objects in the room, and scr_is_cutscene's answer - which, as the game's, needs to run as an instance
+    /// (it reads object_index): run with none, it fails.</summary>
+    protected sealed class FakeScene
+    {
+        public const int PlayerPointer = 0x600;
+        public readonly HashSet<GameObjectId> Present = new();
+        public bool Cutscene;
+        public int CutsceneChecks;
+        public IntPtr CheckedAs;
+
+        internal bool Answer(string function, IntPtr self, NValue* args, int count, NValue* result)
+        {
+            switch (function)
+            {
+                case "instance_exists":
+                    result->Kind = 13;
+                    result->Real = Present.Contains((GameObjectId)(int)args[0].Real) ? 1 : 0;
+                    return true;
+                case "instance_find":
+                    if ((int)args[0].Real == (int)GameObjectId.o_player && Present.Contains(GameObjectId.o_player))
+                        *result = new NValue { Kind = 6, Ptr = PlayerPointer };
+                    else
+                        result->Kind = 5;
+                    return true;
+                case "asset_get_index": result->Real = 777; return true;
+                case "script_execute":
+                    CutsceneChecks++;
+                    CheckedAs = self;
+                    if (self == IntPtr.Zero)
+                        return false;
+                    result->Kind = 13;
+                    result->Real = Cutscene ? 1 : 0;
+                    return true;
+            }
+            return false;
+        }
+    }
+
     protected FakeGame()
     {
         Game.Api = Api;
@@ -372,6 +412,7 @@ public abstract unsafe class FakeGame : IDisposable
         Ds = null;
         Rng = null;
         GameScripts = null;
+        Scene = null;
     }
 
     private static BridgeApi* Create()
@@ -423,6 +464,8 @@ public abstract unsafe class FakeGame : IDisposable
         *result = new NValue { Kind = 0 };
         if (GameScripts is { } scripts && scripts.Answer(function, self, other, args, count, result))
             return 1;
+        if (Scene is { } scene)
+            return scene.Answer(function, self, args, count, result) ? 1 : 0;
         if (Rng is { } rng && rng.Answer(function, args, count, result))
             return 1;
         if (Ds is { } ds && ds.Answer(function, args, count, result))

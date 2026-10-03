@@ -98,6 +98,12 @@ public sealed class ReliabilityProbe : IStoneMod, ITickable
         DsLists();
         SeededRandom();
         ScriptHooks();
+        Check("busy and cutscene in the main menu", expect =>
+        {
+            bool busy = Game.IsBusy;
+            _context.Log($"LIVE INFO main menu: IsBusy {busy}, IsCutscene {Game.IsCutscene}");
+            expect(!Game.IsCutscene, "no cutscene with no player");
+        });
         _context.Log($"LIVE SUMMARY main menu: {_passed} passed, {_failed} failed");
     }
 
@@ -406,9 +412,14 @@ public sealed class ReliabilityProbe : IStoneMod, ITickable
         Game.CallBuiltin("randomize");
     }
 
-    // Once a save is loaded: the room's ground loot, active and culled.
+    // Once a save is loaded: busy / cutscene, as the player; the room's ground loot, active and culled.
     private void OffScreen()
     {
+        Check("busy and cutscene in game", () =>
+        {
+            _context.Log($"LIVE INFO in game: IsBusy {Game.IsBusy}, IsCutscene {Game.IsCutscene}");
+            return true;
+        });
         Check("off-screen instances", () =>
         {
             var all = Instances.All(GameObjectId.o_loot, includeCulled: true);

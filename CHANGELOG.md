@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- **`Game.IsBusy`:** whether the game is mid-way through something a mod shouldn't step into: a room change, a fade, a dialogue or a cutscene. **`Game.IsCutscene`:** the game's own check (scr_is_cutscene), run as the player, as it needs to be. It reads the instance's object_index and fails with none. Both are false with no player, except that a room change on the main menu still counts as busy.
 - **Script hooks after the call:** `Scripts.x.After(context, call => ...)` (or `OnScript(name, after: ...)`) runs once the game's call is done, with what it returned in `call.Result`. Set it to change what the caller gets.
   - The loader makes the call itself, with the call's own self, other and arguments. That's the game's version, or a before handler's replacement, which after handlers then follow. Several mods' after handlers share that one call.
 - **Functions defined inside another script's file can be hooked**, e.g. Gwynel's house cutscene steps (`scr_rewards_find_guinnel_1`... in scr_rewards_find_guinnel) or the vineyard thief's wine check (in scr_npc_lines_mannshire_satellites). `[assembly: HookScript(...)]` on one now hooks it in the file that defines it. Before, the patcher said it "can't be hooked".

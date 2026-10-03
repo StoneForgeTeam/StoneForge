@@ -8,6 +8,9 @@ object	6	o_player
 object	7	o_textLoader
 object	8	o_weapon_loot
 object	9	o_cullingController
+object	10	o_black_overlay
+object	11	o_dialogue
+object	12	o_smoothRoomChanger
 sprite	0	s_checkbox
 sprite	1	s_gui_arrow_down
 sprite	2	s_gui_arrow_up
