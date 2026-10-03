@@ -1,3 +1,6 @@
+using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp;
+using Microsoft.CodeAnalysis.Text;
 using StoneForge;
 using StoneForge.Gml;
 using StoneForge.Loader;
@@ -24,9 +27,10 @@ public class GmlTests
         var p = Parse();
         var changed = Parse(Function.Replace("* 2", "* 3"));
         Assert.Equal("ExampleMod.Gml", p.Binding);
-        Assert.Contains("namespace ExampleMod {", p.Bindings());
-        Assert.Contains("public static class Gml {", p.Bindings());
-        Assert.Contains("public static double Twice(double value)", p.Bindings());
+        Assert.Contains("    public static partial class Gml\n    {\n        private const string StoneForgeMod = \"ExampleMod\";", p.BindingSource());
+        Assert.Contains(p.Fingerprint, p.BindingSource());
+        Assert.Contains("        public static double Twice(double value)\n        {\n", p.BindingSource(p.Functions[0]));
+        Assert.Contains("\"" + p.InternalName("Twice") + "\", value).AsReal;", p.BindingSource(p.Functions[0]));
         Assert.Equal(p.InternalName("Twice"), changed.InternalName("Twice"));
         Assert.NotEqual(p.Fingerprint, changed.Fingerprint);
         Assert.NotEqual(p.InternalName("Twice"), Parse(folder: "OtherMod").InternalName("Twice"));
@@ -105,11 +109,43 @@ public class GmlTests
     }
 
     [Fact]
+    public void Each_GML_file_gets_its_own_part_named_after_it()
+    {
+        var files = new (string Path, string Name)[] { ("GML/Twice.gml", "Twice"), ("GML/Fx/Util.gml", "Glow"), ("GML/Ui/Util.gml", "Fade"), ("GML/Gml.gml", "Gather") };
+        var gml = files.Select(f => (AdditionalText)new Text("/mods/ExampleMod/" + f.Path, Fn(f.Name, "return v;"))).ToArray();
+        var references = AppDomain.CurrentDomain.GetAssemblies().Where(a => !a.IsDynamic && a.Location.Length > 0)
+            .Select(a => MetadataReference.CreateFromFile(a.Location));
+        var compilation = CSharpCompilation.Create("Bindings", Array.Empty<SyntaxTree>(), references, new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
+        CSharpGeneratorDriver.Create(new ISourceGenerator[] { new GmlBindingGenerator() }, gml)
+            .RunGeneratorsAndUpdateCompilation(compilation, out var output, out var diagnostics);
+        Assert.Empty(diagnostics);
+        // (Gml.g.cs is the class's own part; a name already taken gets its folder, then the mod's.)
+        Assert.Equal(new[] { "ExampleMod.Gml.g.cs", "Gml.g.cs", "Twice.g.cs", "Ui.Util.g.cs", "Util.g.cs" },
+            output.SyntaxTrees.Select(t => Path.GetFileName(t.FilePath)).OrderBy(n => n, StringComparer.Ordinal));
+        Assert.Empty(output.GetDiagnostics().Where(d => d.Severity == DiagnosticSeverity.Error));
+    }
+
+    [Fact]
+    public void A_mod_can_add_to_its_bindings_with_a_partial_class()
+    {
+        NewMods(out string mod, out _);
+        File.AppendAllText(Path.Combine(mod, "Test.cs"), " namespace MyGmlMod { public static partial class Gml { public static double Four() => Twice(2); } }");
+        var compiled = ModCompiler.Compile(mod);
+        Assert.True(compiled.Assembly != null, string.Join("; ", compiled.Errors));
+    }
+
+    [Fact]
     public void A_class_clashing_with_the_bindings_is_a_compiler_error()
     {
         NewMods(out string mod, out _);
         File.AppendAllText(Path.Combine(mod, "Test.cs"), " namespace MyGmlMod { public class Gml {} }");
         Assert.Null(ModCompiler.Compile(mod).Assembly);
+    }
+
+    private sealed class Text(string path, string text) : AdditionalText
+    {
+        public override string Path => path;
+        public override SourceText GetText(CancellationToken cancellationToken = default) => SourceText.From(text);
     }
 
     // A mods folder: "my-gml mod" (GML, and C# calling it) and "PlainMod" (C# only).
