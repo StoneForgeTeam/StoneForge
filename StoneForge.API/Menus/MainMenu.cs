@@ -38,7 +38,7 @@ public static class MainMenu
     // one made later has the buttons anyway (mods add theirs as they load, before the main menu is up).
     private static void Changed()
     {
-        if (Game.Running && Gm.InstanceExists(GameObject.o_mainMenuNavContainer))
+        if (Game.Running && Gm.InstanceExists(GameObjectId.o_mainMenuNavContainer))
             Game.Global["stonemod_menu_dirty"] = true;
     }
 
@@ -80,8 +80,8 @@ public static class MainMenu
         int count = Buttons.Count(b => !b.Removed);
         if (count == 0)
             return;
-        GameInstance? exit = Instances.All<GameInstance>(GameObject.o_mainMenuButton)
-            .FirstOrDefault(b => b.ObjectIndex == (int)GameObject.o_mainMenuButton && b.Instance.Get("event").AsInt == 3);
+        GameInstance? exit = Instances.All<GameInstance>(GameObjectId.o_mainMenuButton)
+            .FirstOrDefault(b => b.ObjectIndex == (int)GameObjectId.o_mainMenuButton && b.Instance.Get("event").AsInt == 3);
         if (exit == null)
             return;
         double top = exit.Instance.Get("guiLayoutOffsetTop");
@@ -93,7 +93,7 @@ public static class MainMenu
         {
             if (Buttons[i].Removed)
                 continue;
-            Instance button = Scripts.scr_guiCreateInteractive.Call(nav, nav.buttonsContainer, GmValue.From(GameObject.o_mainMenuButton), nav.Depth - 1, 0, top + offset * row++);
+            Instance button = Scripts.scr_guiCreateInteractive.Call(nav, nav.buttonsContainer, GmValue.From(GameObjectId.o_mainMenuButton), nav.Depth - 1, 0, top + offset * row++);
             if (button.IsNone)
             {
                 Game.Log($"Main menu: couldn't make the button \"{Buttons[i].Text}\"");

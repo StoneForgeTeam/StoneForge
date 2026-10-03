@@ -183,8 +183,8 @@ public class UIWindow : UIElement
         Height = Draw.Height;
         // The main menu kept waiting - its list may have been made since it opened (the main menu's room comes
         // a few seconds before its list).
-        if (IsOpen && Gm.InstanceExists(GameObject.o_mainMenuNavContainer))
-            foreach (var nav in Instances.All<GameInstance>(GameObject.o_mainMenuNavContainer))
+        if (IsOpen && Gm.InstanceExists(GameObjectId.o_mainMenuNavContainer))
+            foreach (var nav in Instances.All<GameInstance>(GameObjectId.o_mainMenuNavContainer))
                 if (nav.Instance.Get("active").AsBool)
                     nav.Instance.Set("active", false);
     }
@@ -206,7 +206,7 @@ public class UIWindow : UIElement
                 ByModal[Id(_modal)] = this;
                 Game.CallScript("scr_escapeButtonListAdd", _modal, _modal);
             }
-            foreach (var nav in Instances.All<GameInstance>(GameObject.o_mainMenuNavContainer))
+            foreach (var nav in Instances.All<GameInstance>(GameObjectId.o_mainMenuNavContainer))
                 nav.Instance.Set("active", false);
         }
         catch (Exception e) { Game.Log($"{GetType().Name}: couldn't take the game's input: {e.Message}"); }
@@ -231,7 +231,7 @@ public class UIWindow : UIElement
             }
             if (OpenWindows.Count == 0)
             {
-                foreach (var nav in Instances.All<GameInstance>(GameObject.o_mainMenuNavContainer))
+                foreach (var nav in Instances.All<GameInstance>(GameObjectId.o_mainMenuNavContainer))
                 {
                     nav.Instance.Set("active", true);
                     // Mods switched on or off took buttons off the main menu or put them on: its list is made again.
@@ -242,7 +242,7 @@ public class UIWindow : UIElement
                     }
                 }
                 // (The click that closed it isn't one for the game's buttons under it.)
-                foreach (var button in Instances.All<GameInstance>(GameObject.o_button))
+                foreach (var button in Instances.All<GameInstance>(GameObjectId.o_button))
                     Game.CallBuiltinTrusted("alarm_set", button.Instance, button.Instance, 1, 5);
             }
         }

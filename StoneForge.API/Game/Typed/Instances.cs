@@ -4,7 +4,7 @@ namespace StoneForge;
 public static class Instances
 {
     /// <summary>Every instance of <paramref name="obj"/> (and its children) in the room, as <typeparamref name="T"/>.</summary>
-    public static List<T> All<T>(GameObject obj) where T : GameInstance, new()
+    public static List<T> All<T>(GameObjectId obj) where T : GameInstance, new()
     {
         int count = Gm.InstanceNumber(obj);
         var list = new List<T>(count);
@@ -18,7 +18,7 @@ public static class Instances
     }
 
     /// <summary>The first instance of <paramref name="obj"/>, or null if there's none.</summary>
-    public static T? First<T>(GameObject obj) where T : GameInstance, new()
+    public static T? First<T>(GameObjectId obj) where T : GameInstance, new()
     {
         if (!Gm.InstanceExists(obj))
             return null;
@@ -27,7 +27,7 @@ public static class Instances
     }
 
     /// <summary>The instance of <paramref name="obj"/> nearest to (x, y), or null.</summary>
-    public static T? Nearest<T>(double x, double y, GameObject obj) where T : GameInstance, new()
+    public static T? Nearest<T>(double x, double y, GameObjectId obj) where T : GameInstance, new()
     {
         Instance found = Game.CallBuiltin("instance_nearest", x, y, GmValue.From(obj));
         return found.IsNone ? null : GameInstance.Wrap<T>(found);

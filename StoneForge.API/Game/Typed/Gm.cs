@@ -3,15 +3,15 @@ namespace StoneForge;
 /// <summary>Typed wrappers for common GameMaker built-in functions (anything else: <see cref="Game.CallBuiltin"/>).</summary>
 public static class Gm
 {
-    public static bool InstanceExists(GameObject obj) => Game.CallBuiltin("instance_exists", GmValue.From(obj)).AsBool;
-    public static int InstanceNumber(GameObject obj) => Game.CallBuiltin("instance_number", GmValue.From(obj)).AsInt;
+    public static bool InstanceExists(GameObjectId obj) => Game.CallBuiltin("instance_exists", GmValue.From(obj)).AsBool;
+    public static int InstanceNumber(GameObjectId obj) => Game.CallBuiltin("instance_number", GmValue.From(obj)).AsInt;
 
     /// <summary>Creates an instance of <paramref name="obj"/> at (x, y) on depth <paramref name="depth"/>.</summary>
-    public static T Create<T>(double x, double y, double depth, GameObject obj) where T : GameInstance, new()
+    public static T Create<T>(double x, double y, double depth, GameObjectId obj) where T : GameInstance, new()
         => GameInstance.Wrap<T>(Game.CallBuiltin("instance_create_depth", x, y, depth, GmValue.From(obj)).AsInstance);
 
     public static bool ObjectIsAncestor(int obj, int parent) => Game.CallBuiltin("object_is_ancestor", obj, parent).AsBool;
-    public static bool ObjectIsAncestor(GameObject obj, GameObject parent) => ObjectIsAncestor((int)obj, (int)parent);
+    public static bool ObjectIsAncestor(GameObjectId obj, GameObjectId parent) => ObjectIsAncestor((int)obj, (int)parent);
     public static string ObjectGetName(int obj) => Game.CallBuiltin("object_get_name", obj).AsString;
 
     /// <summary>An asset's index by name (-1 if there's none).</summary>
@@ -47,5 +47,5 @@ public static class Gm
 
     /// <summary>Whether a game is being played: there's a player (o_player, or one of the characters' own
     /// objects), off the main menu.</summary>
-    public static bool InGame => Game.CallBuiltin("instance_exists", (int)GameObject.o_player).AsBool && !InMainMenu;
+    public static bool InGame => Game.CallBuiltin("instance_exists", (int)GameObjectId.o_player).AsBool && !InMainMenu;
 }

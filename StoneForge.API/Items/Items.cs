@@ -112,7 +112,7 @@ public static class Items
         if (names.Count == 0 || !Game.Running)
             return;
         Orphans.UnionWith(names);
-        foreach (var (obj, list) in new[] { (GameObject.o_inv_slot, IdsToRemove), (GameObject.o_weapon_loot, LootIdsToRemove) })
+        foreach (var (obj, list) in new[] { (GameObjectId.o_inv_slot, IdsToRemove), (GameObjectId.o_weapon_loot, LootIdsToRemove) })
             foreach (var found in Instances.All<GameInstance>(obj))
                 if (IdName(found.Instance) is string name && names.Contains(name) && list.Add(found.Instance.Id))
                     Removed.Add(name);
@@ -423,8 +423,8 @@ public static class Items
         if (instance.IsNone)
             return false;
         GmValue index = instance.Get("object_index");
-        return index.Kind == GmKind.Real && (index.AsInt == (int)GameObject.o_player
-            || Game.CallBuiltinTrusted("object_is_ancestor", default, default, index, (int)GameObject.o_player).AsBool);
+        return index.Kind == GmKind.Real && (index.AsInt == (int)GameObjectId.o_player
+            || Game.CallBuiltinTrusted("object_is_ancestor", default, default, index, (int)GameObjectId.o_player).AsBool);
     }
 
     private static List<Item> Equipped<T>() where T : ModItem

@@ -36,7 +36,7 @@ dotnet test StoneForge.Tests -c Release -p:StoneForgeStubGameData=true
 dotnet test StoneForge.Patcher.Tests -c Release
 ```
 
-The stand-in holds only the game names StoneForge's own code and tests use. If you reference another generated name (`GameObject.x`, `Scripts.x`, `Events.x.y`, an object's variable...), add it there, or the Tests workflow fails to build. An API built this way is for testing only: never package it.
+The stand-in holds only the game names StoneForge's own code and tests use. If you reference another generated name (`GameObjectId.x`, `Scripts.x`, `Events.x.y`, an object's variable...), add it there, or the Tests workflow fails to build. An API built this way is for testing only: never package it.
 
 Pinned native binaries and their rebuild instructions are under `lib/Aurie`, `lib/YYToolkit` and `build/BuildThirdParty.ps1`. Library provenance and checksums are under `lib/UndertaleModLib`.
 

@@ -35,6 +35,20 @@ public class DeclarationTests
         finally { Directory.Delete(mods, true); }
     }
 
+    [Fact]
+    public void An_object_is_declared_with_its_parent()
+    {
+        string mods = Path.Combine(Path.GetTempPath(), "StoneForgeDeclarations-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            Mod(mods, "Mp", """{ "id": "mp", "name": "MP", "version": "1" }""",
+                "class Ghost : GameObject { public Ghost() : base(\"ghost\", parent: \"o_enemy\") { } }");
+            var obj = Assert.Single(ModClassDeclaration.Declared(mods));
+            Assert.Equal(("mp__ghost", "GameObject", (string?)"o_enemy"), (obj.Key, obj.BaseType, obj.BasedOn));
+        }
+        finally { Directory.Delete(mods, true); }
+    }
+
     private static void Mod(string mods, string folder, string? manifest, string source)
     {
         string dir = Path.Combine(mods, folder);

@@ -26,6 +26,8 @@ internal sealed class GameFolder
     public string KnownConsumables => Path.Combine(Dotnet, "stoneforge-consumables.txt");
     // ...and mods' skills.
     public string KnownSkills => Path.Combine(Dotnet, "stoneforge-skills.txt");
+    // ...and mods' own objects.
+    public string KnownObjects => Path.Combine(Dotnet, "stoneforge-objects.txt");
     /// <summary>Every file StoneForge installed, relative to the game folder (for upgrades and uninstall).</summary>
     public string Manifest => Path.Combine(Dotnet, "stoneforge-files.txt");
     /// <summary>A copy of the game data from when the game was started on one with -game (no longer made).</summary>

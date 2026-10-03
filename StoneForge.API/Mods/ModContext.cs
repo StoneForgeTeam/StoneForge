@@ -13,6 +13,7 @@ public sealed class ModContext
         Items = new ModItems(this);
         Buffs = new ModBuffs(this);
         Skills = new ModSkills(this);
+        Objects = new GameObjects(this);
     }
 
     private readonly ModFiles? _files;
@@ -45,6 +46,9 @@ public sealed class ModContext
 
     /// <summary>Skill registration for this mod.</summary>
     public ModSkills Skills { get; }
+
+    /// <summary>The mod's own game objects (<see cref="GameObject"/>).</summary>
+    public GameObjects Objects { get; }
 
     /// <summary>The mod's files: its own folder, the game's and Stoneshard's data folder (see <see cref="ModFiles"/>).</summary>
     public ModFiles Files => _files ?? throw new InvalidOperationException("No mod folder");

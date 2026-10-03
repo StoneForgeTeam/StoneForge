@@ -43,6 +43,7 @@ public static unsafe class Bridge
             Items.Install(loader);
             Consumables.Install(loader);
             Skills.Install(loader);
+            GameObjects.Install(loader);
             ModNameTooltip.Install(loader);
             Items.ModsLoaded = () => ModManager.Startup.Finished;
             Buffs.Install(loader);

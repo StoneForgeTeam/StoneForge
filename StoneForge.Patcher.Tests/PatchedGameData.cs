@@ -22,6 +22,7 @@ public sealed class PatchedGameData : IDisposable
     public string BaseSkill { get; } = "";
     public int Consumables { get; }
     public int Skills { get; }
+    public int Objects { get; }
     public int Hooks { get; }
     public GmlProject Gml { get; } = null!;
     private readonly string _output = Path.Combine(Path.GetTempPath(), "StoneForgePatcherTest-" + Guid.NewGuid().ToString("N") + ".win");
@@ -44,6 +45,7 @@ public sealed class PatchedGameData : IDisposable
         BaseSkill = Data.GameObjects.First(o => o.Name.Content.StartsWith("o_skill_") &&
             !o.Name.Content.EndsWith("_ico") && Data.GameObjects.ByName(o.Name.Content + "_ico") != null).Name.Content[8..];
         Skills = SkillObjects.Add(editor, new() { new("sf_test_skill", "ModSkill", BaseSkill), new("sf_test_passive", "ModPassive", null) }).Count;
+        Objects = ModGameObjects.Add(editor, new() { new("sf_test_ghost", "GameObject", "o_enemy"), new("sf_test_plain", "GameObject", null) }).Count;
         // A mod's own GML: GmlFixture's (Twice calls Add, a file read after it).
         string mods = Path.Combine(Path.GetTempPath(), "StoneForgePatcherGml-" + Guid.NewGuid().ToString("N"));
         CopyFolder(Path.Combine(AppContext.BaseDirectory, "GmlFixture"), Path.Combine(mods, "GmlFixture"));

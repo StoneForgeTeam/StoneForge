@@ -248,7 +248,7 @@ internal static class ModManager
         string name = id;
         // One failing cleanup must not strand every later resource or prevent the load context unloading.
         Action[] cleanup = {
-            () => GmlScripts.RemoveMod(name),
+            () => GameObjects.RemoveMod(name), () => GmlScripts.RemoveMod(name),
             () => Hooks.RemoveMod(name), () => MainMenu.RemoveMod(name), () => Items.RemoveMod(name),
             () => Consumables.RemoveMod(name), () => Skills.RemoveMod(name), () => Buffs.RemoveMod(name),
             () => UIWindow.ShutMod(name), () => ModSettings.RemoveMod(name), UITextBox.ReleaseFocus,

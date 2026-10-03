@@ -5,7 +5,7 @@ namespace StoneForge.Generators;
 // The typed, game-specific part of StoneForge's API, from the game's data as StoneForge.DataDump dumped it
 // (StoneForge.API\obj\GameData\*.tsv / *.txt, given to the compiler as AdditionalFiles). A pipeline per file, so editing one
 // regenerates only what's made from it:
-//   assets.tsv  -> Assets.g.cs       (AssetsSource):      enums GameObject, Sprite, Sound, Room.
+//   assets.tsv  -> Assets.g.cs       (AssetsSource):      enums GameObjectId, Sprite, Sound, Room.
 //   scripts.tsv -> Scripts.g.cs      (ScriptsSource):     Scripts.* - every GML script.
 //   objects.tsv -> Objects.g.cs      (ObjectsSource):     StoneForge.Objects - a class per object.
 //   events.tsv  -> Events.g.cs       (EventsSource):      Events.<object>.<event>.

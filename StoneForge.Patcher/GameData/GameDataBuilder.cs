@@ -25,8 +25,9 @@ internal static class GameDataBuilder
         var declared = ModClassDeclaration.Declared(game.Mods);
         var consumables = ModClassDeclaration.WithKnown(declared, game.KnownConsumables);
         var skills = ModClassDeclaration.WithKnown(declared, game.KnownSkills);
+        var objects = ModClassDeclaration.WithKnown(declared, game.KnownObjects);
         var gml = GmlCatalog.Read(game.Mods);
-        string key = Key(newBase ? game.Data : game.BaseData, hooks, consumables, skills) + gml.Fingerprint;
+        string key = Key(newBase ? game.Data : game.BaseData, hooks, consumables, skills, objects) + gml.Fingerprint;
         if (!newBase && key == builtFrom && File.Exists(Path.Combine(game.Dotnet, "stoneforge-gml.txt")))
         {
             PatcherConsole.Log($"Game data up to date ({hooks.Count} hooked script(s)).");
@@ -53,7 +54,7 @@ internal static class GameDataBuilder
                 PatcherConsole.Log(File.Exists(game.BaseData) ? "  data.win has changed (game update or re-patch): using it as the new base" : "  keeping the game's own data.win (dotnet\\data_base.win)");
                 File.Copy(game.Data, game.BaseData, overwrite: true);
             }
-            key = Key(game.BaseData, hooks, consumables, skills) + gml.Fingerprint;
+            key = Key(game.BaseData, hooks, consumables, skills, objects) + gml.Fingerprint;
         }
         if (gameData == null)
         {
@@ -66,6 +67,7 @@ internal static class GameDataBuilder
         LoaderPatches.Apply(editor);
         var added = ConsumableObjects.Add(editor, consumables);
         var addedSkills = SkillObjects.Add(editor, skills);
+        var addedObjects = ModGameObjects.Add(editor, objects);
         int made = ScriptHooks.HookAll(editor, hooks);
         ModGmlPatches.Apply(editor, gml);
 
@@ -78,7 +80,8 @@ internal static class GameDataBuilder
         File.WriteAllLines(game.DataKey, new[] { Stamp(game.Data), key });
         ModClassDeclaration.Remember(game.KnownConsumables, added);
         ModClassDeclaration.Remember(game.KnownSkills, addedSkills);
-        PatcherConsole.Log($"Done ({made} of {hooks.Count} script(s) hooked, {added.Count} mod consumable(s), {addedSkills.Count} mod skill(s)).");
+        ModClassDeclaration.Remember(game.KnownObjects, addedObjects);
+        PatcherConsole.Log($"Done ({made} of {hooks.Count} script(s) hooked, {added.Count} mod consumable(s), {addedSkills.Count} mod skill(s), {addedObjects.Count} mod object(s)).");
     }
 
     /// <summary>Uninstall: the game's own data.win back (if ours is in place), our files gone.</summary>
@@ -98,7 +101,7 @@ internal static class GameDataBuilder
             File.Delete(game.DataKey);
         string gmlState = Path.Combine(game.Dotnet, "stoneforge-gml.txt");
         if (File.Exists(gmlState)) File.Delete(gmlState);
-        foreach (string known in new[] { game.KnownConsumables, game.KnownSkills })
+        foreach (string known in new[] { game.KnownConsumables, game.KnownSkills, game.KnownObjects })
             if (File.Exists(known))
                 File.Delete(known);
     }
@@ -114,8 +117,8 @@ internal static class GameDataBuilder
 
     // What a build is made from: the base data, the hooked scripts, mods' consumables and skills (as declared), and this
     // patcher (its code and its GML).
-    private static string Key(string baseData, List<string> hooks, List<ModClassDeclaration> consumables, List<ModClassDeclaration> skills)
-        => Hash($"{Stamp(baseData)}|{string.Join(",", hooks)}|{string.Join(",", consumables)}|{string.Join(",", skills)}|{Hash(typeof(GameDataBuilder).Assembly.ManifestModule.ModuleVersionId + LoaderGml.Contents())}");
+    private static string Key(string baseData, List<string> hooks, List<ModClassDeclaration> consumables, List<ModClassDeclaration> skills, List<ModClassDeclaration> objects)
+        => Hash($"{Stamp(baseData)}|{string.Join(",", hooks)}|{string.Join(",", consumables)}|{string.Join(",", skills)}|{string.Join(",", objects)}|{Hash(typeof(GameDataBuilder).Assembly.ManifestModule.ModuleVersionId + LoaderGml.Contents())}");
 
     // A file as it stands: its size and time.
     private static string Stamp(string file)

@@ -75,7 +75,7 @@ internal sealed class LoadingScreen : UIElement
             return;
         _cursorHidden = false;
         // (Should the camera not have reset yet, it sets the cursor itself when it has.)
-        var camera = Instances.First<GameInstance>(GameObject.o_cameraController);
+        var camera = Instances.First<GameInstance>(GameObjectId.o_cameraController);
         if (camera != null && !camera.Instance.Get("reset").AsBool)
             Game.CallScript("scr_cursorDataUpdate", camera.Instance, camera.Instance.Get("displayMode"));
     }
@@ -100,7 +100,7 @@ internal sealed class LoadingScreen : UIElement
         double target = startup.Total == 0 ? 1 : (double)startup.Done / startup.Total;
         _shown = _shown < 0 ? target : _shown + (target - _shown) * Math.Min(1, Math.Min(deltaTime, 0.25) * 8);
         _frames++;
-        var camera = Instances.First<GameInstance>(GameObject.o_cameraController);
+        var camera = Instances.First<GameInstance>(GameObjectId.o_cameraController);
         _cameraResetting = camera == null || camera.Instance.Get("reset").AsBool;
         var size = (Width, Height, Game.CallBuiltin("window_get_width").AsReal, Game.CallBuiltin("window_get_height").AsReal);
         if (size != _size && _frames > 1)

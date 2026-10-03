@@ -42,7 +42,7 @@ internal sealed record ModClassDeclaration(string Key, string BaseType, string? 
 
     /// <summary>Every class in the mods' source with a base(...) constructor call whose first argument is a string
     /// literal: the key (with its mod's ID) - and for StoneForge's Consumable or ModSkill itself, the second (or
-    /// basedOn:), what it's based on.</summary>
+    /// basedOn:), what it's based on; for a GameObject, the second (or parent:), the game object it's a child of.</summary>
     public static List<ModClassDeclaration> Declared(string modsDir)
     {
         var declared = new List<ModClassDeclaration>();
@@ -75,9 +75,9 @@ internal sealed record ModClassDeclaration(string Key, string BaseType, string? 
                     if (args.Count == 0 || Literal(args[0]) is not string key || key.Length == 0)
                         continue;
                     string? basedOn = null;
-                    if (baseType is "Consumable" or "ModSkill")
+                    if (baseType is "Consumable" or "ModSkill" or "GameObject")
                     {
-                        var basedOnArg = args.FirstOrDefault(a => a.NameColon?.Name.Identifier.ValueText == "basedOn") ?? (args.Count > 1 ? args[1] : null);
+                        var basedOnArg = args.FirstOrDefault(a => a.NameColon?.Name.Identifier.ValueText is "basedOn" or "parent") ?? (args.Count > 1 ? args[1] : null);
                         basedOn = basedOnArg == null ? null : Literal(basedOnArg);
                         if (basedOn == null)
                         {

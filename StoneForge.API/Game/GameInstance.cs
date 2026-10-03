@@ -29,7 +29,7 @@ public class GameInstance
     public double ImageAngle { get => Get("image_angle"); set => Set("image_angle", value); }
     public double ImageAlpha { get => Get("image_alpha"); set => Set("image_alpha", value); }
     public double SpriteIndex { get => Get("sprite_index"); set => Set("sprite_index", value); }
-    /// <summary>The object it's an instance of (compare with the generated GameObject enum).</summary>
+    /// <summary>The object it's an instance of (compare with the generated GameObjectId enum).</summary>
     public int ObjectIndex => Get("object_index");
     /// <summary>Its GameMaker instance id.</summary>
     public int Id => Get("id");

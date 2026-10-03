@@ -35,7 +35,7 @@ internal static class SkillObjects
             ?? data.GameObjects.FirstOrDefault(o => o.Name.Content.StartsWith("o_pass_skill_", StringComparison.Ordinal) && o.Sprite != null)?.Sprite;
         foreach (var declaration in declarations)
         {
-            if (declaration.BaseType == "Consumable")
+            if (declaration.BaseType is "Consumable" or "GameObject")
                 continue;
             // A mod's passive: o_pass_skill_<key>, one of the game's passives (child of o_skill_passive).
             if (declaration.BaseType == "ModPassive")

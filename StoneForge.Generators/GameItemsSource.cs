@@ -18,7 +18,7 @@ internal static class GameItemsSource
         "Armor", "ArmorColumn", "Attack", "AttackResult", "BuffKind", "BuffStat", "Buffs", "CodeEvent", "Draw", "Effect", "Fx",
         "FxOptions", "GameInstance", "Gm", "GmKind", "GmValue", "Instance", "Instances", "Item", "ItemQuality", "Items",
         "Keyboard", "MainMenu", "ModBuff", "ModContext", "ModFiles", "ModInfo", "ModItem", "Mouse", "Script", "ScriptCall",
-        "Visual", "Weapon", "WeaponColumn", "Game", "Events", "Scripts", "Sprite", "Sound", "Room", "GameObject", "Objects",
+        "Visual", "Weapon", "WeaponColumn", "Game", "Events", "Scripts", "Sprite", "Sound", "Room", "GameObject", "GameObjects", "GameObjectId", "Objects",
         "Consumable", "ConsumableColumn", "Consumables",
     };
 

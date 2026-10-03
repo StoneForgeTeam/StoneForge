@@ -5,13 +5,13 @@ using static StoneForge.Generators.Emit;
 
 namespace StoneForge.Generators;
 
-// assets.tsv (kind, index, name) -> enums GameObject, Sprite, Sound, Room: every asset by name, valued by its
+// assets.tsv (kind, index, name) -> enums GameObjectId, Sprite, Sound, Room: every asset by name, valued by its
 // index.
 internal static class AssetsSource
 {
     private static readonly (string Kind, string Enum, string Summary)[] Kinds =
     {
-        ("object", "GameObject", "Every object in the game."),
+        ("object", "GameObjectId", "Every object in the game, by name: its object index."),
         ("sprite", "Sprite", "Every sprite in the game."),
         ("sound", "Sound", "Every sound in the game."),
         ("room", "Room", "Every room in the game."),

@@ -22,6 +22,7 @@ public class PatcherIntegrationTests : IClassFixture<PatchedGameData>
         RequireData();
         Assert.Equal(1, _game.Consumables);
         Assert.Equal(2, _game.Skills);
+        Assert.Equal(2, _game.Objects);
         Assert.Equal(ScriptHooks.LoaderHooks.Length, _game.Hooks);
     }
 
@@ -40,6 +41,14 @@ public class PatcherIntegrationTests : IClassFixture<PatchedGameData>
         Assert.Equal("o_inv_wine", _game.Read.GetObject("o_inv_sf_test_tonic").ParentId.Name.Content);
         Assert.Equal("o_skill_" + _game.BaseSkill, _game.Read.GetObject("o_skill_sf_test_skill").ParentId.Name.Content);
         Assert.Equal("o_skill_passive", _game.Read.GetObject("o_pass_skill_sf_test_passive").ParentId.Name.Content);
+        var ghost = _game.Read.GetObject("o_sf_test_ghost");
+        Assert.Equal("o_enemy", ghost.ParentId.Name.Content);
+        // (Every event StoneForge runs C# for: Create, Destroy, Clean Up, 3 Steps, 4 Draws, 12 alarms, 16 user events, 4 mouse.)
+        Assert.Equal(42, ghost.Events.SelectMany(e => e).Count());
+        Assert.Contains("event_inherited", _game.Read.ReadGml("gml_Object_o_sf_test_ghost_Create_0"));
+        var plain = _game.Read.GetObject("o_sf_test_plain");
+        Assert.Null(plain.ParentId);
+        Assert.Contains("draw_self", _game.Read.ReadGml("gml_Object_o_sf_test_plain_Draw_0"));
         Assert.Contains(_game.Read.GetObject("o_stonemod_gui").Events.SelectMany(e => e).SelectMany(e => e.Actions), a => a.CodeId != null);
     }
 
