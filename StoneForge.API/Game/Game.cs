@@ -160,6 +160,37 @@ public static unsafe class Game
         }
     }
 
+    // An element of an instance's indexed engine variable (alarm[n]...); undefined if it can't be read.
+    internal static GmValue GetVarAt(Instance instance, string name, int index)
+    {
+        IntPtr pointer = PointerOf(instance);
+        byte* namePtr = Utf8(name);
+        try
+        {
+            NValue result;
+            return Api->GetVarAt(pointer, namePtr, index, &result) != 0 ? FromNative(result) : GmValue.Undefined;
+        }
+        finally { NativeMemory.Free(namePtr); }
+    }
+
+    internal static bool SetVarAt(Instance instance, string name, int index, GmValue value)
+    {
+        IntPtr pointer = PointerOf(instance);
+        byte* namePtr = Utf8(name);
+        var strings = new List<IntPtr>();
+        try
+        {
+            NValue v = ToNative(value, strings);
+            return Api->SetVarAt(pointer, namePtr, index, &v) != 0;
+        }
+        finally
+        {
+            NativeMemory.Free(namePtr);
+            foreach (var s in strings)
+                NativeMemory.Free((void*)s);
+        }
+    }
+
     internal static byte* Utf8(string text)
     {
         int length = Encoding.UTF8.GetByteCount(text);

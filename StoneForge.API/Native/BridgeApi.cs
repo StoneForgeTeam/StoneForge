@@ -8,7 +8,7 @@ namespace StoneForge;
 [StructLayout(LayoutKind.Sequential)]
 internal unsafe struct BridgeApi
 {
-    internal const int ExpectedVersion = 3;
+    internal const int ExpectedVersion = 4;
     public int Size;
     public int Version;
     public delegate* unmanaged<byte*, void> Log;
@@ -23,4 +23,7 @@ internal unsafe struct BridgeApi
     public delegate* unmanaged<IntPtr, int> InstanceId;
     // Lets go of references (arrays and structs: GmRef) C# no longer holds.
     public delegate* unmanaged<long*, int, void> ReleaseRefs;
+    // An element of an instance's indexed engine variable (alarm[n]...).
+    public delegate* unmanaged<IntPtr, byte*, int, NValue*, int> GetVarAt;
+    public delegate* unmanaged<IntPtr, byte*, int, NValue*, int> SetVarAt;
 }

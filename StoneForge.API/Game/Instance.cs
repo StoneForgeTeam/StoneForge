@@ -70,6 +70,10 @@ public readonly struct Instance : IEquatable<Instance>
         set => Set(name, value);
     }
 
+    /// <summary>Its alarms, GameMaker's <c>alarm[0]</c> to <c>alarm[11]</c>: steps until each goes off, -1 when one is
+    /// off. <c>instance.Alarm[2] = -1</c> stops one; <c>instance.Alarm[4] = 1</c> sets one for the next step.</summary>
+    public Alarms Alarm => new(this);
+
     /// <summary>This instance as the typed wrapper <typeparamref name="T"/>.</summary>
     public T As<T>() where T : GameInstance, new() => GameInstance.Wrap<T>(this);
 

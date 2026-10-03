@@ -16,6 +16,9 @@ public class GameInstance
     /// <summary>Whether it's still there.</summary>
     public bool Exists => Instance.Exists;
 
+    /// <summary>Its alarms (<c>alarm[0]</c> to <c>alarm[11]</c>, see <see cref="StoneForge.Alarms"/>).</summary>
+    public Alarms Alarm => Instance.Alarm;
+
     public double X { get => Get("x"); set => Set("x", value); }
     public double Y { get => Get("y"); set => Set("y", value); }
     public double XPrevious => Get("xprevious");

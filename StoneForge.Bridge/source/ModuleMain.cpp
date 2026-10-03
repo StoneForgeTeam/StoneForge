@@ -45,6 +45,9 @@ struct BridgeApi
     int (*InstanceId)(void* Instance);
     // Lets go of references (arrays and structs) C# no longer holds.
     void (*ReleaseRefs)(const int64_t* Ids, int Count);
+    // An element of an instance's indexed engine variable (alarm[n]...).
+    int (*GetVarAt)(void* Instance, const char* Name, int Index, NValue* Result);
+    int (*SetVarAt)(void* Instance, const char* Name, int Index, const NValue* Value);
 };
 
 struct ManagedCallbacks
@@ -404,6 +407,29 @@ static int ApiSetVar(void* Instance, const char* Name, const NValue* Value)
 	return AurieSuccess(g_Yytk->CallBuiltinEx(ignored, "variable_global_set", nullptr, nullptr, { RValue(std::string_view(Name)), value })) ? 1 : 0;
 }
 
+// An element of an instance's indexed engine variable - alarm[n] and the like - through the engine's own accessor with
+// that index (the whole-variable access above passes none). Only the engine's built-ins: an array a script keeps in a
+// variable of its own is a reference C# reads directly.
+static int ApiGetVarAt(void* Instance, const char* Name, int Index, NValue* Result)
+{
+	*Result = {}; Result->Kind = 5;
+	if (!RequireGameThread() || !Instance || Index < 0 || !IsBuiltin(Name))
+		return 0;
+	RValue value;
+	if (!AurieSuccess(g_Yytk->GetBuiltin(Name, static_cast<CInstance*>(Instance), Index, value)))
+		return 0;
+	FromRValue(value, *Result);
+	return 1;
+}
+
+static int ApiSetVarAt(void* Instance, const char* Name, int Index, const NValue* Value)
+{
+	if (!RequireGameThread() || !Instance || Index < 0 || !IsBuiltin(Name))
+		return 0;
+	RValue value = ToRValue(*Value);
+	return AurieSuccess(g_Yytk->SetBuiltin(Name, static_cast<CInstance*>(Instance), Index, value)) ? 1 : 0;
+}
+
 static int ApiHookCode(const char* CodeName)
 {
 	g_HookedNames.insert(CodeName);
@@ -650,9 +676,9 @@ static bool StartDotNet(const fs::path& DotnetDir)
 	}
 
 	g_Api.Size = sizeof(BridgeApi);
-	g_Api.Version = 3;
+	g_Api.Version = 4;
 	g_Callbacks.Size = sizeof(ManagedCallbacks);
-	g_Callbacks.Version = 3;
+	g_Callbacks.Version = 4;
 	g_Api.Log = ApiLog;
 	g_Api.CallBuiltin = ApiCallBuiltin;
 	g_Api.CallScript = ApiCallScript;
@@ -663,6 +689,8 @@ static bool StartDotNet(const fs::path& DotnetDir)
 	g_Api.LastError = ApiLastError;
 	g_Api.InstanceId = ApiInstanceId;
 	g_Api.ReleaseRefs = ApiReleaseRefs;
+	g_Api.GetVarAt = ApiGetVarAt;
+	g_Api.SetVarAt = ApiSetVarAt;
 	rc = initialize(&g_Api, &g_Callbacks);
 	Log("StoneForge initialized: " + std::to_string(rc));
 	return rc == 0;

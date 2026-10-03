@@ -9,6 +9,8 @@
   - Kept alive for the game's garbage collector while C# holds them (the bridge roots them in a global struct, `__stoneforge_refs`), and let go of once C# doesn't (or at once with `Dispose()`).
   - **Breaking:** an array used to arrive as its text (a string), and a struct as a temporary `Instance`.
   - The native bridge's API is version 3: install the matching StoneForge.Bridge.dll and loader together.
+- **Alarms from C#:** `instance.Alarm[n]` (or a typed instance's `Alarm[n]`) reads and sets GameMaker's `alarm[0]` to `alarm[11]` - steps until it goes off, -1 when it's off - through the engine's own accessor. An index outside 0-11 throws.
+  - The native bridge's API is version 4 (`GetVarAt` / `SetVarAt`: an element of an instance's indexed engine variable).
 - The patcher reads its own GML by the system's path separator. Installed deep enough for Windows' long-path form, it failed to read `GML\Items/...`.
 - **Breaking: windows reworked to work with any frame.**
   - `UIWindow` is now only the window: open/close, Escape, the dimmed screen and input blocking as before, a frame and a close button.
