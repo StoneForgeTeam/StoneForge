@@ -1,4 +1,5 @@
 using System.Runtime.InteropServices;
+using System.Text.Json.Nodes;
 using StoneForge;
 using StoneForge.Loader;
 
@@ -16,6 +17,8 @@ public abstract unsafe class FakeGame : IDisposable
     protected static Dictionary<int, int>? ConsumableInstances;
     // A room with culling, for the culled-instance tests (null: not modelled).
     protected static FakeWorld? World;
+    // The game's ds_maps and ds_lists, for the DsMap / DsList tests (null: not modelled).
+    protected static FakeDs? Ds;
 
     /// <summary>A room: instances (id -> object), which are active, object parents, and one culling controller whose
     /// deactivatedInstancesList holds the culled ones' ids - as the game keeps them.</summary>
@@ -95,6 +98,176 @@ public abstract unsafe class FakeGame : IDisposable
         }
     }
 
+    /// <summary>The game's ds_maps and ds_lists, as GameMaker keeps them: maps and lists numbered apart, each key or element
+    /// marked as a nested map or list or not. Marks behave as the worst the game could do: ds_map_set and ds_list_replace
+    /// keep a slot's mark, ds_list_delete doesn't destroy a marked element (ds_map_delete does).</summary>
+    protected sealed class FakeDs
+    {
+        public sealed class Slot
+        {
+            public GmValue Value;
+            public int Mark;
+        }
+
+        public readonly Dictionary<int, List<KeyValuePair<GmValue, Slot>>> Maps = new();
+        public readonly Dictionary<int, List<Slot>> Lists = new();
+        private int _nextMap, _nextList;
+        // (Strings handed back to the API: kept, as the game keeps its own.)
+        private readonly List<IntPtr> _strings = new();
+
+        public int NewMap() { Maps[_nextMap] = new(); return _nextMap++; }
+        public int NewList() { Lists[_nextList] = new(); return _nextList++; }
+
+        private Slot? Find(int map, GmValue key) => Maps[map].FirstOrDefault(p => p.Key == key).Value;
+
+        public void DestroyMap(int id)
+        {
+            if (!Maps.Remove(id, out var map))
+                return;
+            foreach (var (_, slot) in map)
+                DestroyNested(slot);
+        }
+
+        public void DestroyList(int id)
+        {
+            if (!Lists.Remove(id, out var list))
+                return;
+            foreach (var slot in list)
+                DestroyNested(slot);
+        }
+
+        private void DestroyNested(Slot slot)
+        {
+            if (slot.Mark == 1)
+                DestroyMap(slot.Value.AsInt);
+            else if (slot.Mark == 2)
+                DestroyList(slot.Value.AsInt);
+        }
+
+        public string Encode(int map) => EncodeMap(map).ToJsonString();
+
+        private JsonNode? EncodeSlot(Slot slot) => slot.Mark switch
+        {
+            1 => EncodeMap(slot.Value.AsInt),
+            2 => new JsonArray(Lists[slot.Value.AsInt].Select(EncodeSlot).ToArray()),
+            _ => slot.Value.Kind switch
+            {
+                GmKind.Real => JsonValue.Create(slot.Value.AsReal),
+                GmKind.Bool => JsonValue.Create(slot.Value.AsBool),
+                GmKind.Undefined => null,
+                _ => JsonValue.Create(slot.Value.AsString),
+            },
+        };
+
+        private JsonObject EncodeMap(int map)
+        {
+            var o = new JsonObject();
+            foreach (var (key, slot) in Maps[map])
+                o[key.AsString] = EncodeSlot(slot);
+            return o;
+        }
+
+        // (The game's: an object's a map, anything else goes in a map's "default" key; -1 if it isn't JSON.)
+        public int Decode(string json)
+        {
+            JsonNode? node;
+            try { node = JsonNode.Parse(json); }
+            catch (System.Text.Json.JsonException) { return -1; }
+            if (node is JsonObject)
+                return Read(node).Value.AsInt;
+            int map = NewMap();
+            Maps[map].Add(new("default", Read(node)));
+            return map;
+        }
+
+        private Slot Read(JsonNode? node)
+        {
+            switch (node)
+            {
+                case JsonObject o:
+                    int map = NewMap();
+                    foreach (var (key, value) in o)
+                        Maps[map].Add(new(key, Read(value)));
+                    return new Slot { Value = map, Mark = 1 };
+                case JsonArray a:
+                    int list = NewList();
+                    foreach (var value in a)
+                        Lists[list].Add(Read(value));
+                    return new Slot { Value = list, Mark = 2 };
+                case JsonValue v when v.TryGetValue(out bool b):
+                    return new Slot { Value = b };
+                case JsonValue v when v.TryGetValue(out string? text):
+                    return new Slot { Value = text };
+                case JsonValue v:
+                    return new Slot { Value = v.GetValue<double>() };
+                default:
+                    return new Slot();
+            }
+        }
+
+        // A builtin, as the game answers it (false: not one modelled here).
+        internal bool Answer(string function, NValue* args, int count, NValue* result)
+        {
+            var a = new GmValue[count];
+            for (int i = 0; i < count; i++)
+                a[i] = Game.FromNative(args[i]);
+            int id = count > 0 ? a[0].AsInt : -1;
+            GmValue answer = GmValue.Undefined;
+            switch (function)
+            {
+                case "ds_exists": answer = a[1].AsInt == 1 ? Maps.ContainsKey(id) : a[1].AsInt == 2 && Lists.ContainsKey(id); break;
+                case "ds_map_create": answer = NewMap(); break;
+                case "ds_map_destroy": DestroyMap(id); break;
+                case "ds_map_size": answer = Maps[id].Count; break;
+                case "ds_map_exists": answer = Find(id, a[1]) != null; break;
+                case "ds_map_find_value": answer = Find(id, a[1])?.Value ?? GmValue.Undefined; break;
+                case "ds_map_is_map": answer = Find(id, a[1])?.Mark == 1; break;
+                case "ds_map_is_list": answer = Find(id, a[1])?.Mark == 2; break;
+                case "ds_map_set":
+                    if (Find(id, a[1]) is { } set)
+                        set.Value = a[2];
+                    else
+                        Maps[id].Add(new(a[1], new Slot { Value = a[2] }));
+                    break;
+                case "ds_map_add_map":
+                case "ds_map_add_list":
+                    if (Find(id, a[1]) == null)
+                        Maps[id].Add(new(a[1], new Slot { Value = a[2], Mark = function == "ds_map_add_map" ? 1 : 2 }));
+                    break;
+                case "ds_map_delete":
+                    int at = Maps[id].FindIndex(p => p.Key == a[1]);
+                    if (at >= 0)
+                    {
+                        DestroyNested(Maps[id][at].Value);
+                        Maps[id].RemoveAt(at);
+                    }
+                    break;
+                case "ds_map_find_first": answer = Maps[id].Count > 0 ? Maps[id][0].Key : GmValue.Undefined; break;
+                case "ds_map_find_next":
+                    int next = Maps[id].FindIndex(p => p.Key == a[1]) + 1;
+                    answer = next > 0 && next < Maps[id].Count ? Maps[id][next].Key : GmValue.Undefined;
+                    break;
+                case "ds_list_create": answer = NewList(); break;
+                case "ds_list_destroy": DestroyList(id); break;
+                case "ds_list_size": answer = Lists[id].Count; break;
+                case "ds_list_find_value": answer = a[1].AsInt < Lists[id].Count ? Lists[id][a[1].AsInt].Value : GmValue.Undefined; break;
+                case "ds_list_is_map": answer = Lists[id][a[1].AsInt].Mark == 1; break;
+                case "ds_list_is_list": answer = Lists[id][a[1].AsInt].Mark == 2; break;
+                case "ds_list_add": Lists[id].Add(new Slot { Value = a[1] }); break;
+                case "ds_list_insert": Lists[id].Insert(a[1].AsInt, new Slot { Value = a[2] }); break;
+                case "ds_list_replace": Lists[id][a[1].AsInt].Value = a[2]; break;
+                case "ds_list_delete": Lists[id].RemoveAt(a[1].AsInt); break;
+                case "ds_list_mark_as_map": Lists[id][a[1].AsInt].Mark = 1; break;
+                case "ds_list_mark_as_list": Lists[id][a[1].AsInt].Mark = 2; break;
+                case "json_encode": answer = Encode(id); break;
+                case "json_decode": answer = Decode(a[0].AsString); break;
+                default: return false;
+            }
+            *result = Game.ToNative(answer, _strings);
+            return true;
+        }
+    }
+
     protected FakeGame()
     {
         Game.Api = Api;
@@ -112,6 +285,7 @@ public abstract unsafe class FakeGame : IDisposable
         Hooks.Faulted = null;
         ConsumableInstances = null;
         World = null;
+        Ds = null;
     }
 
     private static BridgeApi* Create()
@@ -161,6 +335,8 @@ public abstract unsafe class FakeGame : IDisposable
         string function = Marshal.PtrToStringUTF8((IntPtr)name)!;
         Calls.Add(function);
         *result = new NValue { Kind = 0 };
+        if (Ds is { } ds && ds.Answer(function, args, count, result))
+            return 1;
         if (World is { } world && world.Answer(function, args, count, result))
             return 1;
         if (ConsumableInstances is { } instances)

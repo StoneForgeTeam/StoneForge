@@ -39,6 +39,10 @@ public readonly struct GmValue : IEquatable<GmValue>
     public GmArray? AsArray => Kind == GmKind.Array ? (GmArray)_ref! : null;
     /// <summary>The struct; null if it isn't one.</summary>
     public GmStruct? AsStruct => Kind == GmKind.Struct ? (GmStruct)_ref! : null;
+    /// <summary>The game's ds_map with this number; null if it isn't a number, or no map has it.</summary>
+    public DsMap? AsDsMap => DsMap.From(this);
+    /// <summary>The game's ds_list with this number; null if it isn't a number, or no list has it.</summary>
+    public DsList? AsDsList => DsList.From(this);
 
     /// <summary>The instance as the typed wrapper <typeparamref name="T"/> (an object class from the
     /// generated API, e.g. <c>Objects.o_player</c>).</summary>

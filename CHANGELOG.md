@@ -1,5 +1,13 @@
 # StoneForge changes
 
+## Unreleased
+
+- **ds_maps and ds_lists in C#.** The game keeps almost everything in ds_maps (saves, characters, contracts...). `GmValue.AsDsMap` / `AsDsList` (or `DsMap.From` / `DsList.From`) gives the one a number names, null if there's none; `DsMap.Create()` / `DsList.Create()` makes one.
+  - `DsMap`: `map[key]` (get and set), `Get(key, fallback)`, `Has`, `Remove`, `Keys`, `Count`. `DsList`: `list[i]` (get and set), `Count`, `Add`, `RemoveAt`, `Clear`.
+  - Nested maps and lists: `IsMap` / `IsList`, `GetMap` / `GetList`, and `AddMap` / `AddList`, which mark them as owned (as `ds_map_add_map` / `ds_list_mark_as_map`). Setting or removing a slot that holds a nested one destroys it, and the slot loses its mark.
+  - `ToJson()`, and `DsMap.FromJson` / `DsList.FromJson`.
+  - `AssignFrom(source)` copies another map or list into this one in place, because the game holds references to its maps. Nested maps and lists are copied into the ones already there, at any depth. Keys the source lacks are removed, and a list is cut to the source's length. A slot whose kind changes (plain value, map or list) is destroyed and made anew. Nothing nested is shared with the source.
+
 ## 0.3.0 — Game values and off-screen instances
 
 - **A hook on a script that isn't hookable fails at once.** A mod's `Scripts.x.Before(...)` or `OnScript("x", ...)` on a script the game data doesn't hook would never be called, so it throws. The mod's `Load` fails, in the log and on its Mods page, with the attribute to add: `[assembly: HookScript(nameof(Scripts.x))]`.
