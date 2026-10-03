@@ -1,5 +1,9 @@
 # StoneForge changes
 
+## Unreleased
+
+- GML bindings are now a `public static partial class Gml`, generated as one tidily formatted file per GML file (`Add.gml` gives `Add.g.cs`) plus a shared `Gml.g.cs`. A mod can add its own members with a `partial class Gml` of its own.
+
 ## 0.1.0 — Initial public release
 
 - C# source mods with manifests, version checks, in-game management and reload support.
