@@ -1,6 +1,6 @@
 # StoneForge changes
 
-## Unreleased
+## 0.2.0 — GameObject release
 
 - **Breaking:** the generated enum of the game's objects is now `GameObjectId` (`GameObjectId.o_player`), not `GameObject`. That name is the base class of a mod's own objects.
 - Game objects of a mod's own: `class Ghost : GameObject { public Ghost() : base("ghost", "o_enemy") { } }`, added with `context.Objects.Add`.
