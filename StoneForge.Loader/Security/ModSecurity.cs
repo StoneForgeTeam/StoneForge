@@ -33,6 +33,7 @@ internal static class ModSecurity
         "StoneForge.Objects",
         "StoneForge.GameItems",
         "StoneForge.GameSkills",
+        "StoneForge.GameDamageTypes",
     };
 
     // Single types allowed in otherwise closed namespaces (by metadata name, generic arity as `n).

@@ -9,6 +9,8 @@ namespace StoneForge.Generators;
 //   scripts.tsv -> Scripts.g.cs      (ScriptsSource):     Scripts.* - every GML script.
 //   objects.tsv -> Objects.g.cs      (ObjectsSource):     StoneForge.Objects - a class per object.
 //   events.tsv  -> Events.g.cs       (EventsSource):      Events.<object>.<event>.
+//   damage_types.tsv -> DamageTypes.g.cs (DamageTypesSource): StoneForge.GameDamageTypes - each kind of damage, to
+//               deal or inherit; DamageType.Shock...
 //   weapons.txt / armor.txt (ItemTable)
 //               -> ItemColumns.g.cs  (ItemColumnsSource): WeaponColumn / ArmorColumn.
 //               -> GameItems.g.cs    (GameItemsSource):   StoneForge.GameItems - every item, to inherit.
@@ -35,6 +37,7 @@ public sealed class GameApiGenerator : IIncrementalGenerator
         Emit("scripts.tsv", "Scripts.g.cs", ScriptsSource.Make);
         Emit("objects.tsv", "Objects.g.cs", ObjectsSource.Make);
         Emit("events.tsv", "Events.g.cs", EventsSource.Make);
+        Emit("damage_types.tsv", "DamageTypes.g.cs", DamageTypesSource.Make);
 
         context.RegisterSourceOutput(File("weapons.txt").Combine(File("armor.txt")).Combine(File("consumables.txt")).Combine(File("objects.tsv")), (spc, t) =>
         {

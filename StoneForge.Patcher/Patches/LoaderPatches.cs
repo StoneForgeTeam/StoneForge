@@ -8,6 +8,7 @@ internal static class LoaderPatches
     public static void Apply(GameDataEditor editor)
     {
         ItemScripts.Add(editor);
+        CombatScripts.Add(editor);
         GuiObject.Add(editor);
         InputBlocker.Add(editor);
         FxObject.Add(editor);

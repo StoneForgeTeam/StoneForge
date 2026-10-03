@@ -11,6 +11,8 @@ namespace StoneForge.DataDump;
 /// <item>objects.tsv - name, parent (blank: none), the variables its own events assign on itself (comma-separated).</item>
 /// <item>events.tsv - object, code entry (gml_Object_&lt;object&gt;_&lt;event&gt;): every object event.</item>
 /// <item>skills.tsv - skill object id (o_skill_&lt;id&gt;), its name in the skills table.</item>
+/// <item>damage_types.tsv - each kind of damage (Shock), its resistance stat (Shock_Resistance): the &lt;X&gt;_Damage
+/// variables scr_damage_init sets that the game has an &lt;X&gt;_Resistance for, in its order.</item>
 /// <item>weapons.txt / armor.txt / consumables.txt / skills_stats.txt - the game's item and skill tables as they are
 /// (;-separated rows, the header among them).</item>
 /// </list>
@@ -18,7 +20,7 @@ namespace StoneForge.DataDump;
 internal static class Dump
 {
     // (Bump when what's written changes, so existing dumps are made again.)
-    private const int Format = 1;
+    private const int Format = 2;
     private const string Stamp = "source.txt";
 
     private static readonly (string Code, string File)[] Tables =
@@ -67,6 +69,7 @@ internal static class Dump
             Save("objects.tsv", objects);
             Save("events.tsv", events);
             Save("skills.tsv", Skills(data));
+            Save("damage_types.tsv", DamageTypes(data));
             foreach (var (code, file) in Tables)
                 if (Table(data, code) is { } rows)
                     Save(file, rows);
@@ -129,6 +132,30 @@ internal static class Dump
             objects.Append(obj.Name.Content).Append('\t').Append(obj.ParentId?.Name?.Content ?? "").Append('\t').Append(string.Join(",", vars)).Append('\n');
         }
         return (objects, events);
+    }
+
+    // The kinds of damage: what scr_damage_init sets to 0 (X_Damage) that a unit resists (X_Resistance) - not the
+    // multipliers it sets too (Weapon_Damage, Bodypart_Damage...).
+    private static StringBuilder DamageTypes(UndertaleData data)
+    {
+        var text = new StringBuilder();
+        // (The script's bytecode is its global script's: the function's own entry is a child within it.)
+        if (data.Code.ByName("gml_GlobalScript_scr_damage_init") is not { } code)
+        {
+            Console.WriteLine("warning SFDD002: the game data has no scr_damage_init; damage_types.tsv is empty");
+            return text;
+        }
+        var variables = new HashSet<string>(data.Variables.Where(v => v?.Name != null).Select(v => v.Name.Content), StringComparer.Ordinal);
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var instr in code.Instructions)
+            if (instr.Kind == UndertaleInstruction.Opcode.Pop && instr.ValueVariable?.Name?.Content is { } name
+                && name.EndsWith("_Damage", StringComparison.Ordinal) && seen.Add(name))
+            {
+                string kind = name[..^"_Damage".Length];
+                if (variables.Contains(kind + "_Resistance"))
+                    text.Append(kind).Append('\t').Append(kind).Append("_Resistance").Append('\n');
+            }
+        return text;
     }
 
     // Each o_skill_<id> with an icon object (o_skill_<id>_ico), and its name in the skills table: the string its
