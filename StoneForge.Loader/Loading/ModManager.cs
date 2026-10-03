@@ -270,7 +270,9 @@ internal static class ModManager
             GmlRuntime.Activate(folder, id);
             if (manifest.Trusted) Game.Log($"WARNING: {name}: {ModsWindow.TrustedWarning}");
             if (GmlRuntime.ContainsGml(folder)) Game.Log($"WARNING: {name}: {ModsWindow.GmlWarning}");
-            mod.Load(modContext);
+            MainMenu.BeginLoad();
+            try { mod.Load(modContext); }
+            finally { MainMenu.EndLoad(); }
             Hooks.Mods.Add((id, mod));
             if (mod is ITickable tickable)
                 modContext.AddTickable(tickable);

@@ -1,5 +1,15 @@
 # StoneForge changes
 
+## Unreleased
+
+- Main menu layout:
+  - `MainMenu.AddBefore` / `AddAfter(context, anchor, text, onClick)` place a button relative to any button. The anchor is a game button (`VanillaButton.Play`, or the names `"Play"`/`"Start"`, `"Settings"`, `"Credits"`, `"Exit"`), the text shown on a button (in the game's language), or another mod's button text.
+  - The game's own buttons are added the same way: `AddButton(context, VanillaButton.Exit)`, `AddBefore` / `AddAfter(context, anchor, VanillaButton.Settings)`. One already in the menu is moved.
+  - `MainMenu.ClearButtons(context)` empties the menu: the game's buttons and every mod's added so far.
+  - `MainMenu.RestoreButtons(context)` puts it back as it was at startup: the game's buttons and what every mod did while loading.
+  - The menu is laid out from every loaded mod's calls in load order. A change shows at once (the main list is rebuilt the next frame), or when a window over the menu closes. An anchor that isn't there yet is waited for, then falls back to above Exit (or last). A mod switched off takes its changes with it.
+  - `AddButton(context, text, onClick)` still adds above Exit, or last if Exit isn't there.
+
 ## 0.2.0 — GameObject release
 
 - **Breaking:** the generated enum of the game's objects is now `GameObjectId` (`GameObjectId.o_player`), not `GameObject`. That name is the base class of a mod's own objects.
