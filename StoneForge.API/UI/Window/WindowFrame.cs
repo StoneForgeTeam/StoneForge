@@ -29,7 +29,7 @@ internal sealed class WindowFrame : UIElement
         _sprite = settings;
         if (_window.FrameSprite >= 0)
         {
-            if (Game.CallBuiltin("sprite_exists", _window.FrameSprite).AsBool
+            if (Game.CallBuiltinTrusted("sprite_exists", default, default, _window.FrameSprite).AsBool
                 && Draw.SpriteWidth(_window.FrameSprite) > 0 && Draw.SpriteHeight(_window.FrameSprite) > 0)
                 _sprite = _window.FrameSprite;
             else
