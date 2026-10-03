@@ -1,3 +1,5 @@
+using System.Text.Json;
+
 namespace StoneForge;
 
 /// <summary>A GameMaker ds_map, the game's own: it keeps almost everything in them - the save data, characters,
@@ -39,8 +41,15 @@ public readonly struct DsMap : IEquatable<DsMap>
     /// <summary>A key's value, or <paramref name="fallback"/> if it has none (as the game's ds_map_find_value_ext).</summary>
     public GmValue Get(GmValue key, GmValue fallback) => Has(key) ? this[key] : fallback;
 
-    /// <summary>Takes a key out (ds_map_delete) - a nested map or list there is destroyed with it.</summary>
-    public void Remove(GmValue key) => Game.CallBuiltin("ds_map_delete", Id, key);
+    /// <summary>Takes a key out - a nested map or list there is destroyed with it (the game's ds_map_delete leaves it,
+    /// owned by nothing).</summary>
+    public void Remove(GmValue key)
+    {
+        int kind = IsMap(key) ? Type : IsList(key) ? DsList.Type : 0;
+        GmValue value = this[key];
+        Game.CallBuiltin("ds_map_delete", Id, key);
+        DestroyNested(kind, value);
+    }
 
     /// <summary>How many keys it has.</summary>
     public int Count => Game.CallBuiltin("ds_map_size", Id).AsInt;
@@ -137,7 +146,19 @@ public readonly struct DsMap : IEquatable<DsMap>
     /// <summary>A new map from JSON text, as the game reads it (json_decode): objects and arrays in it nested in it, marked;
     /// an array at the top in its "default" key. Null if the text isn't JSON. The caller owns it: <see cref="Destroy"/> it,
     /// or nest it in another.</summary>
-    public static DsMap? FromJson(string json) => From(Game.CallBuiltin("json_decode", json));
+    public static DsMap? FromJson(string json)
+    {
+        // (The game makes a map of anything at all: text that isn't JSON is turned away first.)
+        try
+        {
+            using var _ = JsonDocument.Parse(json);
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+        return From(Game.CallBuiltin("json_decode", json));
+    }
 
     /// <summary>The map numbered <paramref name="value"/>; null if it isn't a number, or no map has it.</summary>
     public static DsMap? From(GmValue value)
@@ -148,6 +169,16 @@ public readonly struct DsMap : IEquatable<DsMap>
 
     /// <summary>Destroys it - and the maps and lists nested in it.</summary>
     public void Destroy() => Game.CallBuiltin("ds_map_destroy", Id);
+
+    // Destroys a map or list (kind: Type / DsList.Type; 0 neither) taken out of a map or list, if it's still there. (The
+    // game's ds_map_delete and ds_list_delete leave a nested one as it is.)
+    internal static void DestroyNested(int kind, GmValue value)
+    {
+        if (kind == Type && Game.CallBuiltin("ds_exists", value, Type).AsBool)
+            Game.CallBuiltin("ds_map_destroy", value);
+        else if (kind == DsList.Type && Game.CallBuiltin("ds_exists", value, DsList.Type).AsBool)
+            Game.CallBuiltin("ds_list_destroy", value);
+    }
 
     public static implicit operator GmValue(DsMap map) => map.Id;
 

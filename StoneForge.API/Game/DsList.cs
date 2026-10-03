@@ -184,17 +184,14 @@ public readonly struct DsList : IEquatable<DsList>
             Put(index, source[at], 0);
     }
 
-    // Deletes an element, destroying it if it's nested. (Whether ds_list_delete destroys a marked one itself isn't
-    // something to count on: it's destroyed after, if it's still there. A mark goes with its element.)
+    // Deletes an element, destroying it if it's nested (the game's ds_list_delete leaves it, owned by nothing). A mark
+    // goes with its element.
     private void DestroyAt(int index)
     {
         int kind = KindAt(index, Count);
         GmValue value = this[index];
         Game.CallBuiltin("ds_list_delete", Id, index);
-        if (kind == DsMap.Type && Game.CallBuiltin("ds_exists", value, DsMap.Type).AsBool)
-            Game.CallBuiltin("ds_map_destroy", value);
-        else if (kind == Type && Game.CallBuiltin("ds_exists", value, Type).AsBool)
-            Game.CallBuiltin("ds_list_destroy", value);
+        DsMap.DestroyNested(kind, value);
     }
 
     private JsonArray ToJsonNode()

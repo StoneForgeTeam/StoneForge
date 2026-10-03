@@ -99,8 +99,9 @@ public abstract unsafe class FakeGame : IDisposable
     }
 
     /// <summary>The game's ds_maps and ds_lists, as GameMaker keeps them: maps and lists numbered apart, each key or element
-    /// marked as a nested map or list or not. Marks behave as the worst the game could do: ds_map_set and ds_list_replace
-    /// keep a slot's mark, ds_list_delete doesn't destroy a marked element (ds_map_delete does).</summary>
+    /// marked as a nested map or list or not. As the game does (seen by the reliability probe): ds_map_delete and
+    /// ds_list_delete leave a nested one undestroyed, a mark moves with its element, ds_list_replace clears it, and
+    /// json_decode makes a map of anything. ds_map_set keeps a key's mark (the worst it could do).</summary>
     protected sealed class FakeDs
     {
         public sealed class Slot
@@ -167,12 +168,12 @@ public abstract unsafe class FakeGame : IDisposable
             return o;
         }
 
-        // (The game's: an object's a map, anything else goes in a map's "default" key; -1 if it isn't JSON.)
+        // (The game's: an object's a map, anything else goes in a map's "default" key; a map, empty, if it isn't JSON.)
         public int Decode(string json)
         {
             JsonNode? node;
             try { node = JsonNode.Parse(json); }
-            catch (System.Text.Json.JsonException) { return -1; }
+            catch (System.Text.Json.JsonException) { return NewMap(); }
             if (node is JsonObject)
                 return Read(node).Value.AsInt;
             int map = NewMap();
@@ -237,10 +238,7 @@ public abstract unsafe class FakeGame : IDisposable
                 case "ds_map_delete":
                     int at = Maps[id].FindIndex(p => p.Key == a[1]);
                     if (at >= 0)
-                    {
-                        DestroyNested(Maps[id][at].Value);
                         Maps[id].RemoveAt(at);
-                    }
                     break;
                 case "ds_map_find_first": answer = Maps[id].Count > 0 ? Maps[id][0].Key : GmValue.Undefined; break;
                 case "ds_map_find_next":
@@ -255,7 +253,7 @@ public abstract unsafe class FakeGame : IDisposable
                 case "ds_list_is_list": answer = Lists[id][a[1].AsInt].Mark == 2; break;
                 case "ds_list_add": Lists[id].Add(new Slot { Value = a[1] }); break;
                 case "ds_list_insert": Lists[id].Insert(a[1].AsInt, new Slot { Value = a[2] }); break;
-                case "ds_list_replace": Lists[id][a[1].AsInt].Value = a[2]; break;
+                case "ds_list_replace": Lists[id][a[1].AsInt] = new Slot { Value = a[2] }; break;
                 case "ds_list_delete": Lists[id].RemoveAt(a[1].AsInt); break;
                 case "ds_list_mark_as_map": Lists[id][a[1].AsInt].Mark = 1; break;
                 case "ds_list_mark_as_list": Lists[id][a[1].AsInt].Mark = 2; break;
