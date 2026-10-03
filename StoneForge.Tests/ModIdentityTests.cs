@@ -16,6 +16,14 @@ public class ModIdentityTests
     public void Only_id_name_and_version_are_required()
         => Assert.Equal(new ManifestData("m", "M", "1", "", "", null), ModIdentity.ParseManifest("""{ "id": "m", "name": "M", "version": "1" }"""));
 
+    [Fact]
+    public void Trusted_is_a_boolean_off_by_default()
+    {
+        Assert.True(ModIdentity.ParseManifest("""{ "id": "m", "name": "M", "version": "1", "trusted": true }""").Trusted);
+        Assert.False(ModIdentity.ParseManifest("""{ "id": "m", "name": "M", "version": "1", "trusted": false }""").Trusted);
+        Assert.False(ModIdentity.ParseManifest("""{ "id": "m", "name": "M", "version": "1" }""").Trusted);
+    }
+
     [Theory]
     [InlineData("""{ "name": "M", "version": "1" }""")] // no id
     [InlineData("""{ "id": "m", "version": "1" }""")] // no name
@@ -23,6 +31,7 @@ public class ModIdentityTests
     [InlineData("""{ "id": "m", "name": "M", "version": "1", "nmae": "x" }""")] // unknown key
     [InlineData("""{ "id": "m", "name": "M", "version": 1 }""")] // not a string
     [InlineData("""{ "id": "m", "name": "M", "version": "1", "stoneforge": "soon" }""")]
+    [InlineData("""{ "id": "m", "name": "M", "version": "1", "trusted": "yes" }""")] // not a boolean
     [InlineData("""[ "id" ]""")]
     [InlineData("""{ "id": "m", """)] // not JSON
     public void Invalid_manifests_say_why(string json)

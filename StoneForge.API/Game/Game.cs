@@ -37,6 +37,14 @@ public static unsafe class Game
         return Call(Api->CallBuiltin, name, PointerOf(self), PointerOf(other), args);
     }
 
+    /// <summary>Calls any built-in, those <see cref="CallBuiltin"/> refuses too (files, network, steam_...). For trusted
+    /// mods only (mod.json <c>"trusted": true</c>): a mod in StoneForge's sandbox isn't allowed to use it.</summary>
+    public static GmValue CallBuiltinUnrestricted(string name, Instance self, Instance other, params GmValue[] args)
+    {
+        CheckRunning(name);
+        return CallBuiltinTrusted(name, self, other, args);
+    }
+
     // An instance as the game holds it - one known by its id (a script's result, instance_find's) found by it:
     // as self or other it must be the instance itself, or the call runs as no instance.
     internal static IntPtr PointerOf(Instance instance)

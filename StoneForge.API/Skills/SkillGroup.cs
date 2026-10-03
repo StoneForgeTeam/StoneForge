@@ -1,6 +1,6 @@
 namespace StoneForge;
 
-/// <summary>The skills menu's sections (<see cref="ModSkill.Group"/>). The game's three - <see cref="Weaponry"/>,
+/// <summary>The skills menu's sections (<see cref="ModSkillBase.Group"/>). The game's three - <see cref="Weaponry"/>,
 /// <see cref="Utility"/>, <see cref="Sorcery"/> - take a mod's tabs after their own; any other name is a section of
 /// the mods' own, after the game's (default: <see cref="Mods"/>).
 /// <code>Group = SkillGroup.Sorcery;   // its tab beside Pyromancy, Electromancy...</code></summary>

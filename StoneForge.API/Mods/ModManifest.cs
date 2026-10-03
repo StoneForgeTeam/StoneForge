@@ -24,6 +24,7 @@ public sealed class ModManifest
         Author = data.Author;
         Description = data.Description;
         StoneForge = data.StoneForge;
+        Trusted = data.Trusted;
     }
 
     /// <summary>The mod's permanent ID: lowercase letters and digits, single underscores between them.</summary>
@@ -38,6 +39,11 @@ public sealed class ModManifest
     public string Description { get; }
     /// <summary>The StoneForge version it needs, at least (null if not given).</summary>
     public string? StoneForge { get; }
+    /// <summary>Whether it asks for full access (<c>"trusted": true</c>): its own DLLs (any .dll in its folder, outside
+    /// bin and obj - LiteNetLib, say), compiled against the whole of .NET, and none of StoneForge's checks on what it
+    /// uses - networking, threads, files, reflection. It runs only once the player has allowed it in the Mods window,
+    /// warned that it can do anything a program on their PC can.</summary>
+    public bool Trusted { get; }
 
     /// <summary>A mod's folder's mod.json (throws InvalidDataException saying what's wrong).</summary>
     internal static ModManifest Read(string folder) => new(ModIdentity.ReadManifest(folder));

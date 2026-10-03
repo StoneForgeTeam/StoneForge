@@ -1,6 +1,6 @@
 namespace StoneForge;
 
-/// <summary>The character's attributes, as skills ask for them (<see cref="ModSkill.RequireAttributes"/>).</summary>
+/// <summary>The character's attributes, as skills ask for them (<see cref="ModSkillBase.RequireAttributes"/>).</summary>
 public enum CharacterAttribute
 {
     Strength,

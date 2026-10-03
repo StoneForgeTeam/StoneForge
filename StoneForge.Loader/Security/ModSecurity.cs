@@ -83,6 +83,8 @@ internal static class ModSecurity
         "System.Object.GetType", "System.Exception.TargetSite", "System.Exception.GetType",
         "System.Array.CreateInstance", "System.Array.CreateInstanceFromArrayType",
         "System.Enum.GetUnderlyingType", "System.Convert.ChangeType",
+        // (Trusted mods' only.)
+        "StoneForge.Game.CallBuiltinUnrestricted",
     };
 
     // The loader itself (StoneForge.Loader - a separate assembly mods aren't even compiled against): never theirs.

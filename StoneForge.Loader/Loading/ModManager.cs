@@ -54,10 +54,10 @@ internal static class ModManager
         GmlRuntime.Snapshot();
         Game.Log($"{_folders.Count} mod folder(s) in {modsDir}");
         foreach (string folder in _folders)
-            // (A mod's own build output - bin, obj, from editing it in an IDE - is expected and ignored.)
-            if (Directory.GetFiles(folder, "*.dll", SearchOption.AllDirectories)
-                .Any(f => !Path.GetRelativePath(folder, f).Split(Path.DirectorySeparatorChar).Any(p => p is "bin" or "obj")))
-                Game.Log($"{Path.GetFileName(folder)}: has DLLs - ignored (mods are C# source; DLLs are never loaded)");
+            // (A mod's own build output - bin, obj, from editing it in an IDE - is expected and ignored; only a
+            // trusted mod's own DLLs are loaded.)
+            if (ModCompiler.Libraries(folder).Count > 0 && !IsTrusted(folder))
+                Game.Log($"{Path.GetFileName(folder)}: has DLLs - ignored (mods are C# source; only a trusted mod's DLLs are loaded - mod.json \"trusted\": true)");
         Startup.Begin(_folders.Count);
         _compiles = new Task<Compiled>[_folders.Count];
         Task previous = Task.CompletedTask;
@@ -181,10 +181,12 @@ internal static class ModManager
             UnloadIfUnused(context, folderName);
             return;
         }
-        bool enabled = !ModRegistry.Disabled.Contains(manifest.Id);
+        bool enabled = ModRegistry.MayRun(manifest.Id, manifest.Trusted);
         ModRegistry.All.Add(Info(folder, manifest, enabled));
         if (enabled)
             Start(manifest, folder, mod, context);
+        else if (manifest.Trusted && !ModRegistry.Disabled.Contains(manifest.Id))
+            Game.Log($"{manifest.Name} {manifest.Version} asks for full access (trusted) - not loaded until it's allowed in the Mods window");
         else
             Game.Log($"{manifest.Name} {manifest.Version} is switched off (Mods window) - not loaded");
         UnloadIfUnused(context, folderName);
@@ -192,7 +194,7 @@ internal static class ModManager
 
     private static ModInfo Info(string folder, ModManifest manifest, bool enabled, string? error = null, string idSuffix = "")
         => new(manifest.Id + idSuffix, manifest.Name, manifest.Description, manifest.Author, manifest.Version, enabled, folder,
-            error, ContainsGml: GmlRuntime.ContainsGml(folder));
+            error, ContainsGml: GmlRuntime.ContainsGml(folder), Trusted: manifest.Trusted);
 
     private static void SwitchOn(string id)
     {
@@ -200,6 +202,11 @@ internal static class ModManager
         if (Mods.Any(m => m.Id == id))
             return;
         var info = ModRegistry.All.FirstOrDefault(m => m.Id == id);
+        if (info != null && info.Trusted && !ModRegistry.Allowed.Contains(id))
+        {
+            Game.Log($"{info.Name}: asks for full access - allow it in the Mods window first");
+            return;
+        }
         if (info == null || info.Error != null)
         {
             Game.Log($"{info?.Name ?? id}: can't be switched on{(info?.Error != null ? " - " + info.Error : "")}");
@@ -261,6 +268,7 @@ internal static class ModManager
             ModRegistry.SetFault(id, null);
             var modContext = new ModContext(manifest, folder);
             GmlRuntime.Activate(folder, id);
+            if (manifest.Trusted) Game.Log($"WARNING: {name}: {ModsWindow.TrustedWarning}");
             if (GmlRuntime.ContainsGml(folder)) Game.Log($"WARNING: {name}: {ModsWindow.GmlWarning}");
             mod.Load(modContext);
             Hooks.Mods.Add((id, mod));
@@ -294,7 +302,7 @@ internal static class ModManager
         }
         catch (Exception e) { return new Compiled(null, new ModCompiler.Result(null, new List<string> { e.Message }), 0); }
         ModCompiler.Result result;
-        try { result = ModCompiler.Compile(folder); }
+        try { result = ModCompiler.Compile(folder, manifest.Trusted); }
         catch (Exception e) { result = new ModCompiler.Result(null, new List<string> { e.Message }); }
         return new Compiled(manifest, result, Math.Max(1, timer.ElapsedMilliseconds));
     }
@@ -313,7 +321,7 @@ internal static class ModManager
                 ModRegistry.All.Add(new ModInfo(m?.Id ?? folderName, m?.Name ?? folderName, m?.Description ?? "", m?.Author ?? "", m?.Version ?? "?",
                     !ModRegistry.Disabled.Contains(m?.Id ?? folderName), folder,
                     "Not loaded: " + why + string.Concat(details.Take(6).Select(d => "\n" + d)),
-                    ContainsGml: GmlRuntime.ContainsGml(folder)));
+                    ContainsGml: GmlRuntime.ContainsGml(folder), Trusted: m?.Trusted ?? false));
             }
         }
         // (No compile happened: a missing or invalid mod.json, or a StoneForge too old for it.)
@@ -328,7 +336,7 @@ internal static class ModManager
             return (null, null);
         }
         Game.Log($"{folderName}: compiled and checked in {compiled.Milliseconds} ms");
-        var context = new ModLoadContext(folderName);
+        var context = new ModLoadContext(folderName, compiled.Manifest.Trusted ? ModCompiler.Libraries(folder) : null);
         try
         {
             Assembly assembly = context.LoadFromStream(new MemoryStream(compiled.Result.Assembly));
@@ -348,6 +356,13 @@ internal static class ModManager
             context.Unload();
             return (null, null);
         }
+    }
+
+    // Whether a folder's mod.json asks for full access (false: it doesn't, or it has no valid one).
+    private static bool IsTrusted(string folder)
+    {
+        try { return ModManifest.Read(folder).Trusted; }
+        catch { return false; }
     }
 
     // A context no loaded mod uses any more (its mods switched off, or never on): unloaded.

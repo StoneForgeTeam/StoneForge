@@ -19,8 +19,8 @@ namespace StoneForge;
 ///     protected override void OnCast(SkillCast cast) => ...;
 /// }
 /// </code>
-/// Add it with <see cref="Skills.Add"/>: it's on its <see cref="Tab"/> of the skills menu (under its
-/// <see cref="Group"/>'s header), learnt with ability points. Its key must be written as a string literal in the base(...) call: StoneForge's patcher reads it
+/// Add it with <see cref="Skills.Add"/>: it's on its <see cref="ModSkillBase.Tab"/> of the skills menu (under its
+/// <see cref="ModSkillBase.Group"/>'s header), learnt with ability points. Its key must be written as a string literal in the base(...) call: StoneForge's patcher reads it
 /// from the source to give the game objects for it (o_skill_&lt;key&gt; and its icon) at the game's next start.</summary>
 public abstract class ModSkill : ModSkillBase
 {

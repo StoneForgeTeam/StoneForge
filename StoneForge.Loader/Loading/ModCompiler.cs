@@ -9,7 +9,8 @@ namespace StoneForge.Loader;
 // Mods are C# source - every .cs file in mods\<mod>\ (and its subfolders) - compiled here with Roslyn when the
 // game starts: against a few assemblies only (the core types, collections, LINQ, Regex, and this loader), with
 // unsafe code off, and checked by ModSecurity before the result is ever loaded. A mod that doesn't compile or
-// isn't allowed isn't loaded; why is logged and shown in the Mods window.
+// isn't allowed isn't loaded; why is logged and shown in the Mods window. A trusted mod (mod.json "trusted": true)
+// is compiled against the whole framework and its own DLLs instead, unchecked: it can do anything.
 internal static class ModCompiler
 {
     internal sealed record Result(byte[]? Assembly, List<string> Errors);
@@ -43,12 +44,46 @@ internal static class ModCompiler
         return refs.ToImmutableArray();
     });
 
+    // A trusted mod's: the whole framework (every platform assembly), and StoneForge.API.
+    private static readonly Lazy<ImmutableArray<MetadataReference>> TrustedReferences = new(() =>
+    {
+        string api = typeof(IStoneMod).Assembly.Location;
+        var refs = new List<MetadataReference> { MetadataReference.CreateFromFile(api) };
+        var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { Path.GetFileNameWithoutExtension(api) };
+        string tpa = AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES") as string ?? "";
+        var paths = tpa.Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries).ToList();
+        if (paths.Count == 0)
+            paths = Directory.GetFiles(Path.GetDirectoryName(typeof(object).Assembly.Location)!, "*.dll").ToList();
+        foreach (string path in paths)
+            if (names.Add(Path.GetFileNameWithoutExtension(path)) && IsManaged(path))
+                refs.Add(MetadataReference.CreateFromFile(path));
+        return refs.ToImmutableArray();
+    });
+
+    /// <summary>A trusted mod's own DLLs: every .dll in its folder (bin and obj aside) - managed ones are referenced
+    /// when it's compiled and loaded with it (ModLoadContext), native ones loaded when its code asks for them.</summary>
+    internal static List<string> Libraries(string folder) => Directory.GetFiles(folder, "*.dll", SearchOption.AllDirectories)
+        .Where(f => !Path.GetRelativePath(folder, f).Split(Path.DirectorySeparatorChar).Any(p => p is "bin" or "obj"))
+        .OrderBy(f => f, StringComparer.OrdinalIgnoreCase).ToList();
+
+    // Whether a DLL is a .NET assembly (not a native one).
+    internal static bool IsManaged(string path)
+    {
+        try
+        {
+            using var stream = File.OpenRead(path);
+            using var reader = new System.Reflection.PortableExecutable.PEReader(stream);
+            return reader.HasMetadata;
+        }
+        catch { return false; }
+    }
+
     /// <summary>A mod's .cs files (bin and obj folders aside), in a stable order.</summary>
     internal static List<string> SourceFiles(string folder) => Directory.GetFiles(folder, "*.cs", SearchOption.AllDirectories)
         .Where(f => !Path.GetRelativePath(folder, f).Split(Path.DirectorySeparatorChar).Any(p => p is "bin" or "obj"))
         .OrderBy(f => f, StringComparer.OrdinalIgnoreCase).ToList();
 
-    internal static Result Compile(string folder)
+    internal static Result Compile(string folder, bool trusted = false)
     {
         var files = SourceFiles(folder);
         if (files.Count == 0)
@@ -59,10 +94,13 @@ internal static class ModCompiler
         string assemblyName = "StoneMod_" + new string(Path.GetFileName(folder).Where(char.IsLetterOrDigit).ToArray()) + "_" + Guid.NewGuid().ToString("N")[..8];
         var options = new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary,
             optimizationLevel: OptimizationLevel.Release,
-            allowUnsafe: false,
+            allowUnsafe: trusted,
             nullableContextOptions: NullableContextOptions.Enable,
             metadataImportOptions: MetadataImportOptions.Public);
-        Compilation compilation = CSharpCompilation.Create(assemblyName, trees, References.Value, options);
+        var references = trusted
+            ? TrustedReferences.Value.AddRange(Libraries(folder).Where(IsManaged).Select(f => MetadataReference.CreateFromFile(f)))
+            : References.Value;
+        Compilation compilation = CSharpCompilation.Create(assemblyName, trees, references, options);
         // (Its GML\**\*.gml, for its bindings: <Folder>.Gml.)
         var additional = GmlCatalog.Files(folder).Select(path => (AdditionalText)new GmlText(Path.GetFullPath(path))).ToArray();
         GeneratorDriver driver = CSharpGeneratorDriver.Create(new[] { new GmlBindingGenerator() }, additional, parse);
@@ -75,7 +113,7 @@ internal static class ModCompiler
             .Select(Format).Take(20).ToList();
         if (errors.Count > 0)
             return new Result(null, errors);
-        var problems = ModSecurity.Check((CSharpCompilation)compilation);
+        var problems = trusted ? new List<string>() : ModSecurity.Check((CSharpCompilation)compilation);
         if (problems.Count > 0)
             return new Result(null, problems.Take(20).Prepend("not allowed:").ToList());
 

@@ -4,7 +4,7 @@ using System.Text.RegularExpressions;
 namespace StoneForge;
 
 /// <summary>A mod's mod.json, as read (shared by the loader's API and the patcher).</summary>
-internal sealed record ManifestData(string Id, string Name, string Version, string Author, string Description, string? StoneForge);
+internal sealed record ManifestData(string Id, string Name, string Version, string Author, string Description, string? StoneForge, bool Trusted = false);
 
 /// <summary>Who a mod is - its mod.json - and how its content is named: content keyed "key" in the mod "examplemod"
 /// is "examplemod:key" to mods, and "examplemod__key" in the game's data (objects, tables, saves). A mod ID has no
@@ -15,7 +15,7 @@ internal static class ModIdentity
 
     // Lowercase letters and digits, single underscores between them: "examplemod", "failmelon_examplemod".
     private static readonly Regex IdPattern = new("^[a-z][a-z0-9]*(_[a-z0-9]+)*$", RegexOptions.CultureInvariant);
-    private static readonly string[] Keys = { "id", "name", "version", "author", "description", "stoneforge" };
+    private static readonly string[] Keys = { "id", "name", "version", "author", "description", "stoneforge", "trusted" };
 
     public static bool IsValidId(string id) => id.Length <= 64 && IdPattern.IsMatch(id);
 
@@ -62,10 +62,22 @@ internal static class ModIdentity
             if (root.ValueKind != JsonValueKind.Object)
                 throw new InvalidDataException($"{ManifestFile} must be a JSON object");
             var values = new Dictionary<string, string>(StringComparer.Ordinal);
+            bool trusted = false;
             foreach (var property in root.EnumerateObject())
             {
                 if (!Keys.Contains(property.Name))
                     throw new InvalidDataException($"{ManifestFile}: unknown key \"{property.Name}\" (it has {string.Join(", ", Keys)})");
+                // (Full access - its own DLLs, no sandbox: see ModManifest.Trusted.)
+                if (property.Name == "trusted")
+                {
+                    trusted = property.Value.ValueKind switch
+                    {
+                        JsonValueKind.True => true,
+                        JsonValueKind.False => false,
+                        _ => throw new InvalidDataException($"{ManifestFile}: \"trusted\" must be true or false"),
+                    };
+                    continue;
+                }
                 if (property.Value.ValueKind != JsonValueKind.String)
                     throw new InvalidDataException($"{ManifestFile}: \"{property.Name}\" must be a string");
                 values[property.Name] = property.Value.GetString()!.Trim();
@@ -79,7 +91,7 @@ internal static class ModIdentity
             if (stoneForge != null && !System.Version.TryParse(stoneForge.Count(c => c == '.') == 0 ? stoneForge + ".0" : stoneForge, out _))
                 throw new InvalidDataException($"{ManifestFile}: stoneforge \"{stoneForge}\" - the StoneForge version it needs, e.g. \"0.1\"");
             return new ManifestData(id, Required("name"), Required("version"), values.GetValueOrDefault("author") ?? "",
-                values.GetValueOrDefault("description") ?? "", stoneForge);
+                values.GetValueOrDefault("description") ?? "", stoneForge, trusted);
         }
     }
 

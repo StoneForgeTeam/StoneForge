@@ -10,6 +10,7 @@ internal sealed class ModsWindow : UIWindow
     private static readonly int ErrorColour = Draw.Rgb(200, 70, 60);
     // (The game's yellow, as its tooltips highlight with.)
     private static readonly int WarningColour = Draw.Rgb(232, 196, 82);
+    internal const string TrustedWarning = "This mod asks for full access: it runs outside StoneForge's security, with its own DLLs, and can do anything a program on your PC can - files, the network, other programs. Only allow mods you trust. Ticking Enabled allows it.";
     internal const string GmlWarning = "This mod uses GML bindings and can bypass StoneForge's security. Its GML can't be hot-reloaded: changes need a restart of the game. Use at your own discretion.";
 
     private List<ModInfo> _mods = new();
@@ -41,6 +42,8 @@ internal sealed class ModsWindow : UIWindow
         var mod = ModRegistry.All.FirstOrDefault(m => m.Id == _mods[tab.Index].Id) ?? _mods[tab.Index];
         Page.Clear();
         Page.AddHeader(mod.Name);
+        if (mod.Trusted)
+            Page.AddText(TrustedWarning, ErrorColour);
         if (mod.ContainsGml)
         {
             Page.AddText(GmlWarning, WarningColour);
@@ -60,7 +63,7 @@ internal sealed class ModsWindow : UIWindow
         if (mod.Description.Length > 0)
             Page.AddText(mod.Description);
         _enabled = Page.AddCheckbox("Enabled", IsEnabled(mod), EnabledTooltip);
-        _enabled.Changed += on => SetEnabled(mod.Id, on);
+        _enabled.Changed += on => SetEnabled(mod, on);
         // (Its settings, if it's loaded and has some.)
         SettingsPage.Add(Page, mod.Id, () => tab.Open());
     }
@@ -70,21 +73,24 @@ internal sealed class ModsWindow : UIWindow
     // Every mod switched on / off, the open page's checkbox with them.
     private void SetAll(bool on)
     {
+        // (A trusted mod is never allowed in bulk: only by its own checkbox, under its warning.)
         foreach (var mod in _mods)
-            if (IsEnabled(mod) != on)
-                SetEnabled(mod.Id, on);
-        if (_enabled != null)
-            _enabled.Checked = on;
+            if (IsEnabled(mod) != on && !(on && mod.Trusted))
+                SetEnabled(mod, on);
+        if (_enabled != null && _mods.Count > 0)
+            _enabled.Checked = IsEnabled(_mods[Math.Clamp(_lastTab, 0, _mods.Count - 1)]);
         Gm.AudioPlaySound(on ? Sound.snd_checkbox_on : Sound.snd_checkbox_off, 4);
     }
 
-    private static bool IsEnabled(ModInfo mod) => !ModRegistry.Disabled.Contains(mod.Id);
+    private static bool IsEnabled(ModInfo mod) => ModRegistry.MayRun(mod.Id, mod.Trusted);
 
-    // Saved for the next start, and done now (next frame).
-    private static void SetEnabled(string id, bool enabled)
+    // Saved for the next start, and done now (next frame). (A trusted mod switched on is allowed; off, no longer.)
+    private static void SetEnabled(ModInfo mod, bool enabled)
     {
-        ModRegistry.SetEnabled(id, enabled);
-        ModManager.Request(id, enabled);
+        if (mod.Trusted)
+            ModRegistry.SetAllowed(mod.Id, enabled);
+        ModRegistry.SetEnabled(mod.Id, enabled);
+        ModManager.Request(mod.Id, enabled);
     }
 
     private static void OpenFolder()
