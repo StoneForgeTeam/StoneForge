@@ -93,6 +93,40 @@ public class MainMenuTests : IDisposable
     }
 
     [Fact]
-    public void Only_the_games_four_buttons_are_game_buttons()
+    public void Back_goes_back_one_menu()
+    {
+        MainMenu.BeginLoad();
+        MainMenu.AddButton(A, "Example Button", Nothing);
+        MainMenu.EndLoad();
+        MainMenu.ClearButtons(A);
+        MainMenu.AddButton(A, VanillaButton.Play);
+        MainMenu.AddButton(A, "Play Options", Nothing);
+        MainMenu.AddButton(A, VanillaButton.Back);
+        MainMenu.ClearButtons(A);
+        MainMenu.AddButton(A, VanillaButton.NewGame);
+        MainMenu.AddButton(A, VanillaButton.Back);
+        Assert.True(MainMenu.UndoLastClear());
+        Assert.Equal(new[] { "Play", "Play Options", "Back" }, MainMenu.Describe());
+        Assert.True(MainMenu.UndoLastClear());
+        Assert.Equal(new[] { "Play", "Settings", "Credits", "Example Button", "Exit" }, MainMenu.Describe());
+        // (At the menu as it started: nothing to undo.)
+        Assert.False(MainMenu.UndoLastClear());
+    }
+
+    [Theory]
+    [InlineData("New Game", VanillaButton.NewGame)]
+    [InlineData("loadgame", VanillaButton.LoadGame)]
+    [InlineData("Continue", VanillaButton.Continue)]
+    [InlineData("Start", VanillaButton.Play)]
+    public void Game_buttons_are_named_with_or_without_spaces(string name, VanillaButton which)
+    {
+        MainMenu.ClearButtons(A);
+        MainMenu.AddButton(A, which);
+        MainMenu.AddBefore(A, name, "Mine", Nothing);
+        Assert.Equal(new[] { "Mine", which.ToString() }, MainMenu.Describe());
+    }
+
+    [Fact]
+    public void Only_the_games_buttons_are_game_buttons()
         => Assert.Throws<ArgumentOutOfRangeException>(() => MainMenu.AddButton(A, (VanillaButton)9));
 }

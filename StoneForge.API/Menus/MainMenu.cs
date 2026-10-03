@@ -2,14 +2,30 @@ using StoneForge.Objects;
 
 namespace StoneForge;
 
-/// <summary>The game's own main menu buttons, by what they do (their text depends on the game's language).</summary>
+/// <summary>The game's own main menu buttons - the main list's and its play screens' - by what they do (their text is
+/// the game's, in its language). Each does in the menu what it does in the game's own, greyed out (or, Continue
+/// without a last save, left out) as the game's is.</summary>
 public enum VanillaButton
 {
-    /// <summary>Opens the play screen (new game, load...). "Start" names it too.</summary>
+    /// <summary>Opens the play screen (Continue, New Game, Load Game). "Start" names it too.</summary>
     Play = 0,
     Settings = 1,
     Credits = 2,
     Exit = 3,
+    /// <summary>Loads the last save (greyed out when it can't be; left out with none).</summary>
+    Continue = 4,
+    /// <summary>Opens the new game screen (Prologue, Adventure, permadeath).</summary>
+    NewGame = 5,
+    /// <summary>Opens the saves (greyed out with none).</summary>
+    LoadGame = 6,
+    /// <summary>Starts a new game with the prologue.</summary>
+    Prologue = 7,
+    /// <summary>Starts a new game in the adventure (no prologue, permadeath off).</summary>
+    Adventure = 8,
+    /// <summary>The game's Back: back to the list before, as it goes back a screen from its play screens - the last
+    /// <see cref="MainMenu.ClearButtons"/> (and everything since) undone, and the list made again. At the menu as it
+    /// started, it stays.</summary>
+    Back = 10,
 }
 
 /// <summary>The main menu's list of buttons. Mods add their own above Exit (<see cref="AddButton(ModContext, string, Action)"/>),
@@ -105,13 +121,37 @@ public static class MainMenu
     /// while it loaded - whatever's been cleared, added or moved since is undone.</summary>
     public static void RestoreButtons(ModContext context)
     {
-        foreach (var op in Ops.Where(op => !op.FromLoad).ToList())
-        {
-            Ops.Remove(op);
-            if (op is AddOp add)
-                ById.Remove(add.Button.Id);
-        }
+        UndoSinceStartup();
         Changed();
+    }
+
+    // One menu back: the last ClearButtons since the mods loaded, and everything since, undone (false: none).
+    internal static bool UndoLastClear()
+    {
+        int last = Ops.FindLastIndex(op => op is ClearOp && !op.FromLoad);
+        if (last < 0)
+            return false;
+        // (By place: the ops are records, equal by value - Remove would take the first one alike.)
+        for (int i = Ops.Count - 1; i >= last; i--)
+            if (!Ops[i].FromLoad)
+                Forget(i);
+        return true;
+    }
+
+    // What's been done to the menu since the mods loaded, undone.
+    private static void UndoSinceStartup()
+    {
+        for (int i = Ops.Count - 1; i >= 0; i--)
+            if (!Ops[i].FromLoad)
+                Forget(i);
+    }
+
+    // An op gone, with its button.
+    private static void Forget(int index)
+    {
+        if (Ops[index] is AddOp add)
+            ById.Remove(add.Button.Id);
+        Ops.RemoveAt(index);
     }
 
     private static void Vanilla(ModContext context, VanillaButton button, string? anchor, bool after, bool waits = true)
@@ -141,12 +181,22 @@ public static class MainMenu
         Changed();
     }
 
+    // A game button by name: its VanillaButton name, spaces or not ("New Game", "LoadGame"), or "Start" for Play.
     private static VanillaButton? ParseVanilla(string name)
     {
-        if (string.Equals(name.Trim(), "Start", StringComparison.OrdinalIgnoreCase))
+        string key = name.Replace(" ", "").Trim();
+        if (string.Equals(key, "Start", StringComparison.OrdinalIgnoreCase))
             return VanillaButton.Play;
-        return Enum.TryParse(name.Trim(), ignoreCase: true, out VanillaButton which) && Enum.IsDefined(which) ? which : null;
+        return Enum.TryParse(key, ignoreCase: true, out VanillaButton which) && Enum.IsDefined(which) ? which : null;
     }
+
+    // The game's text for each of its buttons: their row in its button_hover table.
+    private static readonly Dictionary<VanillaButton, int> TextRows = new()
+    {
+        [VanillaButton.Play] = 13, [VanillaButton.Settings] = 14, [VanillaButton.Credits] = 51, [VanillaButton.Exit] = 15,
+        [VanillaButton.Continue] = 21, [VanillaButton.NewGame] = 20, [VanillaButton.LoadGame] = 90,
+        [VanillaButton.Prologue] = 81, [VanillaButton.Adventure] = 82, [VanillaButton.Back] = 17,
+    };
 
     // The list, from every loaded mod's calls in order; texts: the game's buttons' as shown (to name them by). A call
     // whose anchor isn't there yet is tried again after the rest (another mod's button may come later), then placed
@@ -248,8 +298,9 @@ public static class MainMenu
         }
     }
 
-    // Our buttons carry this variable: their Button.Id.
+    // Our buttons carry this variable: their Button.Id (BackId: a game's Back in our menu).
     internal const string IndexVar = "stonemod_button";
+    private const int BackId = -2;
     private static Instance _pressed;
     private static readonly List<Instance> Made = new();
     private static Instance _fadeFrom;
@@ -268,9 +319,17 @@ public static class MainMenu
         // event_user(event) on release. Ours have no event; we note the release before and act after.
         Events.o_mainMenuButton.Other_25.Before(context, button =>
         {
-            if (button.Instance.Get(IndexVar).Kind == GmKind.Real && button.Instance.Get("guiInteractiveState").AsInt == 4
+            if (button.Instance.Get(IndexVar) is { Kind: GmKind.Real } mark && mark.AsInt != BackId && button.Instance.Get("guiInteractiveState").AsInt == 4
                 && button.Instance.Get("pressed").AsBool && button.Instance.Get("is_activate").AsBool)
                 _pressed = button.Instance;
+            return false;
+        });
+        // Our Back (the game's - user event 10, its event 10): one menu back, before the game makes its main list again.
+        // (The game's own Back on its play screens is left as it is.)
+        Events.o_mainMenuButton.Other_20.Before(context, button =>
+        {
+            if (button.Instance.Get(IndexVar) is { Kind: GmKind.Real } id && id.AsInt == BackId)
+                UndoLastClear();
             return false;
         });
         Events.o_mainMenuButton.Other_25.After(context, button =>
@@ -300,37 +359,58 @@ public static class MainMenu
                 vanilla.TryAdd((VanillaButton)e, button);
         if (vanilla.Count == 0)
             return;
-        var list = Layout(vanilla.ToDictionary(v => v.Key, v => v.Value.Instance.Get("text").AsString));
+        var texts = TextRows.ToDictionary(t => t.Key, t => GameText(t.Value));
+        var list = Layout(texts);
         // (The game's buttons fade in, and ours with them - with one of the game's that stays.)
         double alpha = vanilla.Values.First().ImageAlpha;
         double offset = nav.buttonsOffset;
         foreach (var (which, button) in vanilla)
             if (!list.Any(entry => entry.Vanilla == which))
                 Game.CallBuiltin("instance_destroy", button.Instance);
+        // (Prologue and Adventure apply the new game screen's permadeath checkbox: none here.)
+        if (!Game.CallBuiltin("variable_instance_exists", nav.Instance, "permadeathCheckbox").AsBool)
+            nav.Instance.Set("permadeathCheckbox", -4);
         int row = 0;
         foreach (var entry in list)
         {
             double top = offset * row;
-            if (entry.Vanilla is { } which)
+            if (entry.Vanilla is { } which && vanilla.TryGetValue(which, out var built))
             {
-                if (!vanilla.TryGetValue(which, out var button))
-                    continue;
-                Scripts.scr_guiLayoutOffsetUpdate.Call(nav, button, 0, top);
-                _fadeFrom = button.Instance;
+                Scripts.scr_guiLayoutOffsetUpdate.Call(nav, built, 0, top);
+                _fadeFrom = built.Instance;
                 row++;
                 continue;
             }
-            var mod = entry.Mod!;
+            // (Continue with no last save: left out, as the game does.)
+            bool? usable = entry.Vanilla is { } check ? Usable(check) : true;
+            if (usable == null)
+                continue;
             Instance made = Scripts.scr_guiCreateInteractive.Call(nav, nav.buttonsContainer, GmValue.From(GameObjectId.o_mainMenuButton), nav.Depth - 1, 0, top);
             if (made.IsNone)
             {
-                Game.Log($"Main menu: couldn't make the button \"{mod.Text}\"");
+                Game.Log($"Main menu: couldn't make the button \"{entry.Mod?.Text ?? entry.Vanilla.ToString()}\"");
                 continue;
             }
-            made.Set("text", mod.Text);
-            // (No event: the click is ours - see Install.)
-            made.Set("event", -4);
-            made.Set(IndexVar, mod.Id);
+            if (entry.Vanilla is { } game)
+            {
+                made.Set("text", texts[game]);
+                // (The game's own action; Back, marked as ours, undoes the menu's changes first - see Install.)
+                made.Set("event", (int)game);
+                if (game == VanillaButton.Back)
+                    made.Set(IndexVar, BackId);
+                if (usable == false)
+                {
+                    made.Set("is_activate", false);
+                    made.Set("is_deactivate", true);
+                }
+            }
+            else
+            {
+                made.Set("text", entry.Mod!.Text);
+                // (No event: the click is ours - see Install.)
+                made.Set("event", -4);
+                made.Set(IndexVar, entry.Mod.Id);
+            }
             made.Set("image_alpha", alpha);
             Made.Add(made);
             row++;
@@ -340,6 +420,58 @@ public static class MainMenu
         // buyGameButton, made at the end of Create, the same way); Create lays it out itself afterwards.
         if (Game.CallBuiltin("variable_instance_exists", nav.Instance, "buyGameButton").AsBool)
             Game.CallBuiltinAs("event_user", nav.Instance, nav.Instance, 15);
+    }
+
+    // A game button's text, from its button_hover table (its name, before that's loaded).
+    private static string GameText(int row)
+    {
+        GmValue table = Game.Global["button_hover"];
+        string text = table.Kind == GmKind.Real ? Game.CallBuiltin("ds_list_find_value", table, row).AsString : "";
+        return text.Length > 0 ? text : TextRows.First(t => t.Value == row).Key.ToString().ToUpperInvariant();
+    }
+
+    // Whether one of the game's play screen buttons can be used now, as its screen (o_mainMenuNavContainer user event 1)
+    // decides: true yes, false greyed out, null left out (Continue without a last save).
+    private static bool? Usable(VanillaButton button)
+    {
+        try
+        {
+            switch (button)
+            {
+                case VanillaButton.Continue:
+                {
+                    GmValue slots = Game.Global["slotsMap"];
+                    var character = Game.CallBuiltin("ds_map_find_value", slots, "lastCharacter");
+                    var save = Game.CallBuiltin("ds_map_find_value", slots, "lastSave");
+                    GmValue map = Game.CallScript("scr_slotSaveMapLoad", default, character, save);
+                    if (map.Kind != GmKind.Real || map.AsInt < 0)
+                        return null;
+                    try
+                    {
+                        bool valid = Game.CallBuiltin("ds_map_find_value", map, "valid").AsBool;
+                        GmValue wipe = Game.CallScript("ds_map_find_value_ext", default, map, "wipeVersion", Game.Global["slotsWipeVersionInit"]);
+                        GmValue compiler = Game.CallScript("ds_map_find_value_ext", default, map, "compiler", Game.Global["slotsCompilerInit"]);
+                        return valid && wipe == Game.Global["slotsWipeVersion"] && compiler == Game.Global["slotsCompiler"];
+                    }
+                    finally { Game.CallBuiltin("ds_map_destroy", map); }
+                }
+                case VanillaButton.NewGame:
+                {
+                    GmValue order = Game.CallScript("scr_slotsGetOrderList", default);
+                    try { return Game.CallBuiltin("ds_list_size", order).AsInt < 10; }
+                    finally { Game.CallBuiltin("ds_list_destroy", order); }
+                }
+                case VanillaButton.LoadGame:
+                    return Game.CallScript("scr_slotsExist", default).AsBool;
+                default:
+                    return true;
+            }
+        }
+        catch (Exception e)
+        {
+            Game.Log($"Main menu: couldn't tell whether {button} can be used: {e.Message}");
+            return button == VanillaButton.Continue ? null : true;
+        }
     }
 
     // While the list fades in, ours keep the game's buttons' opacity (with none of theirs left, ours just show).
