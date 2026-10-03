@@ -3,6 +3,12 @@ using System.Collections.Generic;
 using System.Linq;
 using StoneForge;
 
+// Functions defined inside another script's file: easeOutCubic (in EasingEquations - the probe calls it), the vineyard
+// thief's wine check and a Gwynel house cutscene step (only hooked, to show they can be).
+[assembly: HookScript(nameof(Scripts.easeOutCubic))]
+[assembly: HookScript(nameof(Scripts.scr_npc_lines_vineyard_thief_check_wine))]
+[assembly: HookScript(nameof(Scripts.scr_rewards_find_guinnel_1))]
+
 // Install only in a disposable development game copy. Exercises API behavior in the main menu, without loading a save;
 // once a save is loaded, the off-screen instances too. Every check logs LIVE PASS / LIVE FAIL (LIVE INFO: what the game
 // itself does, for the record).
@@ -12,6 +18,10 @@ public sealed class ReliabilityProbe : IStoneMod, ITickable
     private Instance _captured;
     private bool _done, _inGameDone;
     private int _sprite, _passed, _failed;
+    // easeOutCubic's hooks: what they saw, while the probe calls it (the game's own calls only counted).
+    private bool _probing;
+    private int _gameCalls;
+    private readonly List<double> _beforeArgs = new(), _afterResults = new();
 
     public void Load(ModContext context)
     {
@@ -33,6 +43,24 @@ public sealed class ReliabilityProbe : IStoneMod, ITickable
         }
         catch (ArgumentException e) { Pass("hook check: an unhooked script", e.Message.Split('\n')[0]); }
         Check("hook check: a hookable script", () => { context.OnScript("scr_atr", call => false); return true; });
+        Check("hook check: functions inside another script's file", () =>
+        {
+            Scripts.scr_npc_lines_vineyard_thief_check_wine.Before(context, call => false);
+            Scripts.scr_rewards_find_guinnel_1.Before(context, call => false);
+            Scripts.easeOutCubic.Before(context, call =>
+            {
+                if (_probing) _beforeArgs.Add(call.Args[0].AsReal);
+                else _gameCalls++;
+                return false;
+            });
+            Scripts.easeOutCubic.After(context, call =>
+            {
+                if (!_probing) return;
+                _afterResults.Add(call.Result.AsReal);
+                call.Result = call.Result + 1;
+            });
+            return true;
+        });
     }
 
     public void Tick(double deltaTime)
@@ -69,6 +97,7 @@ public sealed class ReliabilityProbe : IStoneMod, ITickable
         DsMaps();
         DsLists();
         SeededRandom();
+        ScriptHooks();
         _context.Log($"LIVE SUMMARY main menu: {_passed} passed, {_failed} failed");
     }
 
@@ -322,6 +351,28 @@ public sealed class ReliabilityProbe : IStoneMod, ITickable
             shorter.Destroy();
             target.Destroy();
             return ok;
+        });
+    }
+
+    private void ScriptHooks()
+    {
+        _context.Log($"LIVE INFO easeOutCubic called by the game so far: {_gameCalls}");
+        Check("script After, on a function inside another script's file", expect =>
+        {
+            _probing = true;
+            try
+            {
+                double result = Scripts.easeOutCubic.Call(null, 0.5).AsReal;
+                expect(_beforeArgs.SequenceEqual(new[] { 0.5 }), "before saw the call: " + string.Join(",", _beforeArgs));
+                expect(_afterResults.SequenceEqual(new[] { 0.875 }), "after saw its result: " + string.Join(",", _afterResults));
+                expect(result == 1.875, "after changed the result: " + result);
+                double original = Scripts.easeOutCubic.CallOriginal(null, 0.5).AsReal;
+                expect(original == 0.875, "CallOriginal: " + original);
+                expect(_beforeArgs.Count == 1 && _afterResults.Count == 1, "CallOriginal skipped the hooks");
+                double again = Scripts.easeOutCubic.Call(null, 0).AsReal;
+                expect(again == 1 && _afterResults.Count == 2, "hooked again after CallOriginal: " + again);
+            }
+            finally { _probing = false; }
         });
     }
 

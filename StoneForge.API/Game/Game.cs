@@ -117,7 +117,10 @@ public static unsafe partial class Game
     /// <summary>Calls a GML script of the game ("scr_atr"), as <paramref name="self"/> (the global scope if
     /// none) - through the game's own script_execute, which works on the bytecode runner. A hooked script's
     /// hooks run too (<see cref="Script.CallOriginal(ScriptCall)"/> skips them).</summary>
-    public static GmValue CallScript(string name, Instance self, params GmValue[] args)
+    public static GmValue CallScript(string name, Instance self, params GmValue[] args) => CallScript(name, self, self, args);
+
+    // A script with its own self and other.
+    internal static GmValue CallScript(string name, Instance self, Instance other, GmValue[] args)
     {
         CheckRunning(name);
         if (!ScriptIndexes.TryGetValue(name, out int index))
@@ -130,7 +133,7 @@ public static unsafe partial class Game
         var all = new GmValue[args.Length + 1];
         all[0] = index;
         args.CopyTo(all, 1);
-        return CallBuiltinTrusted("script_execute", self, self, all);
+        return CallBuiltinTrusted("script_execute", self, other, all);
     }
 
     /// <summary>Writes a line to the loader's log (mods\dotnet\bridge.log).</summary>

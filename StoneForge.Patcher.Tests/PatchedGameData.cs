@@ -24,6 +24,15 @@ public sealed class PatchedGameData : IDisposable
     public int Skills { get; }
     public int Objects { get; }
     public int Hooks { get; }
+    /// <summary>Functions defined inside another script's file, hooked as a mod would (Gwynel's house cutscene steps, the
+    /// vineyard thief's wine check).</summary>
+    public static readonly string[] InnerHooks =
+    {
+        "scr_rewards_find_guinnel_1", "scr_rewards_find_guinnel_door_2", "scr_npc_lines_vineyard_thief_check_wine",
+    };
+    public List<string> InnerHooked { get; } = new();
+    /// <summary>The functions each of their files declared before (its child entries).</summary>
+    public Dictionary<string, string[]> InnerFiles { get; } = new();
     public GmlProject Gml { get; } = null!;
     private readonly string _output = Path.Combine(Path.GetTempPath(), "StoneForgePatcherTest-" + Guid.NewGuid().ToString("N") + ".win");
 
@@ -57,6 +66,9 @@ public sealed class PatchedGameData : IDisposable
         }
         finally { Directory.Delete(mods, true); }
         Hooks = ScriptHooks.HookAll(editor, ScriptHooks.LoaderHooks);
+        foreach (string file in InnerHooks.Select(editor.ScriptFile).Distinct())
+            InnerFiles[file] = Data.Code.ByName(file).ChildEntries.Select(c => c.Name.Content).OrderBy(n => n, StringComparer.Ordinal).ToArray();
+        ScriptHooks.HookAll(editor, InnerHooks, InnerHooked);
         using (var output = File.Create(_output))
             UndertaleIO.Write(output, Data, _ => { });
         using (var roundtrip = File.OpenRead(_output))

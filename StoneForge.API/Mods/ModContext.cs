@@ -127,8 +127,11 @@ public sealed class ModContext
     /// its code: you get its name, self, other and arguments. Return true (after setting
     /// <see cref="ScriptCall.Result"/>) to replace the call - the script's own code doesn't run and the
     /// caller gets Result. The mod also declares the script with <see cref="HookScriptAttribute"/>, so the
-    /// patcher makes it hookable.</summary>
-    public void OnScript(string scriptName, Func<ScriptCall, bool> before) => Hooks.AddScript(Id, scriptName, before);
+    /// patcher makes it hookable.
+    /// <para><paramref name="after"/> runs once the call is done, with what it returned in <see cref="ScriptCall.Result"/>
+    /// (set it to change what the caller gets).</para></summary>
+    public void OnScript(string scriptName, Func<ScriptCall, bool>? before = null, Action<ScriptCall>? after = null)
+        => Hooks.AddScript(Id, scriptName, before, after);
 
     /// <summary>Writes a line to the loader's log, tagged with the mod's name.</summary>
     public void Log(string text) => Game.Log($"[{Name}] {text}");

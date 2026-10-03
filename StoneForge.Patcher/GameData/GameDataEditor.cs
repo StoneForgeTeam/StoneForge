@@ -49,6 +49,12 @@ internal sealed class GameDataEditor
         Import(name, source);
     }
 
+    /// <summary>The code entry that declares function <paramref name="name"/>: its global script - gml_GlobalScript_&lt;name&gt;,
+    /// or another's for a function defined in another script's file (scr_rewards_find_guinnel_1, in
+    /// gml_GlobalScript_scr_rewards_find_guinnel).</summary>
+    public string ScriptFile(string name)
+        => Data.Code.ByName("gml_Script_" + name)?.ParentEntry?.Name?.Content ?? "gml_GlobalScript_" + name;
+
     /// <summary>A global script declaring function <paramref name="name"/> (gml_GlobalScript_&lt;name&gt;, which the
     /// game runs at start to define it).</summary>
     public UndertaleCode AddFunction(string source, string name)

@@ -425,10 +425,7 @@ public static class Skills
         // The game's own cast, its birth found after: the newest of its object.
         GmValue spell = Arg(call, 0);
         int birthObject = spell.Kind == GmKind.String ? Gm.AssetGetIndex(spell.AsString) : spell.AsInt;
-        string flag = "__smh_" + call.Name;
-        Game.Global[flag] = false;
-        try { call.Result = Game.CallScript(call.Name, call.Self, call.Args); }
-        finally { Game.Global[flag] = true; }
+        call.Result = Hooks.CallOriginal(call.Name, call.Self, call.Other, call.Args);
         int count = birthObject >= 0 ? Game.CallBuiltinTrusted("instance_number", default, default, birthObject).AsInt : 0;
         Instance birth = count > 0 ? Game.CallBuiltinTrusted("instance_find", default, default, birthObject, count - 1).AsInstance : default;
         if (birth.IsNone || !birth.Exists)

@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- **Script hooks after the call:** `Scripts.x.After(context, call => ...)` (or `OnScript(name, after: ...)`) runs once the game's call is done, with what it returned in `call.Result`. Set it to change what the caller gets.
+  - The loader makes the call itself, with the call's own self, other and arguments. That's the game's version, or a before handler's replacement, which after handlers then follow. Several mods' after handlers share that one call.
+- **Functions defined inside another script's file can be hooked**, e.g. Gwynel's house cutscene steps (`scr_rewards_find_guinnel_1`... in scr_rewards_find_guinnel) or the vineyard thief's wine check (in scr_npc_lines_mannshire_satellites). `[assembly: HookScript(...)]` on one now hooks it in the file that defines it. Before, the patcher said it "can't be hooked".
+- `CallOriginal` skips the hooks for its own call only. It used to turn the script's hooks off for the whole call, so the calls it made in turn (a recursive one included) weren't hooked either.
 - **Seeded random:** `Game.WithSeed(seed, action)` (or `WithSeed(seed, () => value)`) runs code with the game's random generator seeded, so its irandom, random, choose... draw the same numbers every time, in every game. Then the generator carries on.
   - GameMaker can't save where its generator is: `random_get_seed` gives only the seed it started from, so setting that back replays the numbers already drawn. Instead the seed to carry on with is drawn from the generator first. A random game stays random, a seeded one stays the same everywhere, and nothing repeats. This also holds when the code throws, and when calls are nested.
   - Any whole number works as a seed; it's brought into GameMaker's range (0 to 2^31 - 2) the same way everywhere.

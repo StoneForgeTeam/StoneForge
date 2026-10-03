@@ -21,6 +21,8 @@ public abstract unsafe class FakeGame : IDisposable
     protected static FakeDs? Ds;
     // The game's random generator, for the seeded random tests (null: not modelled).
     protected static FakeRandom? Rng;
+    // The game's scripts, for the script hook tests (null: not modelled).
+    protected static FakeScripts? GameScripts;
 
     /// <summary>A room: instances (id -> object), which are active, object parents, and one culling controller whose
     /// deactivatedInstancesList holds the culled ones' ids - as the game keeps them.</summary>
@@ -305,6 +307,51 @@ public abstract unsafe class FakeGame : IDisposable
         }
     }
 
+    /// <summary>GML scripts, each a C# body, called with script_execute. A hooked one calls in first, as the patcher's
+    /// block at the top of its body does (unless it's <see cref="Unhooked"/>: not hookable in the game data).</summary>
+    protected sealed class FakeScripts
+    {
+        private const int FirstIndex = 5000;
+        private readonly List<string> _names = new();
+        private readonly Dictionary<string, Func<GmValue[], GmValue>> _bodies = new();
+        public readonly HashSet<string> Unhooked = new();
+        // How many times each one's own code ran; the self and other of the last run.
+        public readonly Dictionary<string, int> Runs = new();
+        public IntPtr LastSelf, LastOther;
+
+        public void Add(string name, Func<GmValue[], GmValue> body)
+        {
+            _names.Add(name);
+            _bodies[name] = body;
+            Runs[name] = 0;
+        }
+
+        internal bool Answer(string function, IntPtr self, IntPtr other, NValue* args, int count, NValue* result)
+        {
+            if (function == "asset_get_index" && Game.FromNative(args[0]).AsString is var asset && _bodies.ContainsKey(asset))
+            {
+                result->Real = FirstIndex + _names.IndexOf(asset);
+                return true;
+            }
+            int index = count > 0 ? (int)args[0].Real - FirstIndex : -1;
+            if (function != "script_execute" || index < 0 || index >= _names.Count)
+                return false;
+            string name = _names[index];
+            var values = new GmValue[count - 1];
+            for (int i = 1; i < count; i++)
+                values[i - 1] = Game.FromNative(args[i]);
+            GmValue value;
+            if (Unhooked.Contains(name) || !Hooks.ScriptCalled(name, new Instance(self), new Instance(other), values, out value))
+            {
+                Runs[name]++;
+                (LastSelf, LastOther) = (self, other);
+                value = _bodies[name](values);
+            }
+            *result = Game.ToNative(value, new List<IntPtr>());
+            return true;
+        }
+    }
+
     protected FakeGame()
     {
         Game.Api = Api;
@@ -324,6 +371,7 @@ public abstract unsafe class FakeGame : IDisposable
         World = null;
         Ds = null;
         Rng = null;
+        GameScripts = null;
     }
 
     private static BridgeApi* Create()
@@ -373,6 +421,8 @@ public abstract unsafe class FakeGame : IDisposable
         string function = Marshal.PtrToStringUTF8((IntPtr)name)!;
         Calls.Add(function);
         *result = new NValue { Kind = 0 };
+        if (GameScripts is { } scripts && scripts.Answer(function, self, other, args, count, result))
+            return 1;
         if (Rng is { } rng && rng.Answer(function, args, count, result))
             return 1;
         if (Ds is { } ds && ds.Answer(function, args, count, result))

@@ -110,7 +110,10 @@ internal static unsafe class Hooks
     // Hooked scripts: handlers by script name. Each one's global.__smh_<name> flag (StoneModHooks' block
     // checks it) is set when the first handler arrives, and set again about once a second in case the game
     // ever clears globals.
-    private static readonly Dictionary<string, List<(string Mod, Func<ScriptCall, bool> Before)>> Scripts = new();
+    private static readonly Dictionary<string, List<(string Mod, Func<ScriptCall, bool>? Before, Action<ScriptCall>? After)>> Scripts = new();
+    // A script being called as the game's own version (CallOriginal): its hook block's call into C# is let through
+    // once - the call's own, the first thing its body does - so calls it makes in turn are hooked as ever.
+    private static string? _passThrough;
     // (Starts due: the first frame sets the flags.)
     private static int _flagTimer = 60;
     private static List<IntPtr> _resultStrings = new();
@@ -138,8 +141,10 @@ internal static unsafe class Hooks
     // (StoneForge's own scripts - scr_stonemod_* - call into C# themselves: only mods' hooks are checked.)
     internal const string LoaderId = "StoneForge";
 
-    internal static void AddScript(string mod, string scriptName, Func<ScriptCall, bool> before)
+    internal static void AddScript(string mod, string scriptName, Func<ScriptCall, bool>? before, Action<ScriptCall>? after = null)
     {
+        if (before == null && after == null)
+            throw new ArgumentException("A script hook needs a before or an after handler.");
         // A hook on a script the game data doesn't hook would never be called: said at once, not left silent.
         if (mod != LoaderId && Hookable != null && !Hookable.Contains(scriptName))
             throw new ArgumentException($"{scriptName} isn't hookable: add [assembly: HookScript(nameof(Scripts.{scriptName}))] to the mod "
@@ -152,7 +157,17 @@ internal static unsafe class Hooks
             if (Game.Running)
                 Game.Global["__smh_" + scriptName] = true;
         }
-        list.Add((mod, before));
+        list.Add((mod, before, after));
+    }
+
+    /// <summary>Calls a script's own code, skipping its hooks for this call only (not for the calls it makes, a
+    /// recursive one included), with these self, other and arguments.</summary>
+    internal static GmValue CallOriginal(string name, Instance self, Instance other, GmValue[] args)
+    {
+        _passThrough = name;
+        try { return Game.CallScript(name, self, other, args); }
+        // (Let go of if it wasn't used: the script isn't hooked in the game data, or its flag is off.)
+        finally { _passThrough = null; }
     }
 
     // A mod switched off: all its handlers go. A script nothing hooks any more has its flag cleared, so the
@@ -189,28 +204,64 @@ internal static unsafe class Hooks
     private static int ScriptCore(byte* scriptName, IntPtr self, IntPtr other, NValue* args, int argCount, NValue* result)
     {
         Game.Running = true;
-        string name = Game.FromUtf8(scriptName);
-        if (!Scripts.TryGetValue(name, out var list))
-            return 0;
         var values = new GmValue[argCount];
         for (int i = 0; i < argCount; i++)
             values[i] = Game.FromNative(args[i]);
-        var call = new ScriptCall(name, new Instance(self), new Instance(other), values);
-        bool replace = false;
-        foreach (var (mod, before) in list.ToArray())
-        {
-            replace |= Invoke(mod, name + " (script)", () => before(call), before);
-        }
-        if (!replace)
+        if (!ScriptCalled(Game.FromUtf8(scriptName), new Instance(self), new Instance(other), values, out GmValue value))
             return 0;
         // (A string result has to outlive this call - the native side copies it into the game's value right
         // after - so it's kept until the next replaced call, then freed.)
         var strings = new List<IntPtr>();
-        *result = Game.ToNative(call.Result, strings);
+        *result = Game.ToNative(value, strings);
         foreach (var old in _resultStrings)
             NativeMemory.Free((void*)old);
         _resultStrings = strings;
         return 1;
+    }
+
+    /// <summary>A hooked script's block calling in, at the start of its body: its handlers run. True: the call is
+    /// replaced - the script returns <paramref name="result"/> without running its own code (done here already, for
+    /// after handlers, or not at all).</summary>
+    internal static bool ScriptCalled(string name, Instance self, Instance other, GmValue[] args, out GmValue result)
+    {
+        result = GmValue.Undefined;
+        if (name == _passThrough)
+        {
+            _passThrough = null;
+            return false;
+        }
+        if (!Scripts.TryGetValue(name, out var list))
+            return false;
+        var call = new ScriptCall(name, self, other, args);
+        bool replace = false;
+        var handlers = list.ToArray();
+        foreach (var (mod, before, _) in handlers)
+        {
+            if (before != null)
+                replace |= Invoke(mod, name + " (script)", () => before(call), before);
+        }
+        // (After handlers: the call is made here - the game's own version, unless a before handler replaced it - and
+        // they see its result, and can change it.)
+        if (handlers.Any(h => h.After != null && !IsSuspended(h.Mod)))
+        {
+            if (!replace)
+            {
+                try { call.Result = CallOriginal(name, self, other, args); }
+                catch (Exception e)
+                {
+                    Game.Log($"Calling {name} for its after hooks failed: {e.Message}");
+                    return false;
+                }
+                replace = true;
+            }
+            foreach (var (mod, _, after) in handlers)
+            {
+                if (after != null)
+                    Invoke(mod, name + " (script after)", () => { after(call); return false; }, after);
+            }
+        }
+        result = call.Result;
+        return replace;
     }
 
     private static void Fail(string mod, string where, Exception e, object? source = null)
