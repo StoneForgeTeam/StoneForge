@@ -55,9 +55,10 @@ public abstract class ModSkill
     /// <summary>The tab of the skills menu it's on, with the mod's other skills of that tab (9 to a tab - more go on
     /// "Tab 2"...). Default: the mod's name.</summary>
     public string? Tab { get; protected set; }
-    /// <summary>The header its tab is under in the skills menu's list, after the game's (as SORCERY is over
-    /// Pyromancy...). Default: "Mods".</summary>
-    public string Group { get; protected set; } = "Mods";
+    /// <summary>The section its tab is in, in the skills menu's list (<see cref="SkillGroup"/>): one of the game's -
+    /// <see cref="SkillGroup.Sorcery"/>, beside Pyromancy... - or a section of the mods' own, after the game's, under its
+    /// own header (as SORCERY is over Pyromancy...). Default: <see cref="SkillGroup.Mods"/>.</summary>
+    public string Group { get; protected set; } = SkillGroup.Mods;
 
     /// <summary>The character level it can be learnt from (default: 0 - any).</summary>
     public int RequiredLevel { get; protected set; }

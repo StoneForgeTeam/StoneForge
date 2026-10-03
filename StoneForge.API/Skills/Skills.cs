@@ -424,7 +424,7 @@ public static class Skills
     {
         // Groups (headers) in the order their first skills were added, each with its tabs, each tab 9 skills a page.
         var groups = ByKey.Values.Where(e => e.Defined && ByObject.ContainsKey(e.Icon))
-            .GroupBy(e => e.Skill.Group)
+            .GroupBy(e => e.Skill.Group, StringComparer.OrdinalIgnoreCase)
             .Select(g => (Group: g.Key, Tabs: g.GroupBy(e => e.Skill.Tab ?? e.Context.Name)
                 .SelectMany(t => t.Select((e, i) => (e, i)).GroupBy(x => x.i / PerPage, x => x.e)
                     .Select(p => (Name: p.Key == 0 ? t.Key : $"{t.Key} {p.Key + 1}", Mods: t.Select(e => e.Context.Name).Distinct().ToList(), Skills: p.ToList())))
@@ -437,44 +437,98 @@ public static class Skills
             Instance left = menu.Get("leftContainer").AsInstance;
             double depth = menu.Get("depth").AsReal - 1;
             const double width = 82;
-            GmValue tierNames = Game.Global["tier_name"], tierDescriptions = Game.Global["tier_description"];
+            var sections = GameSections(left);
             foreach (var (group, tabs) in groups)
             {
-                // A gap, and the header (upper case, as the game's: SORCERY...).
-                Instance spacer = Simple(left, "o_guiSimpleEmpty", depth);
-                Game.CallScript("scr_guiSizeUpdate", spacer, spacer, width, 5);
-                Instance header = Simple(left, "o_skill_metacategory", depth);
-                string title = group.ToUpperInvariant();
-                header.Set("name", title);
-                double headerNameWidth = width - header.Get("nameOffsetX").AsReal * 2;
-                header.Set("nameWidth", headerNameWidth);
-                header.Set("image_xscale", width);
-                header.Set("image_yscale", Game.CallScript("scr_stringGetHeightExt", header, title, headerNameWidth, Game.Global["f_digits"]).AsReal + header.Get("lineHeight").AsReal);
-                Game.CallScript("scr_guiSizeUpdate", header, header, width, header.Get("image_yscale").AsReal);
-                foreach (var (name, mods, skills) in tabs)
-                {
-                    string text = "stonemod_" + group + "_" + name;
-                    if (tierNames.Kind == GmKind.Real)
-                        Game.CallBuiltinTrusted("ds_map_set", default, default, tierNames, text, name);
-                    if (tierDescriptions.Kind == GmKind.Real)
-                        Game.CallBuiltinTrusted("ds_map_set", default, default, tierDescriptions, text,
-                            mods.Count == 1 ? $"Skills from the {mods[0]} mod." : $"Skills from the {string.Join(", ", mods)} mods.");
-                    Instance category = Game.CallScript("scr_guiCreateInteractive", left, left, Gm.AssetGetIndex("o_skill_category_stonemod"), depth, 0, 0).AsInstance;
-                    double nameWidth = width - category.Get("nameOffsetX").AsReal * 2;
-                    category.Set("name", name);
-                    category.Set("nameWidth", nameWidth);
-                    category.Set("image_xscale", width);
-                    category.Set("image_yscale", Game.CallScript("scr_stringGetHeightExt", category, name, nameWidth).AsReal + category.Get("nameOffsetY").AsReal * 2);
-                    Game.CallScript("scr_guiSizeUpdate", category, category, width, category.Get("image_yscale").AsReal);
-                    GmValue list = Game.CallBuiltinTrusted("ds_list_create", default, default);
-                    foreach (var entry in skills)
-                        Game.CallBuiltinTrusted("ds_list_add", default, default, list, entry.Icon);
-                    Game.CallScript("scr_stonemod_skill_category_setup", default, category, text, list, Background(skills.Count));
-                    Game.CallBuiltinTrusted("ds_list_destroy", default, default, list);
-                }
+                // One of the game's sections (Weaponry, Utility, Sorcery): its tabs go in it, after the game's.
+                int section = SkillGroup.GameIndex(group, sections.Select(h => h.Get("name").AsString).ToList());
+                if (section < 0)
+                    Header(left, depth, width, group);
+                var made = tabs.Select(tab => Tab(left, depth, width, group, tab.Name, tab.Mods, tab.Skills)).ToList();
+                if (section >= 0)
+                    MoveIntoSection(left, sections[section], made);
             }
         }
         catch (Exception e) { Game.Log($"Skills menu: couldn't add the mods' tabs: {e}"); }
+    }
+
+    // The game's section headers in the skills menu's list, in order (Weaponry, Utility, Sorcery).
+    private static List<Instance> GameSections(Instance left)
+    {
+        var headers = new List<Instance>();
+        GmValue children = left.Get("guiChildrenList");
+        int header = Gm.AssetGetIndex("o_skill_metacategory");
+        int count = Game.CallBuiltinTrusted("ds_list_size", default, default, children).AsInt;
+        for (int i = 0; i < count; i++)
+        {
+            Instance child = InstanceOf(Game.CallBuiltinTrusted("ds_list_find_value", default, default, children, i));
+            if (!child.IsNone && child.Get("object_index").AsInt == header)
+                headers.Add(child);
+        }
+        return headers;
+    }
+
+    // A GUI list's entry: an instance, or its id.
+    private static Instance InstanceOf(GmValue value) => value.Kind == GmKind.Instance ? value.AsInstance
+        : value.Kind == GmKind.Real && value.AsReal >= 0 ? Instance.FromId((int)value.AsReal) : default;
+
+    // A group of the mods' own: a gap, and its header (upper case, as the game's: SORCERY...), at the list's end.
+    private static void Header(Instance left, double depth, double width, string group)
+    {
+        Instance spacer = Simple(left, "o_guiSimpleEmpty", depth);
+        Game.CallScript("scr_guiSizeUpdate", spacer, spacer, width, 5);
+        Instance header = Simple(left, "o_skill_metacategory", depth);
+        string title = group.ToUpperInvariant();
+        header.Set("name", title);
+        double headerNameWidth = width - header.Get("nameOffsetX").AsReal * 2;
+        header.Set("nameWidth", headerNameWidth);
+        header.Set("image_xscale", width);
+        header.Set("image_yscale", Game.CallScript("scr_stringGetHeightExt", header, title, headerNameWidth, Game.Global["f_digits"]).AsReal + header.Get("lineHeight").AsReal);
+        Game.CallScript("scr_guiSizeUpdate", header, header, width, header.Get("image_yscale").AsReal);
+    }
+
+    // A tab of mods' skills, at the list's end: its name and description, and its page.
+    private static Instance Tab(Instance left, double depth, double width, string group, string name, List<string> mods, List<Entry> skills)
+    {
+        GmValue tierNames = Game.Global["tier_name"], tierDescriptions = Game.Global["tier_description"];
+        string text = "stonemod_" + group.ToLowerInvariant() + "_" + name;
+        if (tierNames.Kind == GmKind.Real)
+            Game.CallBuiltinTrusted("ds_map_set", default, default, tierNames, text, name);
+        if (tierDescriptions.Kind == GmKind.Real)
+            Game.CallBuiltinTrusted("ds_map_set", default, default, tierDescriptions, text,
+                mods.Count == 1 ? $"Skills from the {mods[0]} mod." : $"Skills from the {string.Join(", ", mods)} mods.");
+        Instance category = Game.CallScript("scr_guiCreateInteractive", left, left, Gm.AssetGetIndex("o_skill_category_stonemod"), depth, 0, 0).AsInstance;
+        double nameWidth = width - category.Get("nameOffsetX").AsReal * 2;
+        category.Set("name", name);
+        category.Set("nameWidth", nameWidth);
+        category.Set("image_xscale", width);
+        category.Set("image_yscale", Game.CallScript("scr_stringGetHeightExt", category, name, nameWidth).AsReal + category.Get("nameOffsetY").AsReal * 2);
+        Game.CallScript("scr_guiSizeUpdate", category, category, width, category.Get("image_yscale").AsReal);
+        GmValue list = Game.CallBuiltinTrusted("ds_list_create", default, default);
+        foreach (var entry in skills)
+            Game.CallBuiltinTrusted("ds_list_add", default, default, list, entry.Icon);
+        Game.CallScript("scr_stonemod_skill_category_setup", default, category, text, list, Background(skills.Count));
+        Game.CallBuiltinTrusted("ds_list_destroy", default, default, list);
+        return category;
+    }
+
+    // Tabs moved from the list's end into one of the game's sections: after its last tab (before the gap and the next
+    // header, if there's one), and the list laid out again.
+    private static void MoveIntoSection(Instance left, Instance sectionHeader, List<Instance> tabs)
+    {
+        GmValue children = left.Get("guiChildrenList");
+        int header = Gm.AssetGetIndex("o_skill_metacategory"), gap = Gm.AssetGetIndex("o_guiSimpleEmpty");
+        foreach (var tab in tabs)
+            Game.CallBuiltinTrusted("ds_list_delete", default, default, children,
+                Game.CallBuiltinTrusted("ds_list_find_index", default, default, children, tab));
+        int count = Game.CallBuiltinTrusted("ds_list_size", default, default, children).AsInt;
+        int at = Game.CallBuiltinTrusted("ds_list_find_index", default, default, children, sectionHeader).AsInt + 1;
+        while (at < count && InstanceOf(Game.CallBuiltinTrusted("ds_list_find_value", default, default, children, at)).Get("object_index").AsInt is int obj
+               && obj != header && obj != gap)
+            at++;
+        foreach (var tab in tabs)
+            Game.CallBuiltinTrusted("ds_list_insert", default, default, children, at++, tab);
+        Game.CallScript("scr_guiContainerRebuild", left, left.Get("guiBaseParent"));
     }
 
     private static Instance Simple(Instance parent, string obj, double depth)
