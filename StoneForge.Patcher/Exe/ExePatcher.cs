@@ -19,10 +19,16 @@ internal static class ExePatcher
             File.Copy(game.Exe, game.ExeBackup, overwrite: true);
             PatcherConsole.Log($"Backed up {Path.GetFileName(game.Exe)} -> {Path.GetFileName(game.ExeBackup)}");
         }
-        else if (!File.Exists(game.ExeBackup))
-            PatcherConsole.Log("StoneShard.exe is already patched, and there's no backup of the original (Steam's 'Verify integrity' restores it).");
         else
-            PatcherConsole.Log("StoneShard.exe is already patched - updating it.");
+        {
+            // The .aurie section already loads AurieCore.dll by its stable path. Re-running AuriePatcher on an
+            // executable that has that section fails (and is unnecessary); only an unpatched exe, such as one
+            // restored by Steam, needs patching again.
+            PatcherConsole.Log(File.Exists(game.ExeBackup)
+                ? "StoneShard.exe is already patched."
+                : "StoneShard.exe is already patched, and there's no backup of the original (Steam's 'Verify integrity' restores it).");
+            return;
+        }
 
         string aurie = Path.Combine(game.PatcherDir, "AuriePatcher.exe");
         if (!File.Exists(aurie))
