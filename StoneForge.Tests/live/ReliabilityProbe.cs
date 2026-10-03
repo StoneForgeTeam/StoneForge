@@ -68,6 +68,7 @@ public sealed class ReliabilityProbe : IStoneMod, ITickable
         ArraysAndStructs();
         DsMaps();
         DsLists();
+        SeededRandom();
         _context.Log($"LIVE SUMMARY main menu: {_passed} passed, {_failed} failed");
     }
 
@@ -322,6 +323,36 @@ public sealed class ReliabilityProbe : IStoneMod, ITickable
             target.Destroy();
             return ok;
         });
+    }
+
+    private void SeededRandom()
+    {
+        double Draw() => Game.CallBuiltin("irandom", 1000000).AsReal;
+        string Draws() => string.Join(",", Enumerable.Range(0, 5).Select(_ => Draw()));
+        // (What the game itself does: random_get_seed is the seed set, not where the generator is.)
+        Game.CallBuiltin("random_set_seed", 7);
+        Draws();
+        _context.Log($"LIVE INFO random_get_seed after drawing: {Game.CallBuiltin("random_get_seed")} (set: 7)");
+
+        Check("seeded random", expect =>
+        {
+            string first = Game.WithSeed(42, Draws);
+            Draw();
+            expect(Game.WithSeed(42, Draws) == first, "the same seed draws the same");
+            expect(Game.WithSeed(43, Draws) != first, "another seed draws others");
+            Game.CallBuiltin("random_set_seed", 7);
+            string before = Draws();
+            Game.WithSeed(42, Draws);
+            string after = Draws();
+            expect(after != before, "carries on without replaying");
+            Game.CallBuiltin("random_set_seed", 7);
+            Draws();
+            Game.WithSeed(42, Draws);
+            expect(Draws() == after, "a seeded game stays the same");
+            try { Game.WithSeed(42, () => throw new InvalidOperationException()); }
+            catch (InvalidOperationException) { expect(true, ""); }
+        });
+        Game.CallBuiltin("randomize");
     }
 
     // Once a save is loaded: the room's ground loot, active and culled.

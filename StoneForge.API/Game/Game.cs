@@ -5,7 +5,7 @@ namespace StoneForge;
 
 /// <summary>Calls into the game by name: built-in functions, GML scripts, global variables. The typed API
 /// (<see cref="Gm"/>, the generated <c>Scripts</c>) is built on this.</summary>
-public static unsafe class Game
+public static unsafe partial class Game
 {
     internal static BridgeApi* Api;
     private static int _gameThread;

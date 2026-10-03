@@ -19,6 +19,8 @@ public abstract unsafe class FakeGame : IDisposable
     protected static FakeWorld? World;
     // The game's ds_maps and ds_lists, for the DsMap / DsList tests (null: not modelled).
     protected static FakeDs? Ds;
+    // The game's random generator, for the seeded random tests (null: not modelled).
+    protected static FakeRandom? Rng;
 
     /// <summary>A room: instances (id -> object), which are active, object parents, and one culling controller whose
     /// deactivatedInstancesList holds the culled ones' ids - as the game keeps them.</summary>
@@ -266,6 +268,43 @@ public abstract unsafe class FakeGame : IDisposable
         }
     }
 
+    /// <summary>The game's random generator, as GameMaker's: random_get_seed gives the seed it was last set to (not where
+    /// it is), and setting a seed starts its sequence over.</summary>
+    protected sealed class FakeRandom
+    {
+        public long Seed;
+        public readonly List<long> SeedsSet = new();
+        private ulong _state;
+
+        public FakeRandom(long seed) => Set(seed);
+
+        public void Set(long seed)
+        {
+            Seed = seed;
+            SeedsSet.Add(seed);
+            _state = (ulong)seed * 6364136223846793005UL + 1442695040888963407UL;
+        }
+
+        public long Next(long max)
+        {
+            _state = _state * 6364136223846793005UL + 1442695040888963407UL;
+            return (long)((_state >> 33) % (ulong)(max + 1));
+        }
+
+        // A builtin, as the game answers it (false: not one modelled here).
+        internal bool Answer(string function, NValue* args, int count, NValue* result)
+        {
+            switch (function)
+            {
+                case "random_set_seed": Set((long)args[0].Real); return true;
+                case "random_get_seed": result->Real = Seed; return true;
+                case "irandom": result->Real = Next((long)args[0].Real); return true;
+                case "randomize": Set(Environment.TickCount64 % int.MaxValue); return true;
+            }
+            return false;
+        }
+    }
+
     protected FakeGame()
     {
         Game.Api = Api;
@@ -284,6 +323,7 @@ public abstract unsafe class FakeGame : IDisposable
         ConsumableInstances = null;
         World = null;
         Ds = null;
+        Rng = null;
     }
 
     private static BridgeApi* Create()
@@ -333,6 +373,8 @@ public abstract unsafe class FakeGame : IDisposable
         string function = Marshal.PtrToStringUTF8((IntPtr)name)!;
         Calls.Add(function);
         *result = new NValue { Kind = 0 };
+        if (Rng is { } rng && rng.Answer(function, args, count, result))
+            return 1;
         if (Ds is { } ds && ds.Answer(function, args, count, result))
             return 1;
         if (World is { } world && world.Answer(function, args, count, result))

@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- **Seeded random:** `Game.WithSeed(seed, action)` (or `WithSeed(seed, () => value)`) runs code with the game's random generator seeded, so its irandom, random, choose... draw the same numbers every time, in every game. Then the generator carries on.
+  - GameMaker can't save where its generator is: `random_get_seed` gives only the seed it started from, so setting that back replays the numbers already drawn. Instead the seed to carry on with is drawn from the generator first. A random game stays random, a seeded one stays the same everywhere, and nothing repeats. This also holds when the code throws, and when calls are nested.
+  - Any whole number works as a seed; it's brought into GameMaker's range (0 to 2^31 - 2) the same way everywhere.
 - **ds_maps and ds_lists in C#.** The game keeps almost everything in ds_maps (saves, characters, contracts...). `GmValue.AsDsMap` / `AsDsList` (or `DsMap.From` / `DsList.From`) gives the one a number names, null if there's none; `DsMap.Create()` / `DsList.Create()` makes one.
   - `DsMap`: `map[key]` (get and set), `Get(key, fallback)`, `Has`, `Remove`, `Keys`, `Count`. `DsList`: `list[i]` (get and set), `Count`, `Add`, `RemoveAt`, `Clear`.
   - Nested maps and lists: `IsMap` / `IsList`, `GetMap` / `GetList`, and `AddMap` / `AddList`, which mark them as owned (as `ds_map_add_map` / `ds_list_mark_as_map`). Setting or removing a slot that holds a nested one destroys it, and the slot loses its mark. (The game's own ds_map_delete and ds_list_delete don't: the nested one is left behind, owned by nothing.)
