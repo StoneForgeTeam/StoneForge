@@ -115,8 +115,35 @@ internal static unsafe class Hooks
     private static int _flagTimer = 60;
     private static List<IntPtr> _resultStrings = new();
 
+    // The scripts the game data makes hookable - dotnet\stoneforge-hooks.txt, the patcher's list of those it hooked
+    // (the loader's, and every mod's [assembly: HookScript]). Null: not known (an install from before it was written),
+    // so not checked.
+    internal static HashSet<string>? Hookable;
+
+    internal static void LoadHookable(string path)
+    {
+        try
+        {
+            Hookable = File.Exists(path)
+                ? new HashSet<string>(File.ReadAllLines(path).Select(l => l.Trim()).Where(l => l.Length > 0), StringComparer.Ordinal)
+                : null;
+        }
+        catch (Exception e)
+        {
+            Hookable = null;
+            Game.Log($"Couldn't read the hookable scripts ({path}): {e.Message} - hooks aren't checked");
+        }
+    }
+
+    // (StoneForge's own scripts - scr_stonemod_* - call into C# themselves: only mods' hooks are checked.)
+    internal const string LoaderId = "StoneForge";
+
     internal static void AddScript(string mod, string scriptName, Func<ScriptCall, bool> before)
     {
+        // A hook on a script the game data doesn't hook would never be called: said at once, not left silent.
+        if (mod != LoaderId && Hookable != null && !Hookable.Contains(scriptName))
+            throw new ArgumentException($"{scriptName} isn't hookable: add [assembly: HookScript(nameof(Scripts.{scriptName}))] to the mod "
+                + "(any of its files), then restart the game - the game data is rebuilt with it hookable.", nameof(scriptName));
         if (!Scripts.TryGetValue(scriptName, out var list))
         {
             list = new();

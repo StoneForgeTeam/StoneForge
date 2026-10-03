@@ -25,7 +25,7 @@ internal static class ScriptHooks
     };
 
     /// <summary>Each script made hookable; how many could be.</summary>
-    public static int HookAll(GameDataEditor editor, IEnumerable<string> names)
+    public static int HookAll(GameDataEditor editor, IEnumerable<string> names, List<string>? hooked = null)
     {
         int made = 0;
         foreach (string name in names)
@@ -34,6 +34,7 @@ internal static class ScriptHooks
             {
                 ScriptEditor.InsertAtBodyStart(editor, name, Stub(name));
                 made++;
+                hooked?.Add(name);
                 PatcherConsole.Log($"  {name}: hookable");
             }
             catch (Exception e)

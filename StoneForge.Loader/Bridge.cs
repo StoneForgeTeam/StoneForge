@@ -34,8 +34,10 @@ public static unsafe class Bridge
         {
             Game.Log($"StoneForge {LoaderVersion.Text} on .NET {Environment.Version}");
             LoaderOptions.Load();
+            // (Which scripts mods may hook: those the patcher made hookable.)
+            Hooks.LoadHookable(Path.Combine(Path.GetDirectoryName(typeof(Bridge).Assembly.Location)!, "stoneforge-hooks.txt"));
             // Main menu buttons (ours and mods'), the Mods window, mods' items, the Draw GUI pass.
-            var loader = new ModContext("StoneForge");
+            var loader = new ModContext(Hooks.LoaderId);
             MainMenu.Install(loader);
             UIWindow.Install(loader);
             // (Mods' changed settings saved each frame.)

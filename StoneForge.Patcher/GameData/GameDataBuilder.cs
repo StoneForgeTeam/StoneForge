@@ -28,7 +28,7 @@ internal static class GameDataBuilder
         var objects = ModClassDeclaration.WithKnown(declared, game.KnownObjects);
         var gml = GmlCatalog.Read(game.Mods);
         string key = Key(newBase ? game.Data : game.BaseData, hooks, consumables, skills, objects) + gml.Fingerprint;
-        if (!newBase && key == builtFrom && File.Exists(Path.Combine(game.Dotnet, "stoneforge-gml.txt")))
+        if (!newBase && key == builtFrom && File.Exists(Path.Combine(game.Dotnet, "stoneforge-gml.txt")) && File.Exists(game.HookedScripts))
         {
             PatcherConsole.Log($"Game data up to date ({hooks.Count} hooked script(s)).");
             return;
@@ -68,7 +68,8 @@ internal static class GameDataBuilder
         var added = ConsumableObjects.Add(editor, consumables);
         var addedSkills = SkillObjects.Add(editor, skills);
         var addedObjects = ModGameObjects.Add(editor, objects);
-        int made = ScriptHooks.HookAll(editor, hooks);
+        var hooked = new List<string>();
+        int made = ScriptHooks.HookAll(editor, hooks, hooked);
         ModGmlPatches.Apply(editor, gml);
 
         string temp = game.Data + ".tmp";
@@ -81,6 +82,7 @@ internal static class GameDataBuilder
         ModClassDeclaration.Remember(game.KnownConsumables, added);
         ModClassDeclaration.Remember(game.KnownSkills, addedSkills);
         ModClassDeclaration.Remember(game.KnownObjects, addedObjects);
+        File.WriteAllLines(game.HookedScripts, hooked);
         PatcherConsole.Log($"Done ({made} of {hooks.Count} script(s) hooked, {added.Count} mod consumable(s), {addedSkills.Count} mod skill(s), {addedObjects.Count} mod object(s)).");
     }
 
@@ -101,7 +103,7 @@ internal static class GameDataBuilder
             File.Delete(game.DataKey);
         string gmlState = Path.Combine(game.Dotnet, "stoneforge-gml.txt");
         if (File.Exists(gmlState)) File.Delete(gmlState);
-        foreach (string known in new[] { game.KnownConsumables, game.KnownSkills, game.KnownObjects })
+        foreach (string known in new[] { game.KnownConsumables, game.KnownSkills, game.KnownObjects, game.HookedScripts })
             if (File.Exists(known))
                 File.Delete(known);
     }

@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- **A hook on a script that isn't hookable fails at once.** A mod's `Scripts.x.Before(...)` or `OnScript("x", ...)` on a script the game data doesn't hook would never be called, so it throws. The mod's `Load` fails, in the log and on its Mods page, with the attribute to add: `[assembly: HookScript(nameof(Scripts.x))]`.
+  - The patcher records the scripts it made hookable (the loader's, and every mod's `[assembly: HookScript]`) in `dotnet\stoneforge-hooks.txt`, which the loader checks against. The game data is rebuilt once to write it.
+  - StoneForge's own scripts aren't checked, and neither is anything without that file (an older install).
 - **Arrays and structs in C#.** A GameMaker array or struct now reaches C# as itself - `GmValue.AsArray` (`GmArray`) or `AsStruct` (`GmStruct`) - from a built-in's or script's result, an instance or global variable, or a hooked script's arguments. It's the game's own value, by reference: changes through it change the game's, and passing it back passes that one.
   - `GmArray`: `Length`, `array[i]` (get and set), `Push`, `Insert`, `Delete`, `ToArray()`; a new one with `GmArray.Create(length, fill)`, `GmArray.From(values)` or `GmArray.FromJson(text)`.
   - `GmStruct`: `strukt["name"]` (get and set), `Has`, `Remove`, `Names`, `Count`; a new one with `GmStruct.Create()` or `GmStruct.FromJson(text)`.
