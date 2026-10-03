@@ -47,6 +47,42 @@ public static unsafe class Game
 
     // An instance as the game holds it - one known by its id (a script's result, instance_find's) found by it:
     // as self or other it must be the instance itself, or the call runs as no instance.
+    // Every deactivated instance of the room - id -> object index - in one native walk of the room's inactive list.
+    internal static Dictionary<int, int> InactiveInstances()
+    {
+        EnsureGameThread();
+        var found = new Dictionary<int, int>();
+        if (Api->InactiveInstances == null)
+            return found;
+        int count = Api->InactiveInstances(null, null, 0);
+        while (count > 0)
+        {
+            var ids = new int[count];
+            var objects = new int[count];
+            int total;
+            fixed (int* idsPtr = ids, objectsPtr = objects)
+                total = Api->InactiveInstances(idsPtr, objectsPtr, count);
+            // (More turned up since it was counted: again, with room for them.)
+            if (total > count)
+            {
+                count = total;
+                continue;
+            }
+            for (int i = 0; i < total; i++)
+                found.TryAdd(ids[i], objects[i]);
+            break;
+        }
+        return found;
+    }
+
+    // A culled (deactivated) instance's pointer, by its id - the bridge looks among the room's deactivated instances too.
+    // Zero if it can't be found.
+    internal static IntPtr CulledPointer(int id)
+    {
+        EnsureGameThread();
+        return id < 0 ? IntPtr.Zero : Api->InstanceFromId(id);
+    }
+
     internal static IntPtr PointerOf(Instance instance)
     {
         EnsureGameThread();
@@ -54,7 +90,8 @@ public static unsafe class Game
         if (instance.CanUsePointer) return instance.Pointer;
         if (instance.Id < 0)
             throw new InvalidOperationException("This temporary struct/global handle has expired; read it inside its callback.");
-        if (!instance.Exists) throw new InvalidOperationException($"Instance {instance.Id} no longer exists.");
+        // (A culled one - deactivated, off screen - is still the engine's: its built-ins are read through it.)
+        if (!instance.Exists && !Culling.Contains(instance.Id)) throw new InvalidOperationException($"Instance {instance.Id} no longer exists.");
         IntPtr pointer = Api->InstanceFromId(instance.Id);
         return pointer != IntPtr.Zero ? pointer
             : throw new GameCallException("instance lookup", $"could not resolve instance {instance.Id}; refusing to run in global scope");

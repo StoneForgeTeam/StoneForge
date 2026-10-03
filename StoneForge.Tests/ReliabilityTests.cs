@@ -9,7 +9,7 @@ public class ReliabilityTests : FakeGame
     public unsafe void Bridge_ABI_layout()
     {
         Assert.Equal(32, sizeof(NValue));
-        Assert.Equal(104, sizeof(BridgeApi));
+        Assert.Equal(112, sizeof(BridgeApi));
         Assert.Equal(40, sizeof(ManagedCallbacks));
         Assert.Equal(8, Marshal.OffsetOf<BridgeApi>(nameof(BridgeApi.Log)).ToInt32());
         // (Version 3 added ReleaseRefs at the end, after InstanceId.)
@@ -17,6 +17,8 @@ public class ReliabilityTests : FakeGame
         // (Version 4: GetVarAt and SetVarAt after it.)
         Assert.Equal(88, Marshal.OffsetOf<BridgeApi>(nameof(BridgeApi.GetVarAt)).ToInt32());
         Assert.Equal(96, Marshal.OffsetOf<BridgeApi>(nameof(BridgeApi.SetVarAt)).ToInt32());
+        // (Version 5: InactiveInstances after them.)
+        Assert.Equal(104, Marshal.OffsetOf<BridgeApi>(nameof(BridgeApi.InactiveInstances)).ToInt32());
     }
 
     [Fact]

@@ -8,7 +8,7 @@ namespace StoneForge;
 [StructLayout(LayoutKind.Sequential)]
 internal unsafe struct BridgeApi
 {
-    internal const int ExpectedVersion = 4;
+    internal const int ExpectedVersion = 5;
     public int Size;
     public int Version;
     public delegate* unmanaged<byte*, void> Log;
@@ -26,4 +26,7 @@ internal unsafe struct BridgeApi
     // An element of an instance's indexed engine variable (alarm[n]...).
     public delegate* unmanaged<IntPtr, byte*, int, NValue*, int> GetVarAt;
     public delegate* unmanaged<IntPtr, byte*, int, NValue*, int> SetVarAt;
+    // Every deactivated instance of the current room (the game's culling): ids and object indexes into the two
+    // buffers, up to the capacity; returns how many there are.
+    public delegate* unmanaged<int*, int*, int, int> InactiveInstances;
 }

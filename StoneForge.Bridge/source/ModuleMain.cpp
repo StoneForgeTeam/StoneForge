@@ -48,6 +48,8 @@ struct BridgeApi
     // An element of an instance's indexed engine variable (alarm[n]...).
     int (*GetVarAt)(void* Instance, const char* Name, int Index, NValue* Result);
     int (*SetVarAt)(void* Instance, const char* Name, int Index, const NValue* Value);
+    // Every deactivated instance of the current room (the game's culling): ids and object indexes, in one walk.
+    int (*InactiveInstances)(int* Ids, int* Objects, int Capacity);
 };
 
 struct ManagedCallbacks
@@ -437,10 +439,51 @@ static int ApiHookCode(const char* CodeName)
 	return 1;
 }
 
+// A deactivated instance of the current room (instance_deactivate_object: the game's culling of what's off screen): the
+// engine's id lookup (GetInstanceObject) only has the active ones, so the room's inactive list is walked for it.
+static CInstance* InactiveInstance(int Id)
+{
+	CRoom* room = nullptr;
+	if (!AurieSuccess(g_Yytk->GetCurrentRoomData(room)) || !room)
+		return nullptr;
+	auto& inactive = room->GetMembers().m_InactiveInstances;
+	// (Bounded by the list's own count, should a link ever be stale.)
+	int32_t left = inactive.m_Count;
+	for (CInstance* inst = inactive.m_First; inst && left-- > 0; inst = inst->GetMembers().m_Flink)
+		if (inst->GetMembers().m_ID == Id)
+			return inst;
+	return nullptr;
+}
+
+// Every deactivated instance of the current room - its id and object index - into Ids / Objects, up to Capacity; how
+// many there are (more than Capacity: call again with room for them). One walk of the list however many C# needs.
+static int ApiInactiveInstances(int* Ids, int* Objects, int Capacity)
+{
+	if (!RequireGameThread()) return 0;
+	CRoom* room = nullptr;
+	if (!AurieSuccess(g_Yytk->GetCurrentRoomData(room)) || !room)
+		return 0;
+	auto& inactive = room->GetMembers().m_InactiveInstances;
+	int total = 0;
+	int32_t left = inactive.m_Count;
+	for (CInstance* inst = inactive.m_First; inst && left-- > 0; inst = inst->GetMembers().m_Flink)
+	{
+		if (total < Capacity && Ids && Objects)
+		{
+			Ids[total] = inst->GetMembers().m_ID;
+			Objects[total] = inst->GetMembers().m_ObjectIndex;
+		}
+		total++;
+	}
+	return total;
+}
+
 static void* ApiInstanceFromId(int Id)
 {
 	if (!RequireGameThread()) return nullptr;
-	return CInstance::FromInstanceID(Id);
+	if (CInstance* active = CInstance::FromInstanceID(Id))
+		return active;
+	return InactiveInstance(Id);
 }
 
 // Only inspect a pointer while the engine is lending it to a callback/call result.
@@ -676,9 +719,9 @@ static bool StartDotNet(const fs::path& DotnetDir)
 	}
 
 	g_Api.Size = sizeof(BridgeApi);
-	g_Api.Version = 4;
+	g_Api.Version = 5;
 	g_Callbacks.Size = sizeof(ManagedCallbacks);
-	g_Callbacks.Version = 4;
+	g_Callbacks.Version = 5;
 	g_Api.Log = ApiLog;
 	g_Api.CallBuiltin = ApiCallBuiltin;
 	g_Api.CallScript = ApiCallScript;
@@ -691,6 +734,7 @@ static bool StartDotNet(const fs::path& DotnetDir)
 	g_Api.ReleaseRefs = ApiReleaseRefs;
 	g_Api.GetVarAt = ApiGetVarAt;
 	g_Api.SetVarAt = ApiSetVarAt;
+	g_Api.InactiveInstances = ApiInactiveInstances;
 	rc = initialize(&g_Api, &g_Callbacks);
 	Log("StoneForge initialized: " + std::to_string(rc));
 	return rc == 0;

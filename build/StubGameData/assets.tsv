@@ -7,6 +7,7 @@ object	5	o_mainMenuNavContainer
 object	6	o_player
 object	7	o_textLoader
 object	8	o_weapon_loot
+object	9	o_cullingController
 sprite	0	s_checkbox
 sprite	1	s_gui_arrow_down
 sprite	2	s_gui_arrow_up

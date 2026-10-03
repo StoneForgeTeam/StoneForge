@@ -264,8 +264,12 @@ internal static unsafe class Hooks
     // done here, before any handler list is walked.
     internal static Action? BeforeFrame;
 
+    // The game's frames since the loader started (caches good for one frame key on it: Culling).
+    internal static long Frame { get; private set; }
+
     private static void FrameCore()
     {
+        Frame++;
         Game.Running = true;
         // (Arrays and structs C# let go of since the last frame.)
         GmRef.ReleaseQueued();
