@@ -9,9 +9,11 @@ public class ReliabilityTests : FakeGame
     public unsafe void Bridge_ABI_layout()
     {
         Assert.Equal(32, sizeof(NValue));
-        Assert.Equal(80, sizeof(BridgeApi));
+        Assert.Equal(88, sizeof(BridgeApi));
         Assert.Equal(40, sizeof(ManagedCallbacks));
         Assert.Equal(8, Marshal.OffsetOf<BridgeApi>(nameof(BridgeApi.Log)).ToInt32());
+        // (Version 3 added ReleaseRefs at the end, after InstanceId.)
+        Assert.Equal(80, Marshal.OffsetOf<BridgeApi>(nameof(BridgeApi.ReleaseRefs)).ToInt32());
     }
 
     [Fact]

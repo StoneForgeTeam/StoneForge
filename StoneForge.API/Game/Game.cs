@@ -193,6 +193,13 @@ public static unsafe class Game
                 else if (inst.IsNone) v.Kind = 5;
                 else throw new InvalidOperationException("A temporary game handle was used after its callback returned.");
                 break;
+            case GmKind.Array:
+            case GmKind.Struct:
+                GmRef reference = value.Kind == GmKind.Array ? value.AsArray! : value.AsStruct!;
+                v.Kind = value.Kind == GmKind.Array ? 7 : 8;
+                v.Real = reference.Id;
+                v.Ptr = reference.Pointer;
+                break;
         }
         return v;
     }
@@ -203,6 +210,9 @@ public static unsafe class Game
         13 => v.Real != 0,
         1 or 2 => Marshal.PtrToStringUTF8(v.Str),
         6 => new Instance(v.Ptr),
+        // (An id of 0: the bridge couldn't keep it.)
+        7 => v.Real > 0 ? new GmArray((long)v.Real, v.Ptr) : GmValue.Undefined,
+        8 => v.Real > 0 ? new GmStruct((long)v.Real, v.Ptr) : GmValue.Undefined,
         15 => Instance.FromId((int)v.Real),
         _ => GmValue.Undefined,
     };

@@ -18,8 +18,9 @@
 using namespace Aurie;
 using namespace YYTK;
 
-// A value crossing to and from C#. kind: 0 real, 1 string (UTF-8), 5 undefined, 6 instance / struct
-// (ptr), 13 bool (real 0/1), 15 reference (its id in real, raw value in ptr), 2 other (its text in str).
+// A value crossing to and from C#. kind: 0 real, 1 string (UTF-8), 5 undefined, 6 instance / the global scope
+// (ptr), 7 array / 8 struct (a reference C# holds: its id in real, the game's pointer in ptr - see References),
+// 13 bool (real 0/1), 15 reference (its id in real, raw value in ptr), 2 other (its text in str).
 struct NValue
 {
 	int32_t Kind;
@@ -42,6 +43,8 @@ struct BridgeApi
 	void* (*InstanceFromId)(int Id);
     const char* (*LastError)();
     int (*InstanceId)(void* Instance);
+    // Lets go of references (arrays and structs) C# no longer holds.
+    void (*ReleaseRefs)(const int64_t* Ids, int Count);
 };
 
 struct ManagedCallbacks
@@ -91,6 +94,69 @@ static void Log(const std::string& Line)
 	}
 }
 
+static CInstance* GlobalInstance()
+{
+	CInstance* global = nullptr;
+	g_Yytk->GetGlobalInstance(&global);
+	return global;
+}
+
+// ---- references ----
+
+// An array or struct handed to C# becomes a reference C# holds by id: a copy kept here, to hand back when C#
+// passes it in again, and rooted in the global struct __stoneforge_refs - GameMaker's garbage collector only keeps
+// what the game can reach, and a copy in native memory isn't that. C# lets go of it (ReleaseRefs) when it's done.
+// (Through the game's own built-ins: YYToolkit's array and struct access needs layouts this GameMaker version lacks.)
+static std::unordered_map<int64_t, RValue> g_Refs;
+static int64_t g_NextRef = 1;
+static RValue g_RefRoot;
+
+static RValue CallGame(const char* Name, std::vector<RValue> Args)
+{
+	RValue result;
+	g_Yytk->CallBuiltinEx(result, Name, GlobalInstance(), GlobalInstance(), std::move(Args));
+	return result;
+}
+
+// The root struct, made (again, should the game have lost its globals) as needed.
+static bool RefRoot()
+{
+	RValue current = CallGame("variable_global_get", { RValue(std::string_view("__stoneforge_refs")) });
+	if (current.m_Kind == VALUE_OBJECT && g_RefRoot.m_Kind == VALUE_OBJECT && current.m_Pointer == g_RefRoot.m_Pointer)
+		return true;
+	RValue root = CallGame("json_parse", { RValue(std::string_view("{}")) });
+	if (root.m_Kind != VALUE_OBJECT)
+		return false;
+	CallGame("variable_global_set", { RValue(std::string_view("__stoneforge_refs")), root });
+	g_RefRoot = root;
+	// (Whatever the old root held went with it.)
+	g_Refs.clear();
+	return true;
+}
+
+static std::string RefKey(int64_t Id) { return "r" + std::to_string(Id); }
+
+static int64_t KeepRef(const RValue& Value)
+{
+	if (!RefRoot())
+		return 0;
+	int64_t id = g_NextRef++;
+	CallGame("variable_struct_set", { g_RefRoot, RValue(std::string_view(RefKey(id))), Value });
+	g_Refs.emplace(id, Value);
+	return id;
+}
+
+static void ApiReleaseRefs(const int64_t* Ids, int Count)
+{
+	if (!RequireGameThread() || !Ids)
+		return;
+	for (int i = 0; i < Count; i++)
+	{
+		if (g_Refs.erase(Ids[i]) > 0 && g_RefRoot.m_Kind == VALUE_OBJECT)
+			CallGame("variable_struct_remove", { g_RefRoot, RValue(std::string_view(RefKey(Ids[i]))) });
+	}
+}
+
 // ---- values ----
 
 static RValue ToRValue(const NValue& V)
@@ -100,6 +166,12 @@ static RValue ToRValue(const NValue& V)
 	case 0: return RValue(V.Real);
 	case 1: return RValue(std::string_view(V.Str ? V.Str : ""));
 	case 6: return V.Ptr ? RValue(static_cast<CInstance*>(V.Ptr)) : RValue();
+	case 7:
+	case 8:
+	{
+		auto found = g_Refs.find(static_cast<int64_t>(V.Real));
+		return found != g_Refs.end() ? found->second : RValue();
+	}
 	case 13: return RValue(V.Real != 0.0);
 	default: return RValue();
 	}
@@ -133,7 +205,24 @@ static void FromRValue(const RValue& R, NValue& Out)
 		break;
 	}
 	case VALUE_OBJECT:
-		Out.Kind = 6;
+	{
+		// An instance (or the global scope) by pointer, as always; any other object - a struct, a method - is a
+		// reference C# holds.
+		auto* object = static_cast<YYObjectBase*>(R.m_Pointer);
+		if (!object || object->m_ObjectKind == OBJECT_KIND_CINSTANCE || R.m_Pointer == GlobalInstance())
+		{
+			Out.Kind = 6;
+			Out.Ptr = R.m_Pointer;
+			break;
+		}
+		Out.Kind = 8;
+		Out.Real = static_cast<double>(KeepRef(R));
+		Out.Ptr = R.m_Pointer;
+		break;
+	}
+	case VALUE_ARRAY:
+		Out.Kind = 7;
+		Out.Real = static_cast<double>(KeepRef(R));
 		Out.Ptr = R.m_Pointer;
 		break;
 	case VALUE_UNDEFINED:
@@ -176,13 +265,6 @@ static std::vector<RValue> ToArgs(const NValue* Args, int Count)
 	for (int i = 0; i < Count; i++)
 		args.push_back(ToRValue(Args[i]));
 	return args;
-}
-
-static CInstance* GlobalInstance()
-{
-	CInstance* global = nullptr;
-	g_Yytk->GetGlobalInstance(&global);
-	return global;
 }
 
 // ---- the API C# calls ----
@@ -568,9 +650,9 @@ static bool StartDotNet(const fs::path& DotnetDir)
 	}
 
 	g_Api.Size = sizeof(BridgeApi);
-	g_Api.Version = 2;
+	g_Api.Version = 3;
 	g_Callbacks.Size = sizeof(ManagedCallbacks);
-	g_Callbacks.Version = 2;
+	g_Callbacks.Version = 3;
 	g_Api.Log = ApiLog;
 	g_Api.CallBuiltin = ApiCallBuiltin;
 	g_Api.CallScript = ApiCallScript;
@@ -580,6 +662,7 @@ static bool StartDotNet(const fs::path& DotnetDir)
 	g_Api.InstanceFromId = ApiInstanceFromId;
 	g_Api.LastError = ApiLastError;
 	g_Api.InstanceId = ApiInstanceId;
+	g_Api.ReleaseRefs = ApiReleaseRefs;
 	rc = initialize(&g_Api, &g_Callbacks);
 	Log("StoneForge initialized: " + std::to_string(rc));
 	return rc == 0;

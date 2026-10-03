@@ -19,7 +19,7 @@ public static unsafe class Bridge
             return 2;
         if (api->Log == null || api->CallBuiltin == null || api->CallScript == null
             || api->GetVar == null || api->SetVar == null || api->HookCode == null
-            || api->InstanceFromId == null || api->LastError == null || api->InstanceId == null)
+            || api->InstanceFromId == null || api->LastError == null || api->InstanceId == null || api->ReleaseRefs == null)
             return 2;
         Game.Api = api;
         Game.MarkGameThread();

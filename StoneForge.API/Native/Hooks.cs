@@ -267,6 +267,8 @@ internal static unsafe class Hooks
     private static void FrameCore()
     {
         Game.Running = true;
+        // (Arrays and structs C# let go of since the last frame.)
+        GmRef.ReleaseQueued();
         BeforeFrame?.Invoke();
         AssertScriptFlags();
         KeepGuiObject();

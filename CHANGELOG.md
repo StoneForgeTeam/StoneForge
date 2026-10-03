@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- **Arrays and structs in C#.** A GameMaker array or struct now reaches C# as itself - `GmValue.AsArray` (`GmArray`) or `AsStruct` (`GmStruct`) - from a built-in's or script's result, an instance or global variable, or a hooked script's arguments. It's the game's own value, by reference: changes through it change the game's, and passing it back passes that one.
+  - `GmArray`: `Length`, `array[i]` (get and set), `Push`, `Insert`, `Delete`, `ToArray()`; a new one with `GmArray.Create(length, fill)`, `GmArray.From(values)` or `GmArray.FromJson(text)`.
+  - `GmStruct`: `strukt["name"]` (get and set), `Has`, `Remove`, `Names`, `Count`; a new one with `GmStruct.Create()` or `GmStruct.FromJson(text)`.
+  - Both have `ToJson()`, and compare equal when they're the same game value.
+  - Kept alive for the game's garbage collector while C# holds them (the bridge roots them in a global struct, `__stoneforge_refs`), and let go of once C# doesn't (or at once with `Dispose()`).
+  - **Breaking:** an array used to arrive as its text (a string), and a struct as a temporary `Instance`.
+  - The native bridge's API is version 3: install the matching StoneForge.Bridge.dll and loader together.
+- The patcher reads its own GML by the system's path separator. Installed deep enough for Windows' long-path form, it failed to read `GML\Items/...`.
 - **Breaking: windows reworked to work with any frame.**
   - `UIWindow` is now only the window: open/close, Escape, the dimmed screen and input blocking as before, a frame and a close button.
     - The frame is any sprite (`FrameSprite`; the game's version for the resolution unless `AdaptiveSprite` is off), drawn at its size. Or 9-sliced to `FrameWidth` x `FrameHeight` with `Slice` borders, or a plain panel with no sprite.

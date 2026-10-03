@@ -8,7 +8,7 @@ namespace StoneForge;
 [StructLayout(LayoutKind.Sequential)]
 internal unsafe struct BridgeApi
 {
-    internal const int ExpectedVersion = 2;
+    internal const int ExpectedVersion = 3;
     public int Size;
     public int Version;
     public delegate* unmanaged<byte*, void> Log;
@@ -21,4 +21,6 @@ internal unsafe struct BridgeApi
     public delegate* unmanaged<byte*> LastError;
     // Returns an instance id, or -1 for a struct/global. Only called on freshly lent pointers.
     public delegate* unmanaged<IntPtr, int> InstanceId;
+    // Lets go of references (arrays and structs: GmRef) C# no longer holds.
+    public delegate* unmanaged<long*, int, void> ReleaseRefs;
 }
