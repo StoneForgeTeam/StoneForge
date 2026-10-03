@@ -27,11 +27,13 @@ namespace StoneForge;
 /// MainMenu.AddButton(context, "My Mod", window.Open);
 /// </code>
 /// Each <see cref="Open"/> builds it anew. Anything can go on its page (it's a <see cref="UIScrollArea"/>) or
-/// its <see cref="Frame"/>.</summary>
+/// its <see cref="Frame"/>. Its frame is the Settings menu's sprite unless <see cref="FrameSprite"/> says
+/// otherwise.</summary>
 public class UIWindow : UIElement
 {
     // The settings menu's layout, from its content's corner in the frame: its tab column, page and bottom row
-    // (the buttons' middles, as the game places them).
+    // (the buttons' middles, as the game places them). Another frame sprite grows (or shrinks) the page and moves
+    // the bottom row with it.
     private const double PageX = 110, PageWidth = 310, AreaHeight = 247, TabWidth = 100, TabHeight = 26, ButtonsY = 270;
     private static readonly double[] ButtonColumns = { 50, 183, 285, 387 };
 
@@ -44,6 +46,8 @@ public class UIWindow : UIElement
     private UIScrollArea? _page;
     private Instance _modal;
     private double _offsetX, _offsetY;
+    // The layout for its frame as it was built: the page's height, the bottom row's place, how much wider the frame is.
+    private double _areaHeight = AreaHeight, _buttonsY = ButtonsY, _wider;
 
     public UIWindow(string title)
     {
@@ -53,6 +57,12 @@ public class UIWindow : UIElement
     }
 
     public string Title { get; set; }
+    /// <summary>The window's frame: a sprite - the game's (<c>(int)Sprite.s_...</c>) or the mod's own
+    /// (<see cref="ModContext.LoadSprite"/>) - which the window is the size of. -1, the default: the game's
+    /// Settings menu's, for the game's resolution. The Settings menu's margins are kept, so make room for the
+    /// title along the top: the page grows (or shrinks) with the sprite, and the bottom row and the close button
+    /// follow its bottom and right edges. Takes effect when the window next opens.</summary>
+    public int FrameSprite { get; set; } = -1;
     public bool IsOpen => Visible;
     /// <summary>The window itself - its frame, at the middle of the screen: what's on it is placed from its corner.</summary>
     public UIElement Frame { get; }
@@ -117,11 +127,11 @@ public class UIWindow : UIElement
         if (_tabArea != null)
             Frame.Remove(_tabArea);
         _tabArea = null;
-        if (list.Count * TabHeight > AreaHeight)
+        if (list.Count * TabHeight > _areaHeight)
         {
             // (The column the tabs have - 0 to 100 - with the scrollbar's track at its right, clear of the page's
             // frame at about 106; the tabs narrowed for it.)
-            _tabArea = Frame.Add(new UIScrollArea(_offsetX, _offsetY, 88 + 15, AreaHeight) { Padding = 0, Spacing = 0 });
+            _tabArea = Frame.Add(new UIScrollArea(_offsetX, _offsetY, 88 + 15, _areaHeight) { Padding = 0, Spacing = 0 });
             for (int i = 0; i < list.Count; i++)
                 _tabs.Add(_tabArea.Add(new UITab(this, list[i], i, 86)));
         }
@@ -134,12 +144,13 @@ public class UIWindow : UIElement
     }
 
     /// <summary>A button (the Settings menu's) in the bottom row, in one of its four places: 0 left ... 3
-    /// right, where the settings menu has Cancel.</summary>
+    /// right, where the settings menu has Cancel. (A wider frame spreads them out.)</summary>
     public UIButton AddButton(int place, string text)
     {
         if (place < 0 || place >= ButtonColumns.Length)
             throw new ArgumentOutOfRangeException(nameof(place), "0 to 3");
-        return Frame.Add(new UIButton(text, _offsetX + ButtonColumns[place] - 50, _offsetY + ButtonsY - 13));
+        double x = ButtonColumns[place] + _wider * place / (ButtonColumns.Length - 1);
+        return Frame.Add(new UIButton(text, _offsetX + x - 50, _offsetY + _buttonsY - 13));
     }
 
     /// <summary>A button that closes the window, in the bottom row (as the settings menu's Cancel).</summary>
@@ -172,7 +183,12 @@ public class UIWindow : UIElement
         var frame = (WindowFrame)Frame;
         frame.Fit();
         (_offsetX, _offsetY) = frame.ContentOffset;
-        _page = Frame.Add(new UIScrollArea(_offsetX + PageX, _offsetY, PageWidth + 15, AreaHeight));
+        // (A frame much smaller than the Settings menu's still gets a page, a row of tabs high.)
+        _wider = frame.Growth.Width;
+        double pageWidth = Math.Max(TabWidth, PageWidth + frame.Growth.Width);
+        _areaHeight = Math.Max(TabHeight, AreaHeight + frame.Growth.Height);
+        _buttonsY = ButtonsY + frame.Growth.Height;
+        _page = Frame.Add(new UIScrollArea(_offsetX + PageX, _offsetY, pageWidth + 15, _areaHeight));
         Frame.Add(frame.MakeCloseButton());
     }
 

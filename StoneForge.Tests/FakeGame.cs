@@ -14,6 +14,8 @@ public abstract unsafe class FakeGame : IDisposable
     protected static readonly List<string> Calls = new();
     // Consumable instances for cleanup tests: instance id -> object index (null: not modelled).
     protected static Dictionary<int, int>? ConsumableInstances;
+    // Sprites' sizes for UI tests: sprite -> width, height (others are 0 by 0).
+    protected static readonly Dictionary<int, (double Width, double Height)> SpriteSizes = new();
 
     protected FakeGame()
     {
@@ -30,6 +32,7 @@ public abstract unsafe class FakeGame : IDisposable
         Game.Running = false;
         Hooks.Faulted = null;
         ConsumableInstances = null;
+        SpriteSizes.Clear();
     }
 
     private static BridgeApi* Create()
@@ -76,6 +79,11 @@ public abstract unsafe class FakeGame : IDisposable
             case "asset_get_index": result->Real = 1; break;
             case "sprite_add": Adds++; result->Real = 99; break;
             case "sprite_replace": Replaces++; result->Real = args[0].Real; break;
+            case "sprite_get_width": result->Real = SpriteSizes.GetValueOrDefault((int)args[0].Real).Width; break;
+            case "sprite_get_height": result->Real = SpriteSizes.GetValueOrDefault((int)args[0].Real).Height; break;
+            // (Scripts run as script_execute(index, ...); a sprite asked about - scr_adaptiveMenusGetSprite, the
+            // Settings menu's for every resolution - is answered with itself.)
+            case "script_execute" when count > 1 && SpriteSizes.ContainsKey((int)args[1].Real): result->Real = args[1].Real; break;
         }
         return 1;
     }
