@@ -43,7 +43,11 @@ public static unsafe class Bridge
             UIWindow.Install(loader);
             // (Mods' changed settings saved each frame.)
             loader.Frame += ModSettings.SaveChanged;
-            ModsMenu.Install(loader);
+            // (The loader's own buttons - Mods - are the menu as it starts, as mods' made while they load are: a mod's
+            // RestoreButtons keeps them.)
+            MainMenu.BeginLoad();
+            try { ModsMenu.Install(loader); }
+            finally { MainMenu.EndLoad(); }
             Items.Install(loader);
             Consumables.Install(loader);
             Skills.Install(loader);
