@@ -1,0 +1,78 @@
+# Packages StoneForge from main after every push to it, as the rolling "main-latest" pre-release: StoneForge-main.zip,
+# the same zip a release makes, for main as it is now. Mods developed against StoneForge's main check their pushes
+# compile against its StoneForge.API.dll (StoneshardMP's Build workflow) - GitHub's own runners can't generate it,
+# having no Stoneshard. Players install proper releases (Release workflow, v* tags), not this.
+#
+# The main-latest tag is moved to the commit only once its zip is up: a mod's CI that finds the tag on main's head
+# knows the zip is main's (StoneshardMP's build\Get-StoneForge.ps1 waits for that).
+#
+# Runs on the self-hosted Windows runner labelled "stoneshard", as the Release workflow does (setup:
+# https://github.com/StoneForgeTeam/StoneForgeDocs/blob/main/docs/development/releasing.md).
+name: Main build
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: main-build
+  cancel-in-progress: true
+
+jobs:
+  package:
+    runs-on: [self-hosted, windows, stoneshard]
+    defaults:
+      run:
+        shell: powershell
+    steps:
+      - uses: actions/checkout@v5
+
+      # (This workflow was first published as "nightly": that pre-release and its tag go. Nothing to do once they have.)
+      - name: Remove the old nightly pre-release
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          $headers = @{ Authorization = "Bearer $env:GITHUB_TOKEN"; Accept = "application/vnd.github+json" }
+          $api = "https://api.github.com/repos/${{ github.repository }}"
+          try { $release = Invoke-RestMethod "$api/releases/tags/nightly" -Headers $headers } catch { $release = $null }
+          if ($release) {
+              Invoke-RestMethod "$api/releases/$($release.id)" -Method Delete -Headers $headers
+              Write-Host "Removed the nightly pre-release"
+          }
+          git ls-remote --exit-code --tags origin refs/tags/nightly | Out-Null
+          if ($LASTEXITCODE -eq 0) {
+              git push origin :refs/tags/nightly
+              Write-Host "Removed the nightly tag"
+          }
+          $global:LASTEXITCODE = 0
+
+      - name: Build and package
+        run: |
+          powershell -NoProfile -ExecutionPolicy Bypass -File build\Package.ps1
+          if ($LASTEXITCODE -ne 0) { throw "Packaging failed" }
+          $version = ([xml](Get-Content Directory.Build.props)).Project.PropertyGroup.Version
+          Copy-Item "artifacts\StoneForge-$version.zip" artifacts\StoneForge-main.zip -Force
+
+      - name: Publish
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: main-latest
+          target_commitish: ${{ github.sha }}
+          name: StoneForge main (latest)
+          body: |
+            StoneForge built from `main` at ${{ github.sha }}, replaced on every push to it - for mods' CI to check
+            their pushes against StoneForge's latest API. Not a release: install a versioned release to play.
+          files: artifacts/StoneForge-main.zip
+          prerelease: true
+          make_latest: false
+          fail_on_unmatched_files: true
+
+      # (Last: the tag on this commit says its zip is up.)
+      - name: Move the main-latest tag to this commit
+        run: |
+          git tag -f main-latest
+          git push -f origin refs/tags/main-latest
