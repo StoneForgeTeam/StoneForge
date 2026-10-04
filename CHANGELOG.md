@@ -1,7 +1,8 @@
 # StoneForge changes
 
-## Unreleased
+## 0.5.0 — Menus, the HUD and the profiler
 
+- **Main build workflow:** every push to main is packaged on the Stoneshard runner as the rolling `main-latest` pre-release (`StoneForge-main.zip`), so mods' CI can check their pushes against StoneForge's latest API.
 - **`ContextMenus`: the game's right-click menus.** `ContextMenus.OnOpen(context, menu => ...)` runs as any menu opens, with its options as the game made them: `menu.Target` is what was right-clicked, `menu.Items` its options (each a key - the game's "Attack", "Talk", "Explore"... -, its text, whether it can be clicked and its hover hint), and `Add`, `Remove`, `SetText` and `SetEnabled` change them. A menu left with no options is closed, and one that grows is sized again as the game sizes it.
   - `ContextMenus.Add(context, text, appliesTo, onClick)` adds an option to the menus of the instances `appliesTo` picks. A mod's option runs its C# on what the menu's for when clicked (not while greyed out), then the menu closes as for the game's own.
   - StoneForge makes scr_create_context_menu hookable itself; a mod needs no `[assembly: HookScript]`.
