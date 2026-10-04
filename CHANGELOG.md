@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- **`"stoneforge": "latest"` for a mod in development.** In mod.json, it means the mod is built against StoneForge
+  as it is now. Any StoneForge loads it; the version check is skipped, and the log says "development build". Its
+  release names the StoneForge it was built against. `ModManifest.InDevelopment` tells which a mod is.
 - **`Units`: the room's units on the game's grid.**
   - `CellOf(unit)` and `CellOf(position)` give the cell, `PositionOf(cell)` its middle, and `At(x, y)` who stands there (the game's position grid).
   - `CanTake(unit, x, y)` checks a unit may take a cell. `Move(unit, x, y)` moves it as its own movement does, through the collision grid, the position grid and a big unit's extra cells. `NearestFreeCell(unit, x, y)` finds the nearest free cell.

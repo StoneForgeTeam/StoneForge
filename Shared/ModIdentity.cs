@@ -88,16 +88,27 @@ internal static class ModIdentity
             if (!IsValidId(id))
                 throw new InvalidDataException($"{ManifestFile}: id \"{id}\" - lowercase letters and digits, single underscores between them (\"examplemod\", \"failmelon_examplemod\")");
             string? stoneForge = values.GetValueOrDefault("stoneforge");
-            if (stoneForge != null && !System.Version.TryParse(stoneForge.Count(c => c == '.') == 0 ? stoneForge + ".0" : stoneForge, out _))
-                throw new InvalidDataException($"{ManifestFile}: stoneforge \"{stoneForge}\" - the StoneForge version it needs, e.g. \"0.1\"");
+            if (stoneForge != null && !IsLatest(stoneForge)
+                && !System.Version.TryParse(stoneForge.Count(c => c == '.') == 0 ? stoneForge + ".0" : stoneForge, out _))
+                throw new InvalidDataException($"{ManifestFile}: stoneforge \"{stoneForge}\" - the StoneForge version it needs, e.g. \"0.1\" (or \"latest\", for a mod in development)");
             return new ManifestData(id, Required("name"), Required("version"), values.GetValueOrDefault("author") ?? "",
                 values.GetValueOrDefault("description") ?? "", stoneForge, trusted);
         }
     }
 
-    /// <summary>Whether this StoneForge is at least <paramref name="needed"/> ("0.1", "0.1.2").</summary>
+    /// <summary>The "stoneforge" of a mod in development: built against StoneForge as it is now - any StoneForge loads it
+    /// (its release names the StoneForge it was built against).</summary>
+    public const string Latest = "latest";
+
+    /// <summary>Whether a "stoneforge" requirement is <see cref="Latest"/>.</summary>
+    public static bool IsLatest(string needed) => string.Equals(needed.Trim(), Latest, StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>Whether this StoneForge is at least <paramref name="needed"/> ("0.1", "0.1.2"); any is, for
+    /// <see cref="Latest"/>.</summary>
     public static bool Satisfies(string current, string needed)
     {
+        if (IsLatest(needed))
+            return true;
         static System.Version Parse(string v) => System.Version.Parse(v.Count(c => c == '.') == 0 ? v + ".0" : v);
         return Parse(current.Split('-', '+')[0]) >= Parse(needed);
     }

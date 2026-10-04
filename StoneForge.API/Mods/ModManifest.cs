@@ -37,8 +37,11 @@ public sealed class ModManifest
     public string Author { get; }
     /// <summary>What it does ("" if not given).</summary>
     public string Description { get; }
-    /// <summary>The StoneForge version it needs, at least (null if not given).</summary>
+    /// <summary>The StoneForge version it needs, at least (null if not given) - or "latest": a mod in development, built
+    /// against StoneForge as it is now, which any StoneForge loads (see <see cref="InDevelopment"/>).</summary>
     public string? StoneForge { get; }
+    /// <summary>Whether it's a development build: its "stoneforge" is "latest".</summary>
+    public bool InDevelopment => StoneForge != null && ModIdentity.IsLatest(StoneForge);
     /// <summary>Whether it asks for full access (<c>"trusted": true</c>): its own DLLs (any .dll in its folder, outside
     /// bin and obj - LiteNetLib, say), compiled against the whole of .NET, and none of StoneForge's checks on what it
     /// uses - networking, threads, files, reflection. It runs only once the player has allowed it in the Mods window,

@@ -282,7 +282,8 @@ internal static class ModManager
             if (mod is ITickable tickable)
                 modContext.AddTickable(tickable);
             Mods.Add(new Loaded { Id = id, Name = name, Folder = folder, Mod = mod, Context = context });
-            Game.Log($"Loaded {name} ({id}) {manifest.Version}" + (manifest.Author.Length > 0 ? $" by {manifest.Author}" : "")
+            Game.Log($"Loaded {name} ({id}) {manifest.Version}" + (manifest.InDevelopment ? " (development build: \"stoneforge\": \"latest\")" : "")
+                + (manifest.Author.Length > 0 ? $" by {manifest.Author}" : "")
                 + (manifest.Description.Length > 0 ? $" - {manifest.Description}" : ""));
         }
         catch (Exception e)
