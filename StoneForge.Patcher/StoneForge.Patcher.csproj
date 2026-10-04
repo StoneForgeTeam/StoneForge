@@ -1,7 +1,9 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <OutputType>Exe</OutputType>
+    <!-- (A windowed app: no console of its own - run, Steam's launch option, waits for the game behind it, unseen. Its
+         console opens only to show something, in the terminal it was started from if there is one: PatcherConsole.) -->
+    <OutputType>WinExe</OutputType>
     <!-- Windows installer APIs; the patch engine itself has no WPF/launcher dependency. -->
     <TargetFramework>net10.0-windows</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
