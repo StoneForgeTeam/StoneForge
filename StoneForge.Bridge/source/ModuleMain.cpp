@@ -306,19 +306,58 @@ static int ApiCallScript(const char* Name, void* Self, void* Other, const NValue
 	return CallStatus(st, Name);
 }
 
-// Whether a variable name is one of the engine's built-ins (x, y, image_index, id...). Those must never go
-// through the member lookup: on this runtime it doesn't fail cleanly for them and hands back a bad pointer
-// (writing through it corrupted memory). Cached per name.
-static bool IsBuiltin(const char* Name)
+// An engine built-in's accessors, as the engine keeps them (YYToolkit's RVariableRoutine, which its shared headers only
+// declare - 64-bit layout: name, getter, setter, whether it's settable).
+struct BuiltinAccess
 {
-	static std::unordered_map<std::string, bool> cache;
+	const char* Name;
+	bool (*Get)(CInstance* Instance, int Index, RValue* Value);
+	bool (*Set)(CInstance* Instance, int Index, RValue* Value);
+	bool CanBeSet;
+};
+static_assert(sizeof(BuiltinAccess) == 32, "RVariableRoutine's layout");
+
+// A variable name's built-in accessors (x, y, image_index, alarm, id...), or null if it isn't one. Found once per name
+// and kept: YYToolkit's GetBuiltin / SetBuiltin look the name up on every call, the bulk of an alarm's read.
+static const BuiltinAccess* Builtin(const char* Name)
+{
+	static std::unordered_map<std::string, const BuiltinAccess*> cache;
 	auto found = cache.find(Name);
 	if (found != cache.end())
 		return found->second;
+	const BuiltinAccess* access = nullptr;
 	size_t index = 0;
-	bool builtin = AurieSuccess(g_Yytk->GetBuiltinVariableIndex(Name, index));
-	cache[Name] = builtin;
-	return builtin;
+	RVariableRoutine* routine = nullptr;
+	if (AurieSuccess(g_Yytk->GetBuiltinVariableIndex(Name, index))
+		&& AurieSuccess(g_Yytk->GetBuiltinVariableInformation(index, routine)) && routine)
+		access = reinterpret_cast<const BuiltinAccess*>(routine);
+	cache.emplace(Name, access);
+	return access;
+}
+
+// Whether a variable name is one of the engine's built-ins (x, y, image_index, id...). Those must never go
+// through the member lookup: on this runtime it doesn't fail cleanly for them and hands back a bad pointer
+// (writing through it corrupted memory).
+static bool IsBuiltin(const char* Name) { return Builtin(Name) != nullptr; }
+
+// A built-in read and written through its accessors (as YYToolkit's GetBuiltin / SetBuiltin: a missing getter or
+// setter refuses; whether it's "settable" isn't asked).
+static bool GetBuiltinValue(const char* Name, CInstance* Instance, int Index, RValue& Value)
+{
+	const BuiltinAccess* access = Builtin(Name);
+	if (!access || !access->Get)
+		return false;
+	access->Get(Instance, Index, &Value);
+	return true;
+}
+
+static bool SetBuiltinValue(const char* Name, CInstance* Instance, int Index, RValue& Value)
+{
+	const BuiltinAccess* access = Builtin(Name);
+	if (!access || !access->Set)
+		return false;
+	access->Set(Instance, Index, &Value);
+	return true;
 }
 
 // GameMaker's per-instance built-ins: asked for with no instance (as a global), the engine reads them
@@ -368,7 +407,7 @@ static int ApiGetVar(void* Instance, const char* Name, NValue* Result)
 		if (!Instance && IsInstanceBuiltin(Name))
 			return 0;
 		RValue value;
-		if (!AurieSuccess(g_Yytk->GetBuiltin(Name, Instance ? inst : nullptr, INT_MIN, value)))
+		if (!GetBuiltinValue(Name, Instance ? inst : nullptr, INT_MIN, value))
 			return 0;
 		FromRValue(value, *Result);
 		return 1;
@@ -394,7 +433,7 @@ static int ApiSetVar(void* Instance, const char* Name, const NValue* Value)
 	{
 		if (!Instance && IsInstanceBuiltin(Name))
 			return 0;
-		return AurieSuccess(g_Yytk->SetBuiltin(Name, Instance ? inst : nullptr, INT_MIN, value)) ? 1 : 0;
+		return SetBuiltinValue(Name, Instance ? inst : nullptr, INT_MIN, value) ? 1 : 0;
 	}
 	RValue* member = HasMember(Instance ? inst : nullptr, Name) ? inst->GetRefMember(Name) : nullptr;
 	if (member)
@@ -418,7 +457,7 @@ static int ApiGetVarAt(void* Instance, const char* Name, int Index, NValue* Resu
 	if (!RequireGameThread() || !Instance || Index < 0 || !IsBuiltin(Name))
 		return 0;
 	RValue value;
-	if (!AurieSuccess(g_Yytk->GetBuiltin(Name, static_cast<CInstance*>(Instance), Index, value)))
+	if (!GetBuiltinValue(Name, static_cast<CInstance*>(Instance), Index, value))
 		return 0;
 	FromRValue(value, *Result);
 	return 1;
@@ -429,7 +468,7 @@ static int ApiSetVarAt(void* Instance, const char* Name, int Index, const NValue
 	if (!RequireGameThread() || !Instance || Index < 0 || !IsBuiltin(Name))
 		return 0;
 	RValue value = ToRValue(*Value);
-	return AurieSuccess(g_Yytk->SetBuiltin(Name, static_cast<CInstance*>(Instance), Index, value)) ? 1 : 0;
+	return SetBuiltinValue(Name, static_cast<CInstance*>(Instance), Index, value) ? 1 : 0;
 }
 
 static int ApiHookCode(const char* CodeName)
@@ -493,7 +532,7 @@ static int ApiInstanceId(void* Instance)
     auto* object = static_cast<YYObjectBase*>(Instance);
     if (object->m_ObjectKind != OBJECT_KIND_CINSTANCE) return -1;
     RValue id;
-    if (!AurieSuccess(g_Yytk->GetBuiltin("id", static_cast<CInstance*>(Instance), INT_MIN, id))) return -1;
+    if (!GetBuiltinValue("id", static_cast<CInstance*>(Instance), INT_MIN, id)) return -1;
     return id.m_Kind == VALUE_REF ? static_cast<int32_t>(id.m_i64 & 0xFFFFFFFF) : static_cast<int>(id.ToDouble());
 }
 

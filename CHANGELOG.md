@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- The bridge reads and writes the engine's built-in variables (`x`, `image_index`, `alarm[n]`, an instance's id...) through their accessors, found once per name, rather than YYToolkit's `GetBuiltin` / `SetBuiltin`, which look the name up on every call. Alarm reads and writes went from about 18 µs to 14 µs; the rest is the engine's own alarm accessor.
+- The reliability probe times calls into the game by kind (`LIVE SPEED`): built-ins, instance and global variables, alarms, and scripts unhooked and hooked each way.
 - **No more patcher window behind the game.** The patcher was a console program. Started by Steam's launch option (`run %command%`), it waits for the game so Steam sees it playing, and its console window stayed open the whole time. It's a windowed program now, and that wait is unseen. Its console opens only when there's something to show (patching again after a game update, an error): in the terminal it was started from, as `Install StoneForge.cmd`'s, or else in a window of its own.
 - `Time.Set` / `Time.Advance` only work the time of day out again (the time controller's user event 4) when it has changed. A mod keeping the clock in step every few frames no longer runs the event each time.
 - **Profiler: where the frame goes.** **Ctrl+Shift+P** shows an overlay with the frame rate, the worst frame, and each mod's time per frame. Mods are listed slowest first, with the total of their code and their slowest parts: average and worst over the last second, and how many times each ran.

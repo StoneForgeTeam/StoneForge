@@ -6,6 +6,10 @@ using StoneForge;
 // Functions defined inside another script's file: easeOutCubic (in EasingEquations - the probe calls it), the vineyard
 // thief's wine check and a Gwynel house cutscene step (only hooked, to show they can be).
 [assembly: HookScript(nameof(Scripts.easeOutCubic))]
+// (Hooked only to time hooks of each kind: Speed.)
+[assembly: HookScript(nameof(Scripts.easeInBack))]
+[assembly: HookScript(nameof(Scripts.easeOutBack))]
+[assembly: HookScript(nameof(Scripts.easeInOutCubic))]
 [assembly: HookScript(nameof(Scripts.scr_npc_lines_vineyard_thief_check_wine))]
 [assembly: HookScript(nameof(Scripts.scr_rewards_find_guinnel_1))]
 
@@ -61,6 +65,14 @@ public sealed class ReliabilityProbe : IStoneMod, ITickable
             });
             return true;
         });
+        // (Hooks of each kind, doing nothing, to time: Speed.)
+        Scripts.easeInBack.Before(context, call => false);
+        Scripts.easeOutBack.After(context, call => { });
+        Scripts.easeInOutCubic.Before(context, call =>
+        {
+            call.Result = 0.5;
+            return true;
+        });
     }
 
     public void Tick(double deltaTime)
@@ -87,6 +99,7 @@ public sealed class ReliabilityProbe : IStoneMod, ITickable
         Instance made = Game.CallBuiltin("instance_create_depth", 0, 0, 0, obj);
         if (made.IsNone || !made.Exists) throw new Exception("Probe instance could not be created");
         Alarms(made);
+        Speed(made);
         Game.CallBuiltin("instance_destroy", made);
         if (made.Exists || !made.Get("x").IsUndefined || made.Set("x", 1))
             throw new Exception("Destroyed instance remained usable.");
@@ -142,6 +155,47 @@ public sealed class ReliabilityProbe : IStoneMod, ITickable
             else Fail(name, string.Join(", ", failed));
         }
         catch (Exception e) { Fail(name, string.Join(", ", failed.Append(e.Message))); }
+    }
+
+    // How long a call into the game takes, by kind: microseconds per call over many (the sandbox has no Stopwatch;
+    // DateTime's resolution is fine over this many). For deciding whether batching calls would be worth it.
+    private void Speed(Instance made)
+    {
+        // (Hooked scripts fewer times: each makes game arrays that pile up until the frame's done.)
+        const int Calls = 20000, HookedCalls = 2000;
+        double Time(Action<int> call, int calls = Calls)
+        {
+            DateTime start = DateTime.UtcNow;
+            for (int i = 0; i < calls; i++)
+                call(i);
+            return (DateTime.UtcNow - start).TotalMilliseconds * 1000 / calls;
+        }
+        double sink = 0;
+        var results = new List<(string Name, double Micros)>
+        {
+            ("empty C# loop", Time(i => sink += i)),
+            ("builtin abs(number)", Time(i => sink += Game.CallBuiltin("abs", -i).AsReal)),
+            ("builtin string_length(text)", Time(i => sink += Game.CallBuiltin("string_length", "probe").AsReal)),
+            ("builtin instance_exists(id)", Time(i => sink += Game.CallBuiltin("instance_exists", made).AsReal)),
+            ("instance Get x (by id)", Time(i => sink += made.Get("x").AsReal)),
+            ("instance Set x (by id)", Time(i => made.Set("x", i))),
+            ("global get", Time(i => sink += Game.Global["stoneforge_probe_speed"].AsReal)),
+            ("global set", Time(i => Game.Global["stoneforge_probe_speed"] = i)),
+            ("alarm get (by id)", Time(i => sink += made.Alarm[3])),
+            ("alarm set (by id)", Time(i => made.Alarm[3] = -1)),
+            ("Game.IsCutscene (no player)", Time(i => sink += Game.IsCutscene ? 1 : 0)),
+            ($"Instances.All(o_mainMenuButton) ({Instances.All(GameObjectId.o_mainMenuButton).Count})",
+                Time(i => sink += Instances.All(GameObjectId.o_mainMenuButton).Count, 2000)),
+            ("script, not hooked (easeLinear)", Time(i => sink += Game.CallScript("easeLinear", default, 0.5).AsReal)),
+            ("script, hooked before, replaced (easeInOutCubic)", Time(i => sink += Game.CallScript("easeInOutCubic", default, 0.5).AsReal, HookedCalls)),
+            ("script, hooked before only, passed on (easeInBack)", Time(i => sink += Game.CallScript("easeInBack", default, 0.5).AsReal, HookedCalls)),
+            ("script, hooked after only (easeOutBack)", Time(i => sink += Game.CallScript("easeOutBack", default, 0.5).AsReal, HookedCalls)),
+            ("script, hooked before+after (easeOutCubic)", Time(i => sink += Game.CallScript("easeOutCubic", default, 0.5).AsReal, HookedCalls)),
+            ("script, hooked before, replaced, again", Time(i => sink += Game.CallScript("easeInOutCubic", default, 0.5).AsReal, HookedCalls)),
+        };
+        foreach (var (name, micros) in results)
+            _context.Log($"LIVE SPEED {name}: {micros:0.00} us/call");
+        _context.Log($"LIVE SPEED ({Calls} calls each; sink {sink:0})");
     }
 
     private void Alarms(Instance made)
