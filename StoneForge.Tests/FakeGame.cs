@@ -21,6 +21,7 @@ public abstract unsafe class FakeGame : IDisposable
     protected static FakeDs? Ds;
     // The game's random generator, for the seeded random tests (null: not modelled).
     protected static FakeRandom? Rng;
+    protected static FakeSprites? Sprites;
     // The game's scripts, for the script hook tests (null: not modelled).
     protected static FakeScripts? GameScripts;
     // What's on screen, for the busy / cutscene tests (null: not modelled).
@@ -462,6 +463,34 @@ public abstract unsafe class FakeGame : IDisposable
 
     /// <summary>GML scripts, each a C# body, called with script_execute. A hooked one calls in first, as the patcher's
     /// block at the top of its body does (unless it's <see cref="Unhooked"/>: not hookable in the game data).</summary>
+    /// <summary>The game's sprites: each one's origin, which ones were deleted, and every origin set in turn.</summary>
+    protected sealed class FakeSprites
+    {
+        public readonly Dictionary<int, (double X, double Y)> Origins = new();
+        public readonly List<int> Deleted = new();
+        public readonly List<(int Sprite, double X, double Y)> Set = new();
+
+        internal bool Answer(string function, NValue* args, int count, NValue* result)
+        {
+            int sprite = count > 0 ? (int)args[0].Real : -1;
+            switch (function)
+            {
+                case "sprite_exists": result->Kind = 13; result->Real = Origins.ContainsKey(sprite) ? 1 : 0; return true;
+                case "sprite_get_xoffset": result->Real = Origins[sprite].X; return true;
+                case "sprite_get_yoffset": result->Real = Origins[sprite].Y; return true;
+                case "sprite_set_offset":
+                    Origins[sprite] = (args[1].Real, args[2].Real);
+                    Set.Add((sprite, args[1].Real, args[2].Real));
+                    return true;
+                case "sprite_delete":
+                    Origins.Remove(sprite);
+                    Deleted.Add(sprite);
+                    return true;
+            }
+            return false;
+        }
+    }
+
     protected sealed class FakeScripts
     {
         private const int FirstIndex = 5000;
@@ -565,6 +594,7 @@ public abstract unsafe class FakeGame : IDisposable
         World = null;
         Ds = null;
         Rng = null;
+        Sprites = null;
         GameScripts = null;
         Scene = null;
         Refs = null;
@@ -633,6 +663,8 @@ public abstract unsafe class FakeGame : IDisposable
             return 1;
         if (Scene is { } scene)
             return scene.Answer(function, self, args, count, result) ? 1 : 0;
+        if (Sprites is { } sprites && sprites.Answer(function, args, count, result))
+            return 1;
         if (Rng is { } rng && rng.Answer(function, args, count, result))
             return 1;
         if (Ds is { } ds && ds.Answer(function, args, count, result))

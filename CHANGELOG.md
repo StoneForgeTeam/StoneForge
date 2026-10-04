@@ -1,5 +1,13 @@
 # StoneForge changes
 
+## Unreleased
+
+- **`CharacterLook`: a character's appearance**, as the game composites the player's sprite from it (scr_playerSpriteUpdate): its layers - body, head, hair, each piece of equipment worn - each a sprite at an offset, clipped and masked, over a frame grid. For companions, mannequins, or another player drawn in your game.
+  - `CharacterLook.OfPlayer()` reads the player's (null before there's a character). `ToJson()` / `FromJson()` carry it elsewhere: sprite ids are the same in every game from the same game data. Each `LookLayer` has its `Values` (the compositor's: `Sprite`, `Frame`, `Mask`...) and the origins its sprite and mask had where the look was read.
+  - `look.Build()` makes another character's sprites from it with the game's own compositor, so they look exactly as the player's would. Each layer's sprite sits at its read origins while it composites - equipment's origins are set per wearer at run time, so another game's copy may sit differently - then the player's globals and origins are put back. Call it in a Draw event (it draws to surfaces). Null if the look's body sprite isn't in this game.
+  - `CharacterSprites` are the five sprites the player is drawn with: `Normal`, `Blinking`, `FlashNegative` / `FlashPositive` (its hit flash), `Mask`, and `For(flash, blinking)` picks one as o_player does. `Dispose()` deletes them.
+- Tests: a fake for the game's sprites (origins, deletes).
+
 ## 0.4.0 — The world, saves and screens
 
 - **`Rooms`: moving between screens** as the game does (scr_smoothRoomChange): a fade to black, the room changer's events in the game's order, then the next room. Each returns false, doing nothing, while another room change is under way (`Rooms.IsChanging`) or when it isn't the screen for it. `Rooms.Current`, `CurrentName` and `InMainMenu` say where the game is.

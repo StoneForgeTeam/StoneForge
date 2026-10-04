@@ -100,6 +100,8 @@ public class ReliabilityTests : FakeGame
     public void Sprites_retire_and_reuse_without_deleting_a_referenced_ID()
     {
         Adds = Replaces = 0;
+        // (Its own calls: the log is every test's.)
+        int start = Calls.Count;
         int first = ModContent.LoadSprite("test assets", "test.png", 1, 0, 0);
         Assert.Equal(first, ModContent.LoadSprite("test assets", "test.png", 1, 0, 0));
         Assert.Equal(1, Adds);
@@ -115,7 +117,7 @@ public class ReliabilityTests : FakeGame
         ReplaceFails = false;
         ModContent.RemoveMod("test assets");
         Assert.Equal(0, ModContent.ActiveSprites);
-        Assert.DoesNotContain("sprite_delete", Calls);
+        Assert.DoesNotContain("sprite_delete", Calls.Skip(start));
     }
 
     [Fact]
