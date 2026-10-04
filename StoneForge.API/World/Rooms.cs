@@ -54,12 +54,11 @@ public static class Rooms
             return true;
         if (!save)
             return Start(-4, new[] { LeaveGame, MainMenu });
-        if (!Gm.InGame || !Start(-4, new[] { SaveLocation, ExitSave, LeaveGame, MainMenu }))
+        if (!Gm.InGame || IsChanging)
             return false;
-        // (As the game's Save and Exit: the save's location title and screenshot, and the loading screen.)
-        Game.CallScript("scr_slotSaveTitleKeyPrepare", default);
-        Game.CallScript("scr_slotSaveScreenshotPrepare", default);
-        Game.CallScript("scr_loadingCreate", default, -4, "N/A", 2 * RoomSpeed);
+        // (The game's own Save and Exit - the room saved, an exit save, its title and screenshot, the loading screen - so
+        // what hooks it runs too.)
+        Game.CallScript("scr_smoothSaveExit", default);
         return true;
     }
 

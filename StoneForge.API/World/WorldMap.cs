@@ -25,6 +25,10 @@ public static class WorldMap
     /// <summary>The dungeon floor the player is on: 0 on the surface (the game's floor_counter).</summary>
     public static int Floor => Game.Global["floor_counter"] is { Kind: GmKind.Real } floor ? floor.AsInt : 0;
 
+    /// <summary>The dungeon floor the player is on, as the game numbers it for the dungeon's own records - its seeds, its
+    /// floors' layouts (scr_dungeonGetCurrentFloorNumber).</summary>
+    public static int DungeonFloor => Game.CallScript("scr_dungeonGetCurrentFloorNumber", default).AsInt;
+
     /// <summary>Where the player is, as one string, the same in every game for the same spot: the room's name,
     /// "#f&lt;floor&gt;" in a dungeon (every floor of one is built in the same room), and "@x_y", the world-map cell
     /// (neighbouring cells are built in the same room too) - "r_globalmap_forest#f2@12_7". Null with no player (the main

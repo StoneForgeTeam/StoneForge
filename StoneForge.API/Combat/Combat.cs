@@ -10,7 +10,7 @@ namespace StoneForge;
 /// Combat.Damage(target, new Dictionary&lt;DamageType, double&gt; { [DamageType.Fire] = 8, [DamageType.Slashing] = 4 }, attacker);
 /// Combat.Damage(target, new Lightning(), 10, caster);   // a kind of your own (see DamageType)
 /// </code></summary>
-public static class Combat
+public static partial class Combat
 {
     /// <summary>Damage of one kind to <paramref name="target"/> (a unit), from <paramref name="source"/> (null:
     /// nobody's - a trap's, say). Returns the damage done, after the target's protection and resistances (0 if it

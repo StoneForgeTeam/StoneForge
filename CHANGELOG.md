@@ -2,6 +2,34 @@
 
 ## Unreleased
 
+- **`Units`: the room's units on the game's grid.**
+  - `CellOf(unit)` and `CellOf(position)` give the cell, `PositionOf(cell)` its middle, and `At(x, y)` who stands there (the game's position grid).
+  - `CanTake(unit, x, y)` checks a unit may take a cell. `Move(unit, x, y)` moves it as its own movement does, through the collision grid, the position grid and a big unit's extra cells. `NearestFreeCell(unit, x, y)` finds the nearest free cell.
+  - `Remove(unit)` takes a unit out quietly, with no loot or corpse, together with the effects on it. `Create(obj, x, y)` spawns one as the game does. `SetRecord(unit, "Caravan Dummy")` gives it a mob record.
+  - Also `IsPlayer`, `EndTurn(unit)`, and the player's list of units to run each turn (`TurnsCount`, `RemoveFromTurns`).
+- **`UnitEffects`: the game's effects on any unit.**
+  - `On(unit)` lists them as `GameEffect`s: name, object, turns left, whether shown, whether harmful.
+  - `Create(effect, target, turns, owner, stage)` and `Refresh(...)` put one on as the game does, with immunities and fortitude.
+  - `Has`, `IconOf`, and `RemoveAll(unit)`, which takes them all off before a unit goes without its Destroy event. Left behind, they crash the game.
+- **`Player`: the player's character.**
+  - `Attribute(name)` (scr_atr), `Level`, `HealthCap` / `EnergyCap` (its thresholds), `InCombat`, and `IsHuntedBy(unit)`.
+  - `GiveXp(xp, killed)` gives XP as the game does, logged as a kill. `KillXp(unit)` is what a unit's death is worth.
+  - `WalkTo(x, y)` walks there as a click does, and `CrossAreaEdge()` crosses into the next area. `AddStat` and `ChangePsyche` change its stats and psyche.
+- **Combat:** `Combat.Attack(attacker, target, forced)` (scr_attack), `Combat.Hit(target, amount, source)` (plain damage), `DamageShare` / `AddDamageShare` (a unit's damage list, for kills), and `Factions.Join` / `Leave`.
+- **`Draw`:** `Circle`, `Triangle`, `Line`, `SpriteExt` (scale, angle, tint, alpha), `Text` in a `GameFont` (`Default` or `Digits`), `PlainText` (the current font with a shadow, for the world), `SpriteExists` / `SpriteName` / `SpriteOrigin`, and `Frame(..., alpha)`.
+- **`Blackout`:** the screen held black, with a line of text, until `Hide()` or the next room change.
+- **`GameDialogs.Confirm(context, text, onYes, onNo)`:** the game's own confirmation panel asking a mod's question. Yes runs C#.
+- **`Journal`** (its task lists, `AddTask` / `RemoveTask`, the diary page), **`Contracts.Delete` / `DeleteQuestItems`**, **`ActionsLog.NameOf` / `Write`**, **`Steam.PersonaName`**, **`Doors.Nearest` / `Use`** (ways out, used as a click), and **`Turns.PassWorld` / `RunUnits`** (the game's turns, run by hand).
+- **Smaller additions:**
+  - `Instance.Of(value)`: the instance a reference or id names.
+  - `Instances.Count` and `Instances.Nearest`, by object index.
+  - `WorldTile.SetDungeonValue` / `SetDungeonMap` / `SetDungeonList`, and `WorldMap.DungeonFloor`.
+  - `Locations.TagAt` and `Locations.Exists`.
+  - `SaveData.Save(kind)` runs the game's save step, and `SaveData.WriteTo(save)` writes the save data over a save.
+  - `Gm.IrandomRange`.
+- `Rooms.ToMainMenu(save: true)` runs the game's own Save and Exit (scr_smoothSaveExit), so a mod hooking it sees it.
+- `Mouse.Unit` uses `Units.At`.
+
 - **`Mouse` in the world, and what it's over.** Alongside its screen position, buttons and wheel:
   - `Mouse.WorldX` / `WorldY` are the mouse in the room's coordinates (the game's mouse_x / mouse_y, its camera taken into account), and `Mouse.Cell` the grid cell under it.
   - `Mouse.Unit` is the unit standing on that cell, as the game finds who stands where (its position grid): an enemy, an NPC, the player, another mod's unit. It's none for an empty cell or off the room.

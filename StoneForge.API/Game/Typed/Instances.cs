@@ -61,6 +61,13 @@ public static class Instances
         return found.IsNone ? null : GameInstance.Wrap<T>(found);
     }
 
+    /// <summary>How many instances of an object (and its children) there are - not those culled.</summary>
+    public static int Count(int objectIndex) => objectIndex < 0 ? 0 : Game.CallBuiltin("instance_number", objectIndex).AsInt;
+
+    /// <summary>The instance of an object (or its children) nearest to (x, y); none if there's none.</summary>
+    public static Instance Nearest(double x, double y, int objectIndex)
+        => objectIndex < 0 ? default : Instance.Of(Game.CallBuiltin("instance_nearest", x, y, objectIndex));
+
     /// <summary>The instance of <paramref name="obj"/> nearest to (x, y), or null.</summary>
     public static T? Nearest<T>(double x, double y, GameObjectId obj) where T : GameInstance, new()
     {

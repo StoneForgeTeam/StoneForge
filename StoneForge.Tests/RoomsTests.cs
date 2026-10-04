@@ -38,6 +38,8 @@ public class RoomsTests : FakeGame
         });
         foreach (string script in new[] { "scr_slotSaveTitleKeyPrepare", "scr_slotSaveScreenshotPrepare", "scr_loadingCreate" })
             _scripts.Add(script, _ => { _ran.Add(script); return GmValue.Undefined; });
+        // (The game's Save and Exit, which Rooms runs as it is - so what hooks it runs too.)
+        _scripts.Add("scr_smoothSaveExit", _ => { _ran.Add("scr_smoothSaveExit"); return GmValue.Undefined; });
         var slots = DsMap.Create();
         slots["lastCharacter"] = "N/A";
         slots["lastSave"] = "N/A";
@@ -86,7 +88,7 @@ public class RoomsTests : FakeGame
     }
 
     [Fact]
-    public void Back_to_the_main_menu_as_Exit_or_as_Save_and_Exit()
+    public void Back_to_the_main_menu_as_Exit_or_through_the_games_Save_and_Exit()
     {
         InGame();
         Assert.True(Rooms.ToMainMenu());
@@ -95,12 +97,11 @@ public class RoomsTests : FakeGame
         Assert.Empty(_ran);
 
         Assert.True(Rooms.ToMainMenu(save: true));
-        Assert.Equal(new[] { 4, 7, 14, 3 }, _changes[1].Events);
-        Assert.Equal(new[] { "scr_slotSaveTitleKeyPrepare", "scr_slotSaveScreenshotPrepare", "scr_loadingCreate" }, _ran);
+        Assert.Equal(new[] { "scr_smoothSaveExit" }, _ran);
 
         OnMainMenu();
         Assert.True(Rooms.ToMainMenu());
-        Assert.Equal(2, _changes.Count);
+        Assert.Single(_changes);
     }
 
     [Fact]

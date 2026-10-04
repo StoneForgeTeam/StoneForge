@@ -41,5 +41,15 @@ public readonly record struct WorldTile(int X, int Y)
     /// <summary>The cell's dungeon; null if it has none.</summary>
     public WorldDungeon? Dungeon => Saved is { } saved && saved.GetMap("dungeon") is { } map ? new WorldDungeon(this, map) : null;
 
+    /// <summary>Sets a value of the cell's dungeon as the game does (scr_globaltile_dungeon_set) - made if the cell has
+    /// none yet.</summary>
+    public void SetDungeonValue(string key, GmValue value) => Game.CallScript("scr_globaltile_dungeon_set", default, key, value, X, Y);
+
+    /// <summary>Sets a map of the cell's dungeon (scr_globaltile_dungeon_set_map), which the dungeon then owns.</summary>
+    public void SetDungeonMap(string key, DsMap map) => Game.CallScript("scr_globaltile_dungeon_set_map", default, key, map, X, Y);
+
+    /// <summary>Sets a list of the cell's dungeon (scr_globaltile_dungeon_set_list), which the dungeon then owns.</summary>
+    public void SetDungeonList(string key, DsList list) => Game.CallScript("scr_globaltile_dungeon_set_list", default, key, list, X, Y);
+
     private DsMap? Layer(int layer) => Game.CallScript("scr_globaltile_get_tile", default, X, Y, layer, false).AsDsMap;
 }

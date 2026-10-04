@@ -25,6 +25,10 @@ public static class Gm
     /// chances use C#'s <see cref="System.Random"/> (<c>Random.Shared.Next(3)</c>), which leaves the game's rolls
     /// alone.</summary>
     public static int Irandom(int max) => Game.CallBuiltin("irandom", max).AsInt;
+    /// <summary>The game's irandom_range: a whole number from <paramref name="min"/> to <paramref name="max"/>, both
+    /// included, from the game's own random generator (see <see cref="Irandom"/>; under <see cref="Game.WithSeed"/>, a
+    /// number the same in every game).</summary>
+    public static int IrandomRange(int min, int max) => Game.CallBuiltin("irandom_range", min, max).AsInt;
     /// <summary>The game's random: 0 up to <paramref name="max"/> (see <see cref="Irandom"/> - prefer
     /// <see cref="System.Random"/> for a mod's own chances).</summary>
     public static double Random(double max) => Game.CallBuiltin("random", max).AsReal;

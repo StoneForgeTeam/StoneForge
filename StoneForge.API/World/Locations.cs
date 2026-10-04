@@ -20,7 +20,15 @@ public static class Locations
 
     /// <summary>The location of world-map cell (<paramref name="x"/>, <paramref name="y"/>) (scr_locationGenerateTag);
     /// null if it has no saved state.</summary>
-    public static Location? At(int x, int y) => Get(Game.CallScript("scr_locationGenerateTag", default, x, y).AsString);
+    public static Location? At(int x, int y) => Get(TagAt(x, y));
+
+    /// <summary>The tag the game gives a world-map cell's location ("12_7"...: scr_locationGenerateTag), whether or not
+    /// there's one there yet.</summary>
+    public static string TagAt(int x, int y) => Game.CallScript("scr_locationGenerateTag", default, x, y).AsString;
+
+    /// <summary>Whether the game has a location by this tag (scr_locationExists): its rooms have been made, or
+    /// stored.</summary>
+    public static bool Exists(string tag) => Game.CallScript("scr_locationExists", default, tag).AsBool;
 
     /// <summary>Where the player is: the current location's tag and room's tag (scr_locationGenerateTag,
     /// scr_locationRoomGenerateTag); null outside a game.</summary>

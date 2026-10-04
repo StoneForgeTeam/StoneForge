@@ -40,6 +40,7 @@ public static unsafe class Bridge
             var loader = new ModContext(Hooks.LoaderId);
             MainMenu.Install(loader);
             EscMenu.Install(loader);
+            GameDialogs.Install(loader);
             UIWindow.Install(loader);
             // (Mods' changed settings saved each frame.)
             loader.Frame += ModSettings.SaveChanged;

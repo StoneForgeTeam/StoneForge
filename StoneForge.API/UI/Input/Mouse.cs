@@ -43,31 +43,7 @@ public static class Mouse
     /// <summary>The unit standing on the cell it's over - an enemy, an NPC, the player, another mod's unit - as the game
     /// finds who stands where (its position grid: targeting, the cursor); none for an empty cell, off the room, or with
     /// no game.</summary>
-    public static Instance Unit
-    {
-        get
-        {
-            var (x, y) = Cell;
-            if (_controller == -2)
-                _controller = Gm.AssetGetIndex("o_controller");
-            if (_controller < 0 || x < 0 || y < 0)
-                return default;
-            GmValue controller = Game.CallBuiltin("instance_find", _controller, 0);
-            if (!Game.CallBuiltin("instance_exists", controller).AsBool)
-                return default;
-            GmValue grid = Game.CallBuiltin("variable_instance_get", controller, "posgrid");
-            if (grid.Kind != GmKind.Real || !Game.CallBuiltin("ds_exists", grid, DsGrid).AsBool
-                || x >= Game.CallBuiltin("ds_grid_width", grid).AsInt || y >= Game.CallBuiltin("ds_grid_height", grid).AsInt)
-                return default;
-            GmValue standing = Game.CallBuiltin("ds_grid_get", grid, x, y);
-            if (standing.Kind is not (GmKind.Real or GmKind.Instance) || standing.AsReal < 0 || !Game.CallBuiltin("instance_exists", standing).AsBool)
-                return default;
-            return standing.Kind == GmKind.Instance ? standing.AsInstance.Persist() : Instance.FromId(standing.AsInt);
-        }
-    }
-
-    private const int DsGrid = 3;
-    private static int _controller = -2;
+    public static Instance Unit { get { var (x, y) = Cell; return Units.At(x, y); } }
 
     // ---- what it's over ----
 
@@ -92,7 +68,11 @@ public static class Mouse
     private static int _cGui = -2, _blocker = -2;
 
     // (Tests: the game's objects looked up again.)
-    internal static void ResetForTests() => _cGui = _blocker = _controller = -2;
+    internal static void ResetForTests()
+    {
+        _cGui = _blocker = -2;
+        Units.ResetForTests();
+    }
 
     // Whether any of the game's shown GUI elements is under the mouse (c_GUI, in the game's own GUI space:
     // global.guiMouseX / Y) - all of them, or only those drawn nearer than a depth. Not StoneForge's input blocker, which

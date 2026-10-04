@@ -62,6 +62,15 @@ public readonly struct Instance : IEquatable<Instance>
     /// <summary>The instance with GameMaker instance id <paramref name="id"/>.</summary>
     public static Instance FromId(int id) => new(id);
 
+    /// <summary>The instance a value the game keeps for one names - a reference, or its id as a number (a unit's target,
+    /// an effect's owner, an entry in a list of units) - by its id; none if it names none (noone, -4, undefined).</summary>
+    public static Instance Of(GmValue value) => value.Kind switch
+    {
+        GmKind.Instance => value.AsInstance.Persist(),
+        GmKind.Real when value.AsReal >= 0 => FromId(value.AsInt),
+        _ => default,
+    };
+
     /// <summary>A variable's value (undefined if it's missing, or there's no such instance).</summary>
     public GmValue Get(string name)
     {

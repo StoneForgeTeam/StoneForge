@@ -52,6 +52,22 @@ public static class SaveData
         return picked.ToJsonString();
     }
 
+    /// <summary>Runs the game's save step now (scr_savegame), as its saves run it inside their fade: the character
+    /// collected into the save data (where it stands, its inventory, skills and effects), then the save written as
+    /// <paramref name="kind"/> (scr_slotUpdate - which a mod may hook to keep it). No fade, no room change.</summary>
+    public static void Save(SaveKind kind = SaveKind.Auto)
+        => Game.CallScript("scr_savegame", default, Rooms.CurrentName, (int)kind);
+
+    /// <summary>Writes the save data as it is now over a save already on disk (its data.sav only:
+    /// scr_slotSaveDataMapSave) - to add to one just made. False with no save data.</summary>
+    public static bool WriteTo(SaveFile save)
+    {
+        if (Map is not { } map)
+            return false;
+        Game.CallScript("scr_slotSaveDataMapSave", default, save.Slot.Name, save.Name, map);
+        return true;
+    }
+
     /// <summary>The character's sections as JSON (<see cref="CharacterSections"/>): who's playing, without the world
     /// they're in. Null outside a game.</summary>
     public static string? CharacterJson() => ToJson(CharacterSections);
