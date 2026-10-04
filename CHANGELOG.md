@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- `Time.Set` / `Time.Advance` only work the time of day out again (the time controller's user event 4) when it has changed. A mod keeping the clock in step every few frames no longer runs the event each time.
 - **Profiler: where the frame goes.** **Ctrl+Shift+P** shows an overlay with the frame rate, the worst frame, and each mod's time per frame. Mods are listed slowest first, with the total of their code and their slowest parts: average and worst over the last second, and how many times each ran.
   - StoneForge times every mod handler itself: `Tick`, frame and Draw GUI handlers, script hooks (before and after), code hooks, and so a mod's objects' events. Its own UI (mod screens and windows) is listed under StoneForge.
   - `Profiler.Measure(context, "name", work)` (or with a result) times a part of a mod's own, listed under it.

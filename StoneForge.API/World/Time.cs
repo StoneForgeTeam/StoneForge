@@ -143,12 +143,16 @@ public static class Time
     }
 
     // The time controller works the time of day out when a room starts (its user event 4), then holds it: brought up to
-    // date now, as it does then - with its own change event when the period changes.
+    // date now, as it does then - with its own change event when the period changes. Only when it's changed: its
+    // time_period is the period as TimeOfDay numbers it (a mod keeping the clock in step sets it every few frames).
     private static void RefreshTimeOfDay()
     {
         Instance controller = Game.CallBuiltin("instance_find", (int)GameObjectId.o_time_controller, 0);
-        if (!controller.IsNone)
-            Game.CallBuiltinAs("event_user", controller, controller, 4);
+        if (controller.IsNone)
+            return;
+        if (controller.Get("time_period") is { Kind: GmKind.Real } period && period.AsInt == (int)Now.OfDay)
+            return;
+        Game.CallBuiltinAs("event_user", controller, controller, 4);
     }
 
     private static DsMap? Clock() => Game.Global["timeDataMap"].AsDsMap is { } clock && Parts.All(part => clock.Has(part)) ? clock : null;

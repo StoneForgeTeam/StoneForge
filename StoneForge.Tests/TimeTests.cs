@@ -96,6 +96,22 @@ public class TimeTests : FakeGame
         Assert.Empty(_advances);
     }
 
+    [Fact]
+    public void The_time_of_day_is_worked_out_again_only_when_it_changes()
+    {
+        // (The time controller, instance 8, holding the morning: time_period 0.)
+        World = new FakeWorld();
+        World.Add(8, (int)GameObjectId.o_time_controller);
+        World.Vars[8] = new() { ["time_period"] = (int)TimeOfDay.Morning };
+        var clock = Clock(0, 0, 9, 0);
+        Time.Set(new GameTime(0, 0, 10, 0));
+        Assert.Empty(World.UserEvents);
+        // (Noon: the day - its user event 4 works it out, as when a room starts.)
+        clock["hours"] = 13;
+        Time.Set(new GameTime(0, 0, 13, 0));
+        Assert.Equal(new[] { (8, 4) }, World.UserEvents);
+    }
+
     // A room with the player in it (instance 7).
     private void Player()
     {
