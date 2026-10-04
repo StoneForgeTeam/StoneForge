@@ -29,6 +29,8 @@ public abstract unsafe class FakeGame : IDisposable
     protected static FakeRefs? Refs;
     // Global variables read by name (any not here reads as the number 55, as before).
     protected static readonly Dictionary<string, GmValue> Globals = new();
+    // Whether globals set from C# are kept in Globals (otherwise set and forgotten, as before).
+    protected static bool KeepGlobalWrites;
 
     /// <summary>The game's arrays and structs, as the bridge hands them to C#: by an id (kind 7 array, 8 struct), with
     /// the game's pointer standing for which one it is. An element or member that's itself an array or struct is kept by
@@ -140,10 +142,12 @@ public abstract unsafe class FakeGame : IDisposable
         // Instances whose pointer the bridge can't find (as before it looked among the room's deactivated ones).
         public readonly HashSet<int> Unresolvable = new();
         public double CachedSize;
+        // Whether instance_exists also answers for an object index: any active instance of it (or of a child).
+        public bool ExistsByObject;
         // Instances' variables (variable_instance_get/set on an active one), and the user events run (instance, event).
         public readonly Dictionary<int, Dictionary<string, GmValue>> Vars = new();
         public readonly List<(int Instance, int Event)> UserEvents = new();
-        // Objects known by name (asset_get_index, object_exists, object_get_name).
+        // Objects and rooms known by name (asset_get_index, object_exists, room_exists, object_get_name).
         public readonly Dictionary<string, int> Assets = new();
 
         public FakeWorld()
@@ -194,7 +198,10 @@ public abstract unsafe class FakeGame : IDisposable
                         result->Real = found;
                     }
                     return true;
-                case "instance_exists": result->Kind = 13; result->Real = Active.Contains(arg) ? 1 : 0; return true;
+                case "instance_exists":
+                    result->Kind = 13;
+                    result->Real = Active.Contains(arg) || ExistsByObject && Active.Any(i => IsA(Objects[i], arg)) ? 1 : 0;
+                    return true;
                 case "object_is_ancestor": result->Kind = 13; result->Real = arg != (int)A(1) && IsA(arg, (int)A(1)) ? 1 : 0; return true;
                 case "ds_exists": result->Kind = 13; result->Real = arg == ListId ? 1 : 0; return true;
                 case "ds_list_size": result->Real = Culled.Count; return true;
@@ -204,6 +211,7 @@ public abstract unsafe class FakeGame : IDisposable
                 case "asset_get_index" when Assets.Count > 0:
                     result->Real = Assets.TryGetValue(Marshal.PtrToStringUTF8(args[0].Str)!, out int asset) ? asset : -1;
                     return true;
+                case "room_exists" when Assets.Count > 0: result->Kind = 13; result->Real = Assets.ContainsValue(arg) ? 1 : 0; return true;
                 case "object_exists" when Assets.Count > 0: result->Kind = 13; result->Real = Assets.ContainsValue(arg) ? 1 : 0; return true;
                 case "object_get_name" when Assets.Count > 0:
                     *result = Game.ToNative(Assets.FirstOrDefault(a => a.Value == arg).Key ?? "<undefined>", new List<IntPtr>());
@@ -457,7 +465,9 @@ public abstract unsafe class FakeGame : IDisposable
     protected sealed class FakeScripts
     {
         private const int FirstIndex = 5000;
-        private readonly List<string> _names = new();
+        // Each script name's index, the same in every test: the game's calls keep a name's index once they've asked for
+        // it (Game.CallScript), across tests.
+        private static readonly List<string> AllNames = new();
         private readonly Dictionary<string, Func<GmValue[], GmValue>> _bodies = new();
         public readonly HashSet<string> Unhooked = new();
         // How many times each one's own code ran; the self and other of the last run.
@@ -466,7 +476,8 @@ public abstract unsafe class FakeGame : IDisposable
 
         public void Add(string name, Func<GmValue[], GmValue> body)
         {
-            _names.Add(name);
+            if (!AllNames.Contains(name))
+                AllNames.Add(name);
             _bodies[name] = body;
             Runs[name] = 0;
         }
@@ -475,13 +486,13 @@ public abstract unsafe class FakeGame : IDisposable
         {
             if (function == "asset_get_index" && Game.FromNative(args[0]).AsString is var asset && _bodies.ContainsKey(asset))
             {
-                result->Real = FirstIndex + _names.IndexOf(asset);
+                result->Real = FirstIndex + AllNames.IndexOf(asset);
                 return true;
             }
             int index = count > 0 ? (int)args[0].Real - FirstIndex : -1;
-            if (function != "script_execute" || index < 0 || index >= _names.Count)
+            if (function != "script_execute" || index < 0 || index >= AllNames.Count || !_bodies.ContainsKey(AllNames[index]))
                 return false;
-            string name = _names[index];
+            string name = AllNames[index];
             var values = new GmValue[count - 1];
             for (int i = 1; i < count; i++)
                 values[i - 1] = Game.FromNative(args[i]);
@@ -558,6 +569,7 @@ public abstract unsafe class FakeGame : IDisposable
         Scene = null;
         Refs = null;
         Globals.Clear();
+        KeepGlobalWrites = false;
     }
 
     private static BridgeApi* Create()
@@ -606,7 +618,12 @@ public abstract unsafe class FakeGame : IDisposable
         *result = new NValue { Kind = 0, Real = 55 };
         return 1;
     }
-    [UnmanagedCallersOnly] private static int Set(IntPtr ptr, byte* name, NValue* value) => 1;
+    [UnmanagedCallersOnly] private static int Set(IntPtr ptr, byte* name, NValue* value)
+    {
+        if (ptr == IntPtr.Zero && KeepGlobalWrites)
+            Globals[Marshal.PtrToStringUTF8((IntPtr)name)!] = Game.FromNative(*value);
+        return 1;
+    }
     [UnmanagedCallersOnly] private static int Call(byte* name, IntPtr self, IntPtr other, NValue* args, int count, NValue* result)
     {
         string function = Marshal.PtrToStringUTF8((IntPtr)name)!;
