@@ -22,6 +22,8 @@ internal static class ScriptHooks
         "scr_attack_result_hit", "scr_attack_result_block", "scr_attack_result_dodge", "scr_attack_result_fumble",
         "scr_itemCharSpritesInit",
         "scr_cast_spell", "scr_cast_aoe_spell", "scr_skill_reparse_locked",
+        // (SaveSlots.OnInfoSaving.)
+        "scr_slotMapSave",
     };
 
     /// <summary>Each script made hookable; how many could be.</summary>
