@@ -126,7 +126,8 @@ public static class Time
     /// <summary>Lets <paramref name="minutes"/> of game time pass as play does (scr_timePartsUpdate): minute by minute,
     /// with the game's every-minute, hour, day and month effects - upkeep, villages restocking, dungeons resetting,
     /// contracts' deadlines. Each minute runs them, so a long stretch (days) takes a moment. The time of day is brought up
-    /// to date. 0 does nothing; less throws.</summary>
+    /// to date. Run as the player, as play runs it (in the player's turn: scr_global_turn) - some of those effects need
+    /// it, so with no player it throws. 0 does nothing; less throws.</summary>
     public static void Advance(int minutes)
     {
         if (minutes < 0)
@@ -134,7 +135,10 @@ public static class Time
         Required();
         if (minutes == 0)
             return;
-        Game.CallScript("scr_timePartsUpdate", default, minutes);
+        Instance player = Game.CallBuiltin("instance_find", (int)GameObjectId.o_player, 0);
+        if (player.IsNone)
+            throw new InvalidOperationException("Time passes in the player's turn: there's no player to run it as.");
+        Game.CallScript("scr_timePartsUpdate", player, minutes);
         RefreshTimeOfDay();
     }
 

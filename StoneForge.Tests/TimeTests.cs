@@ -96,14 +96,32 @@ public class TimeTests : FakeGame
         Assert.Empty(_advances);
     }
 
+    // A room with the player in it (instance 7).
+    private void Player()
+    {
+        World = new FakeWorld();
+        World.Add(7, (int)GameObjectId.o_player);
+    }
+
     [Fact]
-    public void Advancing_goes_through_the_games_minute_by_minute_update()
+    public void Advancing_goes_through_the_games_minute_by_minute_update_as_the_player()
     {
         Clock(0, 0, 10, 0);
+        Player();
         Time.Advance(90);
+        // (As play runs it: in the player's turn.)
+        Assert.Equal((IntPtr)(FakeWorld.PointerBase + 7), _scripts.LastSelf);
         Assert.Equal(new GmValue[] { 90 }, Assert.Single(_advances));
         Time.Advance(0);
         Assert.Single(_advances);
         Assert.Throws<ArgumentOutOfRangeException>(() => Time.Advance(-1));
+    }
+
+    [Fact]
+    public void Advancing_with_no_player_throws_rather_than_running_without_one()
+    {
+        Clock(0, 0, 10, 0);
+        Assert.Throws<InvalidOperationException>(() => Time.Advance(60));
+        Assert.Empty(_advances);
     }
 }

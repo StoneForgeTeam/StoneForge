@@ -178,8 +178,16 @@ public abstract unsafe class FakeGame : IDisposable
             {
                 case "instance_number": result->Real = Active.Count(i => IsA(Objects[i], arg)); return true;
                 case "instance_find":
-                    result->Kind = 15;
-                    result->Real = Active.Where(i => IsA(Objects[i], arg)).OrderBy(i => i).ElementAt((int)A(1));
+                    // (As the game: noone, -4, when there isn't one that many in.)
+                    var matches = Active.Where(i => IsA(Objects[i], arg)).OrderBy(i => i).ToList();
+                    int found = (int)A(1) < matches.Count ? matches[(int)A(1)] : -1;
+                    if (found < 0)
+                        *result = new NValue { Kind = 0, Real = -4 };
+                    else
+                    {
+                        result->Kind = 15;
+                        result->Real = found;
+                    }
                     return true;
                 case "instance_exists": result->Kind = 13; result->Real = Active.Contains(arg) ? 1 : 0; return true;
                 case "object_is_ancestor": result->Kind = 13; result->Real = arg != (int)A(1) && IsA(arg, (int)A(1)) ? 1 : 0; return true;
