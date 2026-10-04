@@ -28,6 +28,9 @@ public abstract unsafe class FakeGame : IDisposable
     protected static FakeScene? Scene;
     // The game's arrays and structs, for the game value JSON tests (null: not modelled).
     protected static FakeRefs? Refs;
+    /// <summary>The mouse and what's under it (Mouse): its button, the window's focus, the game's UI under it, the
+    /// units on the room's cells.</summary>
+    protected static FakeInput? Input;
     // Global variables read by name (any not here reads as the number 55, as before).
     protected static readonly Dictionary<string, GmValue> Globals = new();
     // Whether globals set from C# are kept in Globals (otherwise set and forgotten, as before).
@@ -545,6 +548,67 @@ public abstract unsafe class FakeGame : IDisposable
 
     /// <summary>The objects in the room, and scr_is_cutscene's answer - which, as the game's, needs to run as an instance
     /// (it reads object_index): run with none, it fails.</summary>
+    protected sealed class FakeInput
+    {
+        public const int GuiObject = 7001, BlockerObject = 7002, ControllerObject = 7003, Controller = 7100, Grid = 7200, List = 7300;
+        public bool Pressed, Focused = true;
+        // The game's GUI elements under the mouse: their id, object, whether shown, depth.
+        public readonly List<(int Id, int Object, bool Visible, double Depth)> GuiUnderMouse = new();
+        // The controller's position grid (who stands on each cell: an instance id, or -4), and the units that exist.
+        public int[,]? Positions;
+        public readonly HashSet<int> Units = new();
+
+        internal bool Answer(string function, NValue* args, int count, NValue* result)
+        {
+            GmValue Arg(int i) => i < count ? Game.FromNative(args[i]) : GmValue.Undefined;
+            void Real(double value) { result->Kind = 0; result->Real = value; }
+            void Bool(bool value) { result->Kind = 13; result->Real = value ? 1 : 0; }
+            switch (function)
+            {
+                case "asset_get_index":
+                    switch (Arg(0).AsString)
+                    {
+                        case "c_GUI": Real(GuiObject); return true;
+                        case "o_stonemod_blocker": Real(BlockerObject); return true;
+                        case "o_controller": Real(ControllerObject); return true;
+                    }
+                    return false;
+                case "mouse_check_button_pressed": Bool(Pressed); return true;
+                case "window_has_focus": Bool(Focused); return true;
+                case "ds_list_create": Real(List); return true;
+                case "ds_list_destroy": return true;
+                case "instance_position_list": Real(GuiUnderMouse.Count); return true;
+                case "ds_list_find_value" when Arg(0).AsInt == List: Real(GuiUnderMouse[Arg(1).AsInt].Id); return true;
+                case "variable_instance_get":
+                {
+                    int id = Arg(0).AsInt;
+                    string name = Arg(1).AsString;
+                    if (id == Controller && name == "posgrid") { Real(Grid); return true; }
+                    if (GuiUnderMouse.FirstOrDefault(g => g.Id == id) is { Id: > 0 } gui)
+                    {
+                        if (name == "object_index") Real(gui.Object);
+                        else if (name == "visible") Bool(gui.Visible);
+                        else Real(gui.Depth);
+                        return true;
+                    }
+                    return false;
+                }
+                case "instance_find" when Arg(0).AsInt == ControllerObject: Real(Positions != null ? Controller : -4); return true;
+                case "instance_exists":
+                {
+                    int id = Arg(0).AsInt;
+                    Bool(id == Controller ? Positions != null : Units.Contains(id));
+                    return true;
+                }
+                case "ds_exists" when Arg(0).AsInt == Grid: Bool(Positions != null); return true;
+                case "ds_grid_width": Real(Positions!.GetLength(0)); return true;
+                case "ds_grid_height": Real(Positions!.GetLength(1)); return true;
+                case "ds_grid_get": Real(Positions![Arg(1).AsInt, Arg(2).AsInt]); return true;
+            }
+            return false;
+        }
+    }
+
     protected sealed class FakeScene
     {
         public const int PlayerPointer = 0x600;
@@ -604,6 +668,7 @@ public abstract unsafe class FakeGame : IDisposable
         GameScripts = null;
         Scene = null;
         Refs = null;
+        Input = null;
         Globals.Clear();
         KeepGlobalWrites = false;
     }
@@ -673,6 +738,8 @@ public abstract unsafe class FakeGame : IDisposable
         Calls.Add(function);
         *result = new NValue { Kind = 0 };
         if (GameScripts is { } scripts && scripts.Answer(function, self, other, args, count, result))
+            return 1;
+        if (Input is { } input && input.Answer(function, args, count, result))
             return 1;
         if (Scene is { } scene)
             return scene.Answer(function, self, args, count, result) ? 1 : 0;

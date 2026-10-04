@@ -15,6 +15,9 @@ internal static class InputBlock
     private static int _blocker = -1;
     private static bool _blocking, _typing;
 
+    /// <summary>Whether the mouse was on any mod's UI in the last Draw GUI pass (Mouse.OverModUI).</summary>
+    internal static bool MouseOnModUI { get; private set; }
+
     internal static void Report(UIElement root) => Covered.Add((root.ScreenX, root.ScreenY, root.ScreenX + root.Width, root.ScreenY + root.Height));
 
     // After every screen has drawn: the blocker over the covered area the mouse is in (or away), and the
@@ -32,12 +35,14 @@ internal static class InputBlock
             }
             if (Covered.Count == 0)
             {
+                MouseOnModUI = false;
                 if (_blocking)
                     MoveAway();
                 return;
             }
             double mx = Mouse.X, my = Mouse.Y;
             var inside = Covered.Where(c => mx >= c.X1 && mx < c.X2 && my >= c.Y1 && my < c.Y2).ToList();
+            MouseOnModUI = inside.Count > 0;
             if (inside.Count > 0)
                 Place(inside[0], mx, my);
             else if (_blocking)

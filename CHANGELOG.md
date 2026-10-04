@@ -1,5 +1,14 @@
 # StoneForge changes
 
+## Unreleased
+
+- **`Mouse` in the world, and what it's over.** Alongside its screen position, buttons and wheel:
+  - `Mouse.WorldX` / `WorldY` are the mouse in the room's coordinates (the game's mouse_x / mouse_y, its camera taken into account), and `Mouse.Cell` the grid cell under it.
+  - `Mouse.Unit` is the unit standing on that cell, as the game finds who stands where (its position grid): an enemy, an NPC, the player, another mod's unit. It's none for an empty cell or off the room.
+  - `Mouse.OverGameUI` (any of the game's shown GUI elements under it), `OverModUI` (any mod's UI, as of the last frame drawn) and `OverUI` (either), and `Mouse.HasFocus` (the game's window has the focus).
+  - `Mouse.ClickedWorld(button)`: pressed this frame on the world, in the focused window and not on any UI - a click meant for the world, as the game takes one to move or attack.
+  - The HUD layer's check for the game's UI drawn over it is the same code now.
+
 ## 0.5.0 — Menus, the HUD and the profiler
 
 - **Main build workflow:** every push to main is packaged on the Stoneshard runner as the rolling `main-latest` pre-release (`StoneForge-main.zip`), so mods' CI can check their pushes against StoneForge's latest API.
