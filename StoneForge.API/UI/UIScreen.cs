@@ -16,12 +16,16 @@ public sealed class UIScreen : UIElement
     private readonly Func<bool> _active;
     private bool _wasActive;
 
-    internal UIScreen(Func<bool> active, string owner)
+    internal UIScreen(Func<bool> active, string owner, UILayer layer = UILayer.Gui)
     {
         HitTest = false;
         _active = active;
         Owner = owner;
+        Layer = layer;
     }
+
+    /// <summary>Where it's drawn: over everything, or with the game's HUD (under its windows).</summary>
+    public UILayer Layer { get; }
 
     // The mod it's for.
     internal string Owner { get; }
@@ -85,6 +89,10 @@ public sealed class UIScreen : UIElement
                     hovered = _overlays[i].HitAt(mx, my);
             hovered ??= top != null ? top.HitAt(mx, my) : HitAt(mx, my);
         }
+        // (On the HUD: where the game's GUI drawn over it - a window, the bottom panel - is under the mouse, the mouse
+        // is the game's.)
+        if (hovered != null && Layer == UILayer.Hud && GameGuiOver())
+            hovered = null;
         // What the mouse is on (even disabled) - and what's held, while dragged off it - is kept from the game.
         if (hovered != null)
             InputBlock.Report(RootOf(hovered));
@@ -149,6 +157,37 @@ public sealed class UIScreen : UIElement
             if (screen._pressed == null && screen._hoverTime >= TooltipDelay && screen._hovered != null && IsIn(screen._hovered, window))
                 screen.DrawTooltip(Mouse.X, Mouse.Y);
         }
+    }
+
+    // Whether any of the game's GUI drawn over the HUD (nearer than its depth, and shown) is under the mouse: the game's
+    // c_GUI elements, found where the game finds what's clicked (its own GUI space: global.guiMouseX/Y).
+    private static int _cGui = -2, _blocker = -2;
+    private static bool GameGuiOver()
+    {
+        if (_cGui == -2)
+        {
+            _cGui = Gm.AssetGetIndex("c_GUI");
+            _blocker = Gm.AssetGetIndex("o_stonemod_blocker");
+        }
+        if (_cGui < 0)
+            return false;
+        GmValue list = Game.CallBuiltin("ds_list_create");
+        try
+        {
+            int count = Game.CallBuiltin("instance_position_list", Game.Global["guiMouseX"], Game.Global["guiMouseY"], _cGui, list, false).AsInt;
+            for (int i = 0; i < count; i++)
+            {
+                GmValue gui = Game.CallBuiltin("ds_list_find_value", list, i);
+                // (Not our own input blocker, which sits over mod UI for the game's sake.)
+                if (Game.CallBuiltin("variable_instance_get", gui, "object_index").AsInt == _blocker)
+                    continue;
+                if (Game.CallBuiltin("variable_instance_get", gui, "visible").AsBool
+                    && Game.CallBuiltin("variable_instance_get", gui, "depth").AsReal < Hooks.HudDepth)
+                    return true;
+            }
+            return false;
+        }
+        finally { Game.CallBuiltin("ds_list_destroy", list); }
     }
 
     // Whether an element is in (or is) another - through its parents, and the elements its overlays belong to.

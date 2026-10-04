@@ -56,6 +56,8 @@ public static unsafe class Bridge
             Items.ModsLoaded = () => ModManager.Startup.Finished;
             Buffs.Install(loader);
             loader.OnScript("scr_stonemod_draw_gui", _ => { Hooks.DrawGui(); return true; });
+            // (And the HUD pass, under the game's windows: ModContext.DrawHud, ModUI.Hud.)
+            loader.OnCode("gml_Object_o_stonemod_hud_Draw_0", after: (_, _) => Hooks.DrawHud());
             // The loading screen while the mods load (the game's own loading held till then), and StoneForge's
             // version on the main menu.
             LoadingScreen.Install(loader);

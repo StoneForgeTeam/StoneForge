@@ -81,6 +81,7 @@ internal static unsafe class Hooks
     }
     internal static readonly List<(string Mod, Action Handler)> FrameHandlers = new();
     internal static readonly List<(string Mod, Action Handler)> DrawGuiHandlers = new();
+    internal static readonly List<(string Mod, Action Handler)> DrawHudHandlers = new();
     // Mods' ITickables (the mod classes that are, and whatever they added): ticked every frame.
     internal static readonly List<(string Mod, ITickable Tickable)> Tickables = new();
     // The loaded mods, and the clock the ITickables' delta time comes from.
@@ -183,6 +184,7 @@ internal static unsafe class Hooks
     {
         FrameHandlers.RemoveAll(h => h.Mod == mod);
         DrawGuiHandlers.RemoveAll(h => h.Mod == mod);
+        DrawHudHandlers.RemoveAll(h => h.Mod == mod);
         Tickables.RemoveAll(t => t.Mod == mod);
         Mods.RemoveAll(m => m.Name == mod);
         foreach (var list in Code.Values)
@@ -325,14 +327,56 @@ internal static unsafe class Hooks
         Clip.Sweep();
     }
 
+    // The mods' HUD pass (o_stonemod_hud's Draw, at HudDepth: with the game's HUD, under its windows). The game draws its
+    // UI in the world's Draw pass, a UI unit to a world pixel, laid out from its visible base container
+    // (global.guiBaseContainerVisible, at -5000, -5000 in the room): mods draw in the same UI coordinates as in Draw GUI,
+    // moved there by the world matrix. What it draws the game's windows and bottom panel cover; what its screens cover
+    // is reported for the input block as theirs (InputBlock.Flush, at the end of the Draw GUI pass).
+    internal static void DrawHud()
+    {
+        if (DrawHudHandlers.Count == 0)
+            return;
+        Draw.UpdateScale();
+        // (The game's GUI is laid out from its visible base container, off in the room at -5000, -5000 - put on screen
+        // while the game draws its UI, from that container's depth on. Nothing to draw before it's made.)
+        GmValue container = Game.Global["guiBaseContainerVisible"];
+        Instance origin = container.Kind == GmKind.Instance ? container.AsInstance
+            : container.Kind == GmKind.Real && container.AsInt >= 0 ? Instance.FromId(container.AsInt) : default;
+        if (origin.IsNone || !origin.Exists)
+            return;
+        // (2: matrix_world.)
+        using (GmArray? moved = Game.CallBuiltinTrusted("matrix_build", default, default, origin["x"], origin["y"], 0, 0, 0, 0, 1, 1, 1).AsArray)
+            Game.CallBuiltinTrusted("matrix_set", default, default, 2, moved);
+        try
+        {
+            for (int i = 0; i < DrawHudHandlers.Count; i++)
+            {
+                var (mod, handler) = DrawHudHandlers[i];
+                Invoke(mod, "DrawHud", () => { handler(); return false; }, handler);
+            }
+        }
+        finally
+        {
+            using GmArray? identity = Game.CallBuiltinTrusted("matrix_build_identity", default, default).AsArray;
+            Game.CallBuiltinTrusted("matrix_set", default, default, 2, identity);
+        }
+    }
+
+    /// <summary>The HUD pass's depth: in front of the world and the game's HUD bars, behind its windows (-12100, their
+    /// parts just in front) and its bottom panel (-12150) - they draw after it, over it.</summary>
+    internal const int HudDepth = -12050;
+
     // o_stonemod_gui (persistent): made on the 5th frame - the game's first real one, as early as it can be, for
     // the loading screen (the first four come while the runner is still starting, half a second apart, and
     // asset_get_index then crashes the game) - and made again should anything remove it.
-    private static int _guiObject = -2, _guiCheck = 25;
+    private static int _guiObject = -2, _hudObject = -2, _guiCheck = 25;
     internal static void KeepGuiObject()
     {
-        if ((DrawGuiHandlers.Count == 0 && !Profiler.Visible) || ++_guiCheck < 30)
+        if ((DrawGuiHandlers.Count == 0 && DrawHudHandlers.Count == 0 && !Profiler.Visible) || ++_guiCheck < 30)
             return;
+        // (The HUD pass's object, when anything draws there - the Draw GUI pass's below still runs the input block.)
+        if (DrawHudHandlers.Count > 0)
+            KeepHudObject();
         _guiCheck = 0;
         if (_guiObject == -2)
         {
@@ -348,6 +392,21 @@ internal static unsafe class Hooks
             // in front of the game's own menus, about -12500, and still in view.)
             GmValue made = Game.CallBuiltin("instance_create_depth", 0, 0, -14000, _guiObject);
             Game.Log($"Made the Draw GUI object (o_stonemod_gui {_guiObject}): {made}, in room {Gm.Room}");
+        }
+    }
+
+    private static void KeepHudObject()
+    {
+        if (_hudObject == -2)
+        {
+            _hudObject = Gm.AssetGetIndex("o_stonemod_hud");
+            if (_hudObject < 0)
+                Game.Log("No o_stonemod_hud in the game data - mods can't draw on the HUD (run StoneForge.Patcher install)");
+        }
+        if (_hudObject >= 0 && !Game.CallBuiltin("instance_exists", _hudObject).AsBool)
+        {
+            GmValue made = Game.CallBuiltin("instance_create_depth", 0, 0, HudDepth, _hudObject);
+            Game.Log($"Made the HUD object (o_stonemod_hud {_hudObject}): {made}, in room {Gm.Room}");
         }
     }
 

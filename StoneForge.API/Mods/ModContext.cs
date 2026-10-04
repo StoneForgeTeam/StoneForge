@@ -116,6 +116,15 @@ public sealed class ModContext
         remove { Hooks.DrawGuiHandlers.RemoveAll(h => h.Handler == value); }
     }
 
+    /// <summary>Every frame, with the game's HUD - under its windows (inventory, map, dialogue...) and its bottom
+    /// panel, which draw over what's drawn here - in GUI coordinates, as <see cref="DrawGui"/>: for what belongs with
+    /// the HUD (frames, markers) rather than over everything. Draw with <see cref="Draw"/>.</summary>
+    public event Action? DrawHud
+    {
+        add { if (value != null) Hooks.DrawHudHandlers.Add((Id, value)); }
+        remove { Hooks.DrawHudHandlers.RemoveAll(h => h.Handler == value); }
+    }
+
     /// <summary>Runs around one of the game's code entries - an object event such as
     /// "gml_Object_o_player_Step_0" (object o_player, Step), with that event's self and other.
     /// <paramref name="before"/> runs first; returning true skips the game's own code (and later mods'

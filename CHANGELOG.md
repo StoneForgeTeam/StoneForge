@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- **A HUD layer for mod UI: `ModUI.Hud` and `ModContext.DrawHud`.** Drawn with the game's HUD, under its windows (inventory, map, Esc menu) and its bottom panel, and hidden when its HUD is (its UI turned off, a cutscene). `ModUI.When(active, UILayer.Hud)` puts a screen of your own there. A HUD element only has the mouse where none of the game's UI drawn over it is under it.
+  - It's drawn in the game's own Draw pass, at the HUD's depth: the game draws its UI there, by depth, laid out from its visible GUI container, so the game's windows draw over it. (Draw GUI comes after all of that, so mods' `Gui` layer stays over everything.) Mods draw in the same UI coordinates as on the `Gui` layer.
+  - The patcher adds o_stonemod_hud, whose Draw event the loader hooks; no GML of its own.
 - **`EscMenu`: the in-game Esc menu's buttons, as `MainMenu` is the main menu's.** `EscButton` names the game's (Resume, Load Game, Message Log, Settings, Exit, Save and Exit, and Exit Game, to the desktop).
   - `EscMenu.AddButton` / `AddBefore` / `AddAfter` add a mod's button or one of the game's: above the exit by default, or by a button's name, its shown text or another mod's button.
   - `ClearButtons`, `RestoreButtons` and `UndoChanges` (just this mod's changes since it loaded) work as on the main menu.
