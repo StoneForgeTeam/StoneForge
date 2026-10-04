@@ -249,7 +249,7 @@ internal static class ModManager
         // One failing cleanup must not strand every later resource or prevent the load context unloading.
         Action[] cleanup = {
             () => GameObjects.RemoveMod(name), () => GmlScripts.RemoveMod(name),
-            () => Hooks.RemoveMod(name), () => MainMenu.RemoveMod(name), () => Items.RemoveMod(name),
+            () => Hooks.RemoveMod(name), () => MainMenu.RemoveMod(name), () => EscMenu.RemoveMod(name), () => Items.RemoveMod(name),
             () => Consumables.RemoveMod(name), () => Skills.RemoveMod(name), () => Buffs.RemoveMod(name),
             () => UIWindow.ShutMod(name), () => ModSettings.RemoveMod(name), UITextBox.ReleaseFocus,
             () => ModContent.RemoveMod(name), () => Hooks.ResetFault(name)
@@ -271,8 +271,13 @@ internal static class ModManager
             if (manifest.Trusted) Game.Log($"WARNING: {name}: {ModsWindow.TrustedWarning}");
             if (GmlRuntime.ContainsGml(folder)) Game.Log($"WARNING: {name}: {ModsWindow.GmlWarning}");
             MainMenu.BeginLoad();
+            EscMenu.BeginLoad();
             try { mod.Load(modContext); }
-            finally { MainMenu.EndLoad(); }
+            finally
+            {
+                MainMenu.EndLoad();
+                EscMenu.EndLoad();
+            }
             Hooks.Mods.Add((id, mod));
             if (mod is ITickable tickable)
                 modContext.AddTickable(tickable);

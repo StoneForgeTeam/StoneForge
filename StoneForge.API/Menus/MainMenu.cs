@@ -31,8 +31,9 @@ public enum VanillaButton
 /// <summary>The main menu's list of buttons. Mods add their own above Exit (<see cref="AddButton(ModContext, string, Action)"/>),
 /// or before or after any button (<see cref="AddBefore(ModContext, string, string, Action)"/>,
 /// <see cref="AddAfter(ModContext, string, string, Action)"/>); the game's own buttons are added the same way, by
-/// <see cref="VanillaButton"/>. <see cref="ClearButtons"/> empties the menu, and <see cref="RestoreButtons"/> puts it
-/// back as it was when the game started:
+/// <see cref="VanillaButton"/>, and taken out (<see cref="RemoveButton(ModContext, VanillaButton)"/>).
+/// <see cref="ClearButtons"/> empties the menu, <see cref="RestoreButtons"/> puts it back as it was when the game started,
+/// and <see cref="UndoChanges"/> undoes just this mod's changes since:
 /// <code>
 /// MainMenu.ClearButtons(context);
 /// MainMenu.AddButton(context, VanillaButton.Play);
@@ -57,6 +58,7 @@ public static class MainMenu
     private sealed record AddOp(string Mod, Button Button, string? Anchor, bool After, bool Waits) : Op(Mod);
     private sealed record ClearOp(string Mod) : Op(Mod);
     private sealed record VanillaOp(string Mod, VanillaButton Which, string? Anchor, bool After, bool Waits) : Op(Mod);
+    private sealed record RemoveOp(string Mod, string Name) : Op(Mod);
 
     // A mod's button: its Id (on the instance, IndexVar) finds it when it's clicked.
     internal sealed record Button(int Id, string Mod, string Text, Action OnClick);
@@ -110,6 +112,26 @@ public static class MainMenu
     /// <inheritdoc cref="AddAfter(ModContext, string, VanillaButton)"/>
     public static void AddAfter(ModContext context, VanillaButton anchor, VanillaButton button) => Vanilla(context, button, anchor.ToString(), after: true);
 
+    /// <summary>Takes one of the game's buttons out of the menu (<see cref="AddButton(ModContext, VanillaButton)"/> puts it
+    /// back).</summary>
+    public static void RemoveButton(ModContext context, VanillaButton button)
+    {
+        if (!Enum.IsDefined(button))
+            throw new ArgumentOutOfRangeException(nameof(button), "Not one of the game's main menu buttons");
+        Remove(context, button.ToString());
+    }
+
+    /// <summary>Takes a button out of the menu by its name: a game button's, the text shown on it, or another mod's
+    /// button's text. One that isn't there yet (another mod's, added later) goes when it comes.</summary>
+    public static void RemoveButton(ModContext context, string name) => Remove(context, name);
+
+    private static void Remove(ModContext context, string name)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(name);
+        Ops.Add(new RemoveOp(context.Id, name));
+        Changed();
+    }
+
     /// <summary>Empties the menu: the game's buttons and every mod's added so far. Add back what's wanted.</summary>
     public static void ClearButtons(ModContext context)
     {
@@ -122,6 +144,16 @@ public static class MainMenu
     public static void RestoreButtons(ModContext context)
     {
         UndoSinceStartup();
+        Changed();
+    }
+
+    /// <summary>Undoes what this mod has done to the menu since it loaded (what other mods did stays): for a change a mod
+    /// makes for a while, and takes back.</summary>
+    public static void UndoChanges(ModContext context)
+    {
+        for (int i = Ops.Count - 1; i >= 0; i--)
+            if (!Ops[i].FromLoad && Ops[i].Mod == context.Id)
+                Forget(i);
         Changed();
     }
 
@@ -254,6 +286,15 @@ public static class MainMenu
                         return false;
                     }
                     list.Insert(at, new Entry(vanilla.Which, null));
+                    return true;
+                }
+                case RemoveOp remove:
+                {
+                    // (Not there yet: waited for, as an anchor is - then nothing to take out.)
+                    int at = Find(remove.Name);
+                    if (at < 0)
+                        return !strict;
+                    list.RemoveAt(at);
                     return true;
                 }
             }

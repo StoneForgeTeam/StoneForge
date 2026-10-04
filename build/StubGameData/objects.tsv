@@ -7,3 +7,5 @@ o_mainMenuNavContainer		buttonsContainer,buttonsOffset,height,logoHeight,logoTex
 o_player		HP
 o_textLoader		
 o_weapon_loot		
+o_close_panel		logoY,textY
+o_ingame_menu_button	o_button	

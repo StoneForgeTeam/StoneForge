@@ -55,6 +55,24 @@ public class MainMenuTests : IDisposable
     }
 
     [Fact]
+    public void A_button_is_removed_by_name_and_put_back_by_adding_it()
+    {
+        MainMenu.RemoveButton(A, VanillaButton.Credits);
+        Assert.Equal(new[] { "Play", "Settings", "Exit" }, MainMenu.Describe());
+        MainMenu.AddButton(B, VanillaButton.Credits);
+        Assert.Equal(new[] { "Play", "Settings", "Credits", "Exit" }, MainMenu.Describe());
+    }
+
+    [Fact]
+    public void A_removal_waits_for_another_mods_button_added_later()
+    {
+        MainMenu.RemoveButton(A, "lobby");
+        MainMenu.AddButton(B, "Lobby", Nothing);
+        MainMenu.RemoveButton(A, "Nowhere");
+        Assert.Equal(new[] { "Play", "Settings", "Credits", "Exit" }, MainMenu.Describe());
+    }
+
+    [Fact]
     public void Clear_empties_it_and_the_games_buttons_are_added_like_any()
     {
         MainMenu.AddButton(A, "Old", Nothing);

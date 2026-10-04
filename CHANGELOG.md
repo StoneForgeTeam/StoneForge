@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- **`EscMenu`: the in-game Esc menu's buttons, as `MainMenu` is the main menu's.** `EscButton` names the game's (Resume, Load Game, Message Log, Settings, Exit, Save and Exit, and Exit Game, to the desktop).
+  - `EscMenu.AddButton` / `AddBefore` / `AddAfter` add a mod's button or one of the game's: above the exit by default, or by a button's name, its shown text or another mod's button.
+  - `ClearButtons`, `RestoreButtons` and `UndoChanges` (just this mod's changes since it loaded) work as on the main menu.
+  - The menu starts each time as the game makes it there (Load Game only with saves outside permadeath, Exit in place of Save and Exit where the game can't save). The mods' calls apply to that, laid out and centred as the game lays it out, and a change shows at once, open or not. The game's buttons are made as it makes them, sounds and all.
+- **Removing the game's buttons:** `MainMenu.RemoveButton` and `EscMenu.RemoveButton`, by button or by name. A name that isn't there yet (another mod's button, added later) is taken out when it comes. `MainMenu.UndoChanges` too.
 - The bridge reads and writes the engine's built-in variables (`x`, `image_index`, `alarm[n]`, an instance's id...) through their accessors, found once per name, rather than YYToolkit's `GetBuiltin` / `SetBuiltin`, which look the name up on every call. Alarm reads and writes went from about 18 µs to 14 µs; the rest is the engine's own alarm accessor.
 - The reliability probe times calls into the game by kind (`LIVE SPEED`): built-ins, instance and global variables, alarms, and scripts unhooked and hooked each way.
 - **No more patcher window behind the game.** The patcher was a console program. Started by Steam's launch option (`run %command%`), it waits for the game so Steam sees it playing, and its console window stayed open the whole time. It's a windowed program now, and that wait is unseen. Its console opens only when there's something to show (patching again after a game update, an error): in the terminal it was started from, as `Install StoneForge.cmd`'s, or else in a window of its own.

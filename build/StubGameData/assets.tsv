@@ -13,6 +13,8 @@ object	11	o_dialogue
 object	12	o_smoothRoomChanger
 object	13	o_controller
 object	14	o_time_controller
+object	15	o_close_panel
+object	16	o_ingame_menu_button
 sprite	0	s_checkbox
 sprite	1	s_gui_arrow_down
 sprite	2	s_gui_arrow_up

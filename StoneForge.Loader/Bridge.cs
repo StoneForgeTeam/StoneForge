@@ -39,6 +39,7 @@ public static unsafe class Bridge
             // Main menu buttons (ours and mods'), the Mods window, mods' items, the Draw GUI pass.
             var loader = new ModContext(Hooks.LoaderId);
             MainMenu.Install(loader);
+            EscMenu.Install(loader);
             UIWindow.Install(loader);
             // (Mods' changed settings saved each frame.)
             loader.Frame += ModSettings.SaveChanged;
