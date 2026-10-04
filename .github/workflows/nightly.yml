@@ -1,0 +1,55 @@
+# Packages StoneForge from main after every push to it, as the rolling "nightly" pre-release:
+# StoneForge-nightly.zip, the same zip a release makes, for main as it is now. Mods developed against StoneForge's main
+# build against its StoneForge.API.dll in their CI (StoneshardMP's Build workflow) - GitHub's own runners can't generate
+# it, having no Stoneshard. Players install proper releases (Release workflow, v* tags), not this.
+#
+# Runs on the self-hosted Windows runner labelled "stoneshard", as the Release workflow does (setup:
+# https://github.com/StoneForgeTeam/StoneForgeDocs/blob/main/docs/development/releasing.md).
+name: Nightly
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: nightly
+  cancel-in-progress: true
+
+jobs:
+  nightly:
+    runs-on: [self-hosted, windows, stoneshard]
+    defaults:
+      run:
+        shell: powershell
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Build and package
+        run: |
+          powershell -NoProfile -ExecutionPolicy Bypass -File build\Package.ps1
+          if ($LASTEXITCODE -ne 0) { throw "Packaging failed" }
+          $version = ([xml](Get-Content Directory.Build.props)).Project.PropertyGroup.Version
+          Copy-Item "artifacts\StoneForge-$version.zip" artifacts\StoneForge-nightly.zip -Force
+
+      # (The nightly tag follows main: the release below is updated in place.)
+      - name: Move the nightly tag to this commit
+        run: |
+          git tag -f nightly
+          git push -f origin refs/tags/nightly
+
+      - name: Publish
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: nightly
+          name: StoneForge nightly (main)
+          body: |
+            StoneForge built from `main` at ${{ github.sha }}, updated on every push to it - for mods' CI to build
+            against StoneForge's latest API. Not a release: install a versioned release to play.
+          files: artifacts/StoneForge-nightly.zip
+          prerelease: true
+          make_latest: false
+          fail_on_unmatched_files: true
