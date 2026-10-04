@@ -27,6 +27,8 @@ public abstract unsafe class FakeGame : IDisposable
     protected static FakeScene? Scene;
     // The game's arrays and structs, for the game value JSON tests (null: not modelled).
     protected static FakeRefs? Refs;
+    // Global variables read by name (any not here reads as the number 55, as before).
+    protected static readonly Dictionary<string, GmValue> Globals = new();
 
     /// <summary>The game's arrays and structs, as the bridge hands them to C#: by an id (kind 7 array, 8 struct), with
     /// the game's pointer standing for which one it is. An element or member that's itself an array or struct is kept by
@@ -513,6 +515,7 @@ public abstract unsafe class FakeGame : IDisposable
         GameScripts = null;
         Scene = null;
         Refs = null;
+        Globals.Clear();
     }
 
     private static BridgeApi* Create()
@@ -546,6 +549,11 @@ public abstract unsafe class FakeGame : IDisposable
     [UnmanagedCallersOnly] private static int Get(IntPtr ptr, byte* name, NValue* result)
     {
         Reads++;
+        if (ptr == IntPtr.Zero && Globals.TryGetValue(Marshal.PtrToStringUTF8((IntPtr)name)!, out GmValue global))
+        {
+            *result = Game.ToNative(global, new List<IntPtr>());
+            return 1;
+        }
         // (A world instance's built-in, read through its pointer - a culled one's object_index.)
         if (World is { } world && (long)ptr >= FakeWorld.PointerBase
             && world.Objects.TryGetValue((int)((long)ptr - FakeWorld.PointerBase), out int obj))

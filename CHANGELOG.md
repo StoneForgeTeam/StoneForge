@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- **`Time`: the game's clock.** `Time.Now` is what time it is in the world, a `GameTime` (months, days 0-29, hours, minutes, seconds), with `Time.Timestamp` (minutes since the calendar began, as the game's scr_timeGetTimestamp), `Time.OfDay` and `Time.Turns` (turns completed). `Time.IsFrozen` says when the game holds time still (the Black Tablet's ritual). `Time.Available` says whether there's a clock at all: a game loaded or begun.
+  - `Time.Advance(minutes)` lets time pass as play does (scr_timePartsUpdate): minute by minute, with the game's every-minute, hour, day and month effects - upkeep, villages restocking, dungeons resetting, contracts' deadlines.
+  - `Time.Set(time)` jumps there at once (scr_timeSet): nothing in between happens.
+  - After either, the time of day is brought up to date: the time controller only works it out when a room starts, so NPCs would otherwise keep the old one (working at night, a lantern in the day) until the next room.
+  - `TimeOfDay` is the game's: Morning 6:00-11:59, Day 12:00-18:59, Evening 19:00-22:59, Night 23:00-5:59. `GameTime` has `OfDay`, `DayFraction` and `FromTimestamp`, and throws for a moment outside the calendar.
 - **Game values as JSON.** `GmValue.ToJsonNode()` and `GmValue.FromJsonNode(node)` convert between game values and System.Text.Json nodes: a number, true/false, text, undefined as null, and arrays and structs as `JsonArray` / `JsonObject` with everything in them, at any depth. `GmArray.ToJsonNode()` / `GmStruct.ToJsonNode()` give the typed node, and `GmArray.FromJsonNode(JsonArray)` / `GmStruct.FromJsonNode(JsonObject)` make new ones in the game.
   - Written value by value, as `DsList` writes its JSON, not through the game's json_stringify, so the result is always JSON. JSON has no way to write some things, so they become null: NaN and infinity, and a method (it reaches C# as a struct). An instance is written as its id, what the game's functions take. A struct that contains itself throws. A struct reached twice side by side is written twice.
   - `GmArray.ToJson()` / `GmStruct.ToJson()` go through it too, so numbers are written as JSON writes them (`3`, not the game's `3.0`). `GmArray.FromJson` / `GmStruct.FromJson` read the text first and return null if it isn't the right JSON, rather than handing it to the game's json_parse.

@@ -11,6 +11,8 @@ object	9	o_cullingController
 object	10	o_black_overlay
 object	11	o_dialogue
 object	12	o_smoothRoomChanger
+object	13	o_controller
+object	14	o_time_controller
 sprite	0	s_checkbox
 sprite	1	s_gui_arrow_down
 sprite	2	s_gui_arrow_up
