@@ -60,8 +60,8 @@ public abstract class GmRef : IDisposable, IEquatable<GmRef>
             fixed (long* ids = batch) Game.Api->ReleaseRefs(ids, count);
     }
 
-    /// <summary>Its JSON (the game's json_stringify).</summary>
-    public string ToJson() => Game.CallBuiltin("json_stringify", AsValue()).AsString;
+    /// <summary>Its JSON, with everything in it (as <see cref="GmValue.ToJsonNode"/> writes it).</summary>
+    public string ToJson() => AsValue().ToJsonNode()!.ToJsonString();
 
     // As a GmValue, to pass to the game.
     internal abstract GmValue AsValue();

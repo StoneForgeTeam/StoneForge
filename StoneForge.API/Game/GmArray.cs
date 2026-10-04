@@ -1,4 +1,5 @@
 using System.Collections;
+using System.Text.Json.Nodes;
 
 namespace StoneForge;
 
@@ -72,8 +73,14 @@ public sealed class GmArray : GmRef, IReadOnlyList<GmValue>
         return array;
     }
 
-    /// <summary>The array a JSON text describes (json_parse), or null if it isn't one.</summary>
-    public static GmArray? FromJson(string json) => Game.CallBuiltin("json_parse", json).AsArray;
+    /// <summary>As a System.Text.Json array, with everything in it (see <see cref="GmValue.ToJsonNode"/>).</summary>
+    public JsonArray ToJsonNode() => GmJson.Array(this);
+
+    /// <summary>A new game array from a JSON array (see <see cref="GmValue.FromJsonNode"/>).</summary>
+    public static GmArray FromJsonNode(JsonArray json) => GmJson.FromArray(json);
+
+    /// <summary>A new game array from JSON text, or null if the text isn't a JSON array.</summary>
+    public static GmArray? FromJson(string json) => GmJson.Parse(json) is JsonArray array ? FromJsonNode(array) : null;
 
     internal static InvalidOperationException Unmade(string how) => new($"{how} didn't give an array or struct back.");
 

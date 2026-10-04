@@ -1,3 +1,5 @@
+using System.Text.Json.Nodes;
+
 namespace StoneForge;
 
 /// <summary>A GameMaker struct, the game's own (<see cref="GmRef"/>): a script's argument or result, json_parse's...
@@ -36,10 +38,16 @@ public sealed class GmStruct : GmRef
     public int Count => Game.CallBuiltin("variable_struct_names_count", this).AsInt;
 
     /// <summary>A new, empty game struct.</summary>
-    public static GmStruct Create() => FromJson("{}") ?? throw GmArray.Unmade("json_parse");
+    public static GmStruct Create() => Game.CallBuiltin("json_parse", "{}").AsStruct ?? throw GmArray.Unmade("json_parse");
 
-    /// <summary>The struct a JSON text describes (json_parse), or null if it isn't one.</summary>
-    public static GmStruct? FromJson(string json) => Game.CallBuiltin("json_parse", json).AsStruct;
+    /// <summary>As a System.Text.Json object, with everything in it (see <see cref="GmValue.ToJsonNode"/>).</summary>
+    public JsonObject ToJsonNode() => GmJson.Object(this);
+
+    /// <summary>A new game struct from a JSON object (see <see cref="GmValue.FromJsonNode"/>).</summary>
+    public static GmStruct FromJsonNode(JsonObject json) => GmJson.FromObject(json);
+
+    /// <summary>A new game struct from JSON text, or null if the text isn't a JSON object.</summary>
+    public static GmStruct? FromJson(string json) => GmJson.Parse(json) is JsonObject obj ? FromJsonNode(obj) : null;
 
     public override string ToString() => "struct";
 }

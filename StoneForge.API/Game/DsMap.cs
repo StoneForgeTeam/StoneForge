@@ -1,5 +1,7 @@
 using System.Text.Json;
 
+using System.Text.Json.Nodes;
+
 namespace StoneForge;
 
 /// <summary>A GameMaker ds_map, the game's own: it keeps almost everything in them - the save data, characters,
@@ -142,6 +144,9 @@ public readonly struct DsMap : IEquatable<DsMap>
     /// <summary>Its JSON, as the game writes it (json_encode): nested maps and lists as objects and arrays, anything
     /// else as a value.</summary>
     public string ToJson() => Game.CallBuiltin("json_encode", Id).AsString;
+
+    /// <summary>As a System.Text.Json object (its <see cref="ToJson"/>, read).</summary>
+    public JsonObject ToJsonNode() => (JsonObject)JsonNode.Parse(ToJson())!;
 
     /// <summary>A new map from JSON text, as the game reads it (json_decode): objects and arrays in it nested in it, marked;
     /// an array at the top in its "default" key. Null if the text isn't JSON. The caller owns it: <see cref="Destroy"/> it,

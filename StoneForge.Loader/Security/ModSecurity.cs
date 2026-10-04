@@ -29,6 +29,9 @@ internal static class ModSecurity
         "System.Text",
         "System.Text.RegularExpressions",
         "System.Globalization",
+        // (JSON as nodes - JsonNode, JsonArray, JsonObject, JsonValue: data only. Not JsonSerializer, which makes objects of
+        // any type by reflection.)
+        "System.Text.Json.Nodes",
         "StoneForge",
         "StoneForge.Objects",
         "StoneForge.GameItems",
@@ -70,6 +73,10 @@ internal static class ModSecurity
         "System.Runtime.CompilerServices.DefaultInterpolatedStringHandler",
         "System.Runtime.CompilerServices.IsExternalInit",
         "System.Runtime.CompilerServices.ITuple",
+        // (What JSON nodes take and give: a value's kind, a parse error, and the options their methods default to -
+        // inert without JsonSerializer.)
+        "System.Text.Json.JsonValueKind", "System.Text.Json.JsonException", "System.Text.Json.JsonDocumentOptions",
+        "System.Text.Json.JsonSerializerOptions", "System.Text.Json.Nodes.JsonNodeOptions",
     };
 
     // Allowed type families: every System.Func / Action / ValueTuple / Tuple arity.
@@ -363,6 +370,12 @@ internal static class ModSecurity
                         CheckType(node, typeArgument);
                     if (method.IsExtern)
                         Deny(node, $"{method.Name} is extern");
+                    // (JsonValue.Create<T> wraps any object, which is written by reflection - every public property it
+                    // has, a delegate's method among them. A value's own overload - Create(double), Create(string)... -
+                    // is what a plain value picks.)
+                    if (method.IsGenericMethod && method.Name == "Create" && containing != null
+                        && FullName(containing.OriginalDefinition) == "System.Text.Json.Nodes.JsonValue")
+                        Deny(node, "JsonValue.Create<T> isn't allowed (it writes any object by reflection): use the overload for a plain value");
                     break;
                 case IPropertySymbol property:
                     CheckType(node, property.Type);

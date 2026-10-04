@@ -22,7 +22,7 @@ internal static class ModCompiler
         var wanted = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
         {
             "System.Private.CoreLib", "System.Runtime", "System.Collections", "System.Linq",
-            "System.Text.RegularExpressions", "System.Memory",
+            "System.Text.RegularExpressions", "System.Memory", "System.Text.Json",
         };
         var refs = new List<MetadataReference>();
         string tpa = AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES") as string ?? "";

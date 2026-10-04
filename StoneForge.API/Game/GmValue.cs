@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Text.Json.Nodes;
 
 namespace StoneForge;
 
@@ -57,6 +58,17 @@ public readonly struct GmValue : IEquatable<GmValue>
     public static implicit operator GmValue(GameInstance? v) => v == null ? Undefined : (GmValue)v.Instance;
     public static implicit operator GmValue(GmArray? v) => v == null ? Undefined : new(GmKind.Array, reference: v);
     public static implicit operator GmValue(GmStruct? v) => v == null ? Undefined : new(GmKind.Struct, reference: v);
+    /// <summary>As a System.Text.Json node: a number (NaN and infinity have no JSON: null), true/false, text, an array
+    /// (<see cref="JsonArray"/>) or struct (<see cref="JsonObject"/>) with everything in it, an instance as its id (what
+    /// the game's functions take), undefined - or a method - as null. A struct that contains itself throws. Arrays and
+    /// structs are read from the game, so on its thread.</summary>
+    public JsonNode? ToJsonNode() => GmJson.ToNode(this);
+
+    /// <summary>A game value from a System.Text.Json node: a number, true/false, text, undefined for null - and a JSON
+    /// array or object as a new game array (<see cref="GmArray"/>) or struct (<see cref="GmStruct"/>) with everything in
+    /// it, made in the game, so on its thread.</summary>
+    public static GmValue FromJsonNode(JsonNode? node) => GmJson.FromNode(node);
+
     /// <summary>An asset id (object, sprite, sound, room) from the generated enums.</summary>
     public static GmValue From<TEnum>(TEnum asset) where TEnum : Enum => Convert.ToDouble(asset, CultureInfo.InvariantCulture);
 
@@ -94,7 +106,7 @@ public readonly struct GmValue : IEquatable<GmValue>
         GmKind.Bool => _real != 0 ? "true" : "false",
         GmKind.String => _string!,
         GmKind.Instance => _instance.ToString(),
-        GmKind.Array or GmKind.Struct => _ref!.ToString(),
+        GmKind.Array or GmKind.Struct => _ref!.ToString() ?? "",
         _ => "undefined",
     };
 }

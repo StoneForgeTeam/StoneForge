@@ -194,7 +194,8 @@ public readonly struct DsList : IEquatable<DsList>
         DsMap.DestroyNested(kind, value);
     }
 
-    private JsonArray ToJsonNode()
+    /// <summary>As a System.Text.Json array: nested maps and lists as objects and arrays, anything else as a value.</summary>
+    public JsonArray ToJsonNode()
     {
         var array = new JsonArray();
         int count = Count;
@@ -205,13 +206,8 @@ public readonly struct DsList : IEquatable<DsList>
             {
                 DsMap.Type => JsonNode.Parse(new DsMap(value.AsInt).ToJson()),
                 Type => new DsList(value.AsInt).ToJsonNode(),
-                _ => value.Kind switch
-                {
-                    GmKind.Real => JsonValue.Create(value.AsReal),
-                    GmKind.Bool => JsonValue.Create(value.AsBool),
-                    GmKind.Undefined => null,
-                    _ => JsonValue.Create(value.AsString),
-                },
+                // (A plain value as any game value is written: NaN as null, which JSON has no other way to write.)
+                _ => GmJson.Scalar(value),
             });
         }
         return array;

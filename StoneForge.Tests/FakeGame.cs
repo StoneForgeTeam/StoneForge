@@ -25,6 +25,105 @@ public abstract unsafe class FakeGame : IDisposable
     protected static FakeScripts? GameScripts;
     // What's on screen, for the busy / cutscene tests (null: not modelled).
     protected static FakeScene? Scene;
+    // The game's arrays and structs, for the game value JSON tests (null: not modelled).
+    protected static FakeRefs? Refs;
+
+    /// <summary>The game's arrays and structs, as the bridge hands them to C#: by an id (kind 7 array, 8 struct), with
+    /// the game's pointer standing for which one it is. An element or member that's itself an array or struct is kept by
+    /// its id, as the game keeps a reference.</summary>
+    protected sealed class FakeRefs
+    {
+        // (An element: a plain value, or an array / struct by id.)
+        private readonly record struct Item(GmValue Plain, int Ref, bool IsArray);
+
+        private readonly Dictionary<int, List<Item>> _arrays = new();
+        private readonly Dictionary<int, List<KeyValuePair<string, Item>>> _structs = new();
+        public readonly HashSet<int> Methods = new();
+        private int _next = 1;
+        private readonly List<IntPtr> _strings = new();
+
+        public int NewArray() { _arrays[_next] = new(); return _next++; }
+        public int NewStruct() { _structs[_next] = new(); return _next++; }
+        public void Push(int array, GmValue value) => _arrays[array].Add(Keep(value));
+        public void PushRef(int array, int reference, bool isArray) => _arrays[array].Add(new Item(default, reference, isArray));
+        public void SetMember(int strukt, string name, GmValue value) => Put(strukt, name, Keep(value));
+        public void SetRef(int strukt, string name, int reference, bool isArray) => Put(strukt, name, new Item(default, reference, isArray));
+        public GmValue Array(int id) => Game.FromNative(new NValue { Kind = 7, Real = id, Ptr = id });
+        public GmValue Struct(int id) => Game.FromNative(new NValue { Kind = 8, Real = id, Ptr = id });
+        public int Count(int array) => _arrays[array].Count;
+
+        private void Put(int strukt, string name, Item item)
+        {
+            var members = _structs[strukt];
+            int at = members.FindIndex(m => m.Key == name);
+            if (at >= 0)
+                members[at] = new(name, item);
+            else
+                members.Add(new(name, item));
+        }
+
+        // An array or struct handed in is kept by its id: the C# handle may be let go of after.
+        private static Item Keep(GmValue value) => value.Kind switch
+        {
+            GmKind.Array => new Item(default, (int)value.AsArray!.Id, true),
+            GmKind.Struct => new Item(default, (int)value.AsStruct!.Id, false),
+            _ => new Item(value, 0, false),
+        };
+
+        private NValue Out(Item item) => item.Ref == 0 ? Game.ToNative(item.Plain, _strings)
+            : new NValue { Kind = item.IsArray ? 7 : 8, Real = item.Ref, Ptr = item.Ref };
+
+        // A builtin, as the game answers it (false: not one modelled here).
+        internal bool Answer(string function, NValue* args, int count, NValue* result)
+        {
+            int id = count > 0 ? (int)args[0].Real : -1;
+            GmValue A(int i) => Game.FromNative(args[i]);
+            switch (function)
+            {
+                case "array_create":
+                    int made = NewArray();
+                    for (int i = 0; i < (int)args[0].Real; i++)
+                        _arrays[made].Add(count > 1 ? Keep(A(1)) : default);
+                    *result = new NValue { Kind = 7, Real = made, Ptr = made };
+                    return true;
+                case "array_length": *result = new NValue { Kind = 0, Real = _arrays[id].Count }; return true;
+                case "array_get": *result = Out(_arrays[id][(int)args[1].Real]); return true;
+                case "array_set":
+                    var items = _arrays[id];
+                    while (items.Count <= (int)args[1].Real)
+                        items.Add(default);
+                    items[(int)args[1].Real] = Keep(A(2));
+                    *result = new NValue { Kind = 5 };
+                    return true;
+                case "array_push":
+                    for (int i = 1; i < count; i++)
+                        _arrays[id].Add(Keep(A(i)));
+                    *result = new NValue { Kind = 5 };
+                    return true;
+                case "json_parse" when Marshal.PtrToStringUTF8(args[0].Str) == "{}":
+                    int strukt = NewStruct();
+                    *result = new NValue { Kind = 8, Real = strukt, Ptr = strukt };
+                    return true;
+                case "variable_struct_get":
+                    string name = A(1).AsString;
+                    *result = _structs[id].FirstOrDefault(m => m.Key == name) is { Key: not null } found ? Out(found.Value) : new NValue { Kind = 5 };
+                    return true;
+                case "variable_struct_set":
+                    Put(id, A(1).AsString, Keep(A(2)));
+                    *result = new NValue { Kind = 5 };
+                    return true;
+                case "variable_struct_get_names":
+                    int names = NewArray();
+                    foreach (var member in _structs[id])
+                        _arrays[names].Add(new Item(member.Key, 0, false));
+                    *result = new NValue { Kind = 7, Real = names, Ptr = names };
+                    return true;
+                case "variable_struct_names_count": *result = new NValue { Kind = 0, Real = _structs[id].Count }; return true;
+                case "is_method": *result = new NValue { Kind = 13, Real = args[0].Kind == 8 && Methods.Contains(id) ? 1 : 0 }; return true;
+                default: return false;
+            }
+        }
+    }
 
     /// <summary>A room: instances (id -> object), which are active, object parents, and one culling controller whose
     /// deactivatedInstancesList holds the culled ones' ids - as the game keeps them.</summary>
@@ -413,6 +512,7 @@ public abstract unsafe class FakeGame : IDisposable
         Rng = null;
         GameScripts = null;
         Scene = null;
+        Refs = null;
     }
 
     private static BridgeApi* Create()
@@ -469,6 +569,8 @@ public abstract unsafe class FakeGame : IDisposable
         if (Rng is { } rng && rng.Answer(function, args, count, result))
             return 1;
         if (Ds is { } ds && ds.Answer(function, args, count, result))
+            return 1;
+        if (Refs is { } refs && refs.Answer(function, args, count, result))
             return 1;
         if (World is { } world && world.Answer(function, args, count, result))
             return 1;
