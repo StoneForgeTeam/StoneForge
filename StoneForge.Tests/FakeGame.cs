@@ -140,6 +140,11 @@ public abstract unsafe class FakeGame : IDisposable
         // Instances whose pointer the bridge can't find (as before it looked among the room's deactivated ones).
         public readonly HashSet<int> Unresolvable = new();
         public double CachedSize;
+        // Instances' variables (variable_instance_get/set on an active one), and the user events run (instance, event).
+        public readonly Dictionary<int, Dictionary<string, GmValue>> Vars = new();
+        public readonly List<(int Instance, int Event)> UserEvents = new();
+        // Objects known by name (asset_get_index, object_exists, object_get_name).
+        public readonly Dictionary<string, int> Assets = new();
 
         public FakeWorld()
         {
@@ -170,7 +175,7 @@ public abstract unsafe class FakeGame : IDisposable
         }
 
         // A builtin, as the game answers it in this room (false: not one modelled here).
-        internal bool Answer(string function, NValue* args, int count, NValue* result)
+        internal bool Answer(string function, IntPtr self, NValue* args, int count, NValue* result)
         {
             double A(int i) => i < count ? args[i].Real : -1;
             int arg = (int)A(0);
@@ -196,17 +201,46 @@ public abstract unsafe class FakeGame : IDisposable
                 case "ds_list_find_value": result->Kind = 15; result->Real = Culled[(int)A(1)]; return true;
                 case "ds_list_delete": Culled.RemoveAt((int)A(1)); return true;
                 case "instance_activate_object": Active.Add(arg); Culled.Remove(arg); return true;
+                case "asset_get_index" when Assets.Count > 0:
+                    result->Real = Assets.TryGetValue(Marshal.PtrToStringUTF8(args[0].Str)!, out int asset) ? asset : -1;
+                    return true;
+                case "object_exists" when Assets.Count > 0: result->Kind = 13; result->Real = Assets.ContainsValue(arg) ? 1 : 0; return true;
+                case "object_get_name" when Assets.Count > 0:
+                    *result = Game.ToNative(Assets.FirstOrDefault(a => a.Value == arg).Key ?? "<undefined>", new List<IntPtr>());
+                    return true;
+                // (Back off screen: in the controller's list again.)
+                case "instance_deactivate_object":
+                    if (Active.Remove(arg))
+                        Culled.Add(arg);
+                    return true;
+                case "event_user":
+                    UserEvents.Add(((int)((long)self - PointerBase), arg));
+                    return true;
                 // (The game's: an instance that's deactivated isn't found, and nothing happens.)
                 case "instance_destroy":
                     if (Active.Remove(arg))
                         Destroyed.Add(arg);
                     return true;
                 case "variable_instance_get":
+                    if (arg != ControllerId && Vars.TryGetValue(arg, out var vars))
+                    {
+                        // (Its own variables only while it's active, as the game.)
+                        string name = Marshal.PtrToStringUTF8(args[1].Str)!;
+                        *result = Active.Contains(arg) && vars.TryGetValue(name, out GmValue value)
+                            ? Game.ToNative(value, new List<IntPtr>()) : new NValue { Kind = 5 };
+                        return true;
+                    }
                     result->Real = arg == ControllerId ? ListId : -1;
                     return true;
                 case "variable_instance_set":
                     if (arg == ControllerId)
                         CachedSize = args[2].Real;
+                    else if (Active.Contains(arg))
+                    {
+                        if (!Vars.TryGetValue(arg, out var own))
+                            Vars[arg] = own = new();
+                        own[Marshal.PtrToStringUTF8(args[1].Str)!] = Game.FromNative(args[2]);
+                    }
                     return true;
             }
             return false;
@@ -588,7 +622,7 @@ public abstract unsafe class FakeGame : IDisposable
             return 1;
         if (Refs is { } refs && refs.Answer(function, args, count, result))
             return 1;
-        if (World is { } world && world.Answer(function, args, count, result))
+        if (World is { } world && world.Answer(function, self, args, count, result))
             return 1;
         if (ConsumableInstances is { } instances)
         {
