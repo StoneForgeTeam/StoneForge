@@ -145,6 +145,8 @@ public abstract unsafe class FakeGame : IDisposable
         public double CachedSize;
         // Whether instance_exists also answers for an object index: any active instance of it (or of a child).
         public bool ExistsByObject;
+        // Whether an instance's pointer goes by its id (as a code event's self does in game).
+        public bool LendsIds;
         // Instances' variables (variable_instance_get/set on an active one), and the user events run (instance, event).
         public readonly Dictionary<int, Dictionary<string, GmValue>> Vars = new();
         public readonly List<(int Instance, int Event)> UserEvents = new();
@@ -633,7 +635,10 @@ public abstract unsafe class FakeGame : IDisposable
         }
         return culled.Count;
     }
-    [UnmanagedCallersOnly] private static int Id(IntPtr ptr) => ptr == (IntPtr)42 ? 123 : -1;
+    // (A room instance's pointer - one the fake world lent - goes by its id, as the bridge reads it.)
+    [UnmanagedCallersOnly] private static int Id(IntPtr ptr) => ptr == (IntPtr)42 ? 123
+        : World is { } world && (long)ptr >= FakeWorld.PointerBase && world.LendsIds && world.Objects.ContainsKey((int)((long)ptr - FakeWorld.PointerBase))
+            ? (int)((long)ptr - FakeWorld.PointerBase) : -1;
     [UnmanagedCallersOnly] private static int Get(IntPtr ptr, byte* name, NValue* result)
     {
         Reads++;
@@ -646,7 +651,11 @@ public abstract unsafe class FakeGame : IDisposable
         if (World is { } world && (long)ptr >= FakeWorld.PointerBase
             && world.Objects.TryGetValue((int)((long)ptr - FakeWorld.PointerBase), out int obj))
         {
-            *result = Marshal.PtrToStringUTF8((IntPtr)name) == "object_index" ? new NValue { Kind = 0, Real = obj } : new NValue { Kind = 5 };
+            string variable = Marshal.PtrToStringUTF8((IntPtr)name)!;
+            int id = (int)((long)ptr - FakeWorld.PointerBase);
+            *result = variable == "object_index" ? new NValue { Kind = 0, Real = obj }
+                : world.Vars.TryGetValue(id, out var vars) && vars.TryGetValue(variable, out GmValue value) ? Game.ToNative(value, new List<IntPtr>())
+                : new NValue { Kind = 5 };
             return 1;
         }
         *result = new NValue { Kind = 0, Real = 55 };

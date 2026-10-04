@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- **`ContextMenus`: the game's right-click menus.** `ContextMenus.OnOpen(context, menu => ...)` runs as any menu opens, with its options as the game made them: `menu.Target` is what was right-clicked, `menu.Items` its options (each a key - the game's "Attack", "Talk", "Explore"... -, its text, whether it can be clicked and its hover hint), and `Add`, `Remove`, `SetText` and `SetEnabled` change them. A menu left with no options is closed, and one that grows is sized again as the game sizes it.
+  - `ContextMenus.Add(context, text, appliesTo, onClick)` adds an option to the menus of the instances `appliesTo` picks. A mod's option runs its C# on what the menu's for when clicked (not while greyed out), then the menu closes as for the game's own.
+  - StoneForge makes scr_create_context_menu hookable itself; a mod needs no `[assembly: HookScript]`.
 - **A HUD layer for mod UI: `ModUI.Hud` and `ModContext.DrawHud`.** Drawn with the game's HUD, under its windows (inventory, map, Esc menu) and its bottom panel, and hidden when its HUD is (its UI turned off, a cutscene). `ModUI.When(active, UILayer.Hud)` puts a screen of your own there. A HUD element only has the mouse where none of the game's UI drawn over it is under it.
   - It's drawn in the game's own Draw pass, at the HUD's depth: the game draws its UI there, by depth, laid out from its visible GUI container, so the game's windows draw over it. (Draw GUI comes after all of that, so mods' `Gui` layer stays over everything.) Mods draw in the same UI coordinates as on the `Gui` layer.
   - The patcher adds o_stonemod_hud, whose Draw event the loader hooks; no GML of its own.

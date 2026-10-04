@@ -24,6 +24,8 @@ internal static class ScriptHooks
         "scr_cast_spell", "scr_cast_aoe_spell", "scr_skill_reparse_locked",
         // (SaveSlots.OnInfoSaving.)
         "scr_slotMapSave",
+        // (ContextMenus: a menu as it opens.)
+        "scr_create_context_menu",
     };
 
     /// <summary>Each script made hookable; how many could be.</summary>
