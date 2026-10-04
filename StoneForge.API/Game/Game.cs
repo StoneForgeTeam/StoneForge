@@ -136,7 +136,7 @@ public static unsafe partial class Game
         return CallBuiltinTrusted("script_execute", self, other, all);
     }
 
-    /// <summary>Writes a line to the loader's log (mods\dotnet\bridge.log).</summary>
+    /// <summary>Writes a line to the loader's log (dotnet\bridge.log - a second game running at once: bridge-2.log...).</summary>
     public static void Log(string text)
     {
         if (Api == null) return;

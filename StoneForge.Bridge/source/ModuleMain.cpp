@@ -6,12 +6,14 @@
 // entries by name (object events: "gml_Object_o_player_Step_0"...). In return the loader gives us its
 // callbacks: every frame, and before / after each subscribed code entry (before can skip the original).
 // Only subscribed entries cross into .NET - the game runs thousands of code entries a second.
-// Log: <game>\dotnet\bridge.log.
+// Log: <game>\dotnet\bridge.log (a second game running at once: bridge-2.log, and so on).
 #include <YYToolkit/YYTK_Shared.hpp>
 #include <nethost/hostfxr.h>
 #include <nethost/coreclr_delegates.h>
 #include <climits>
+#include <cstdio>
 #include <fstream>
+#include <share.h>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
@@ -779,14 +781,30 @@ static bool StartDotNet(const fs::path& DotnetDir)
 	return rc == 0;
 }
 
-// The log, <game>\dotnet\bridge.log - started afresh each run, by whichever stage comes first.
+// Most games running at once that get a log of their own.
+static constexpr int MaxLogs = 8;
+
+// The log, <game>\dotnet\bridge.log - started afresh each run, by whichever stage comes first. Each game keeps
+// its log closed to other writers while it runs, so a second game running at once (two players on one PC) can't
+// open it and takes the next free one instead - bridge-2.log, bridge-3.log... - as Unreal numbers its logs.
 static void OpenLog(const fs::path& ModulePath)
 {
 	if (g_Log.is_open())
 		return;
 	fs::path dotnetDir = ModulePath.parent_path().parent_path() / "dotnet";
 	fs::create_directories(dotnetDir);
-	g_Log.open(dotnetDir / "bridge.log", std::ios::out | std::ios::trunc);
+	for (int n = 1; n <= MaxLogs; n++)
+	{
+		fs::path file = dotnetDir / (n == 1 ? std::string("bridge.log") : "bridge-" + std::to_string(n) + ".log");
+		// (Others may read it, not write it: one held by a running game fails here, untouched.)
+		if (FILE* f = _wfsopen(file.c_str(), L"w", _SH_DENYWR))
+		{
+			g_Log = std::ofstream(f);
+			if (n > 1)
+				Log("Another game has bridge.log: this one logs to " + file.filename().string());
+			return;
+		}
+	}
 }
 
 // Before the game's own code runs (the process is still suspended): the game data made current for the
