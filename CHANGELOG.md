@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- **Fix: `DsMap.FromJson` (and `DsList.FromJson`) read JSON written by .NET.**
+  - System.Text.Json escapes characters that matter in HTML (an apostrophe, `<`, `>`, `&`, `+`) as backslash-u codes by default, and the game's json_decode gives up on some of them. A save with a dungeon named "Bernarhof's Cenotaph", passed through `JsonNode`, didn't decode at all.
+  - The text is now handed to the game with its characters as they are; numbers keep their exact text.
 - **`CharacterLook`: a character's appearance**, as the game composites the player's sprite from it (scr_playerSpriteUpdate): its layers - body, head, hair, each piece of equipment worn - each a sprite at an offset, clipped and masked, over a frame grid. For companions, mannequins, or another player drawn in your game.
   - `CharacterLook.OfPlayer()` reads the player's (null before there's a character). `ToJson()` / `FromJson()` carry it elsewhere: sprite ids are the same in every game from the same game data. Each `LookLayer` has its `Values` (the compositor's: `Sprite`, `Frame`, `Mask`...) and the origins its sprite and mask had where the look was read.
   - `look.Build()` makes another character's sprites from it with the game's own compositor, so they look exactly as the player's would. Each layer's sprite sits at its read origins while it composites - equipment's origins are set per wearer at run time, so another game's copy may sit differently - then the player's globals and origins are put back. Call it in a Draw event (it draws to surfaces). Null if the look's body sprite isn't in this game.

@@ -123,6 +123,55 @@ internal static class GmJson
         return made;
     }
 
+    // JSON text as the game's json_decode reads it, or null if it isn't JSON: written again with its text as it is. JSON
+    // from .NET escapes what matters in HTML (' < > & + as backslash-u codes), and the game's decoder gives up on some of
+    // those - a dungeon named "Bernarhof's Cenotaph" made a whole save unreadable. Numbers are kept as they're written.
+    public static string? ForGame(string json)
+    {
+        try
+        {
+            using var document = JsonDocument.Parse(json);
+            using var buffer = new MemoryStream();
+            using (var writer = new Utf8JsonWriter(buffer, new JsonWriterOptions { Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping }))
+                Write(writer, document.RootElement);
+            return System.Text.Encoding.UTF8.GetString(buffer.GetBuffer(), 0, (int)buffer.Length);
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
+
+    // (Written value by value: an element's own WriteTo copies its text as it came, escapes and all.)
+    private static void Write(Utf8JsonWriter writer, JsonElement element)
+    {
+        switch (element.ValueKind)
+        {
+            case JsonValueKind.Object:
+                writer.WriteStartObject();
+                foreach (JsonProperty property in element.EnumerateObject())
+                {
+                    writer.WritePropertyName(property.Name);
+                    Write(writer, property.Value);
+                }
+                writer.WriteEndObject();
+                break;
+            case JsonValueKind.Array:
+                writer.WriteStartArray();
+                foreach (JsonElement item in element.EnumerateArray())
+                    Write(writer, item);
+                writer.WriteEndArray();
+                break;
+            case JsonValueKind.String:
+                writer.WriteStringValue(element.GetString());
+                break;
+            default:
+                // (Numbers as they're written - the game's 1.0 stays 1.0 - and true, false, null.)
+                writer.WriteRawValue(element.GetRawText(), skipInputValidation: true);
+                break;
+        }
+    }
+
     // JSON text as a node, or null if it isn't JSON.
     public static JsonNode? Parse(string json)
     {

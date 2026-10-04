@@ -153,16 +153,9 @@ public readonly struct DsMap : IEquatable<DsMap>
     /// or nest it in another.</summary>
     public static DsMap? FromJson(string json)
     {
-        // (The game makes a map of anything at all: text that isn't JSON is turned away first.)
-        try
-        {
-            using var _ = JsonDocument.Parse(json);
-        }
-        catch (JsonException)
-        {
-            return null;
-        }
-        return From(Game.CallBuiltin("json_decode", json));
+        // (The game makes a map of anything at all: text that isn't JSON is turned away first. What is, it's given with
+        // its text unescaped - its decoder can't read some of .NET's escapes: GmJson.ForGame.)
+        return GmJson.ForGame(json) is { } text ? From(Game.CallBuiltin("json_decode", text)) : null;
     }
 
     /// <summary>The map numbered <paramref name="value"/>; null if it isn't a number, or no map has it.</summary>

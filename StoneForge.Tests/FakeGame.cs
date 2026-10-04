@@ -326,9 +326,13 @@ public abstract unsafe class FakeGame : IDisposable
             return o;
         }
 
-        // (The game's: an object's a map, anything else goes in a map's "default" key; a map, empty, if it isn't JSON.)
+        // (The game's: an object's a map, anything else goes in a map's "default" key; a map, empty, if it isn't JSON; and
+        // -1 for JSON with escapes it can't read - .NET's backslash-u codes for ' and <, as seen in a save the game gave
+        // up on.)
         public int Decode(string json)
         {
+            if (json.Contains(@"\u0027", StringComparison.OrdinalIgnoreCase) || json.Contains(@"\u003C", StringComparison.OrdinalIgnoreCase))
+                return -1;
             JsonNode? node;
             try { node = JsonNode.Parse(json); }
             catch (System.Text.Json.JsonException) { return NewMap(); }

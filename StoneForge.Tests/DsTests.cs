@@ -122,6 +122,20 @@ public class DsTests : FakeGame
     }
 
     [Fact]
+    public void Json_from_dotnet_reads_with_its_escapes()
+    {
+        // (As .NET wrote a save the game gave up on: ' and < escaped - the game's decoder can't read those.)
+        const string json = """{"dungeon":"Bernarhof\u0027s Cenotaph","note":"\u003C1>","list":[1.5,"it\u0027s"]}""";
+        var map = DsMap.FromJson(json)!.Value;
+        Assert.Equal("Bernarhof's Cenotaph", map["dungeon"].AsString);
+        Assert.Equal("<1>", map["note"].AsString);
+        Assert.Equal("it's", map.GetList("list")!.Value[1].AsString);
+        var list = DsList.FromJson("""["it\u0027s","\u003Cb>"]""")!.Value;
+        Assert.Equal("it's", list[0].AsString);
+        Assert.Equal("<b>", list[1].AsString);
+    }
+
+    [Fact]
     public void Json_goes_both_ways()
     {
         const string json = """{"name":"Verren","hp":10,"alive":true,"stats":{"str":12},"items":[1,"two",{"id":3},[4]]}""";
