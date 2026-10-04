@@ -30,6 +30,8 @@ internal static unsafe class Hooks
     internal static bool Invoke(string mod, string where, Func<bool> handler, object? source = null)
     {
         if (Suspended.Contains(mod)) return false;
+        // (Timed while the profiler shows: every mod handler comes through here.)
+        long start = Profiler.Visible ? System.Diagnostics.Stopwatch.GetTimestamp() : 0;
         try
         {
             bool result = handler();
@@ -37,6 +39,11 @@ internal static unsafe class Hooks
             return result;
         }
         catch (Exception e) { Fail(mod, where, e, source); return false; }
+        finally
+        {
+            if (start != 0)
+                Profiler.Record(mod, where, section: false, start);
+        }
     }
 
     private static void BoundaryFailure(string where, Exception e)
@@ -298,9 +305,15 @@ internal static unsafe class Hooks
                 var (mod, handler) = DrawGuiHandlers[i];
                 Invoke(mod, "DrawGui", () => { handler(); return false; }, handler);
             }
-            // (Mod windows over all of it.)
+            // (Mod windows over all of it - their screens and controls timed as StoneForge's UI.)
+            long start = Profiler.Visible ? System.Diagnostics.Stopwatch.GetTimestamp() : 0;
             try { UIScreen.DrawWindows(); }
             catch (Exception e) { Game.Log("Drawing windows threw: " + e); }
+            if (start != 0)
+                Profiler.Record(LoaderId, "UI (screens and windows)", section: false, start);
+            // (The profiler's overlay over everything.)
+            try { Profiler.DrawOverlay(); }
+            catch (Exception e) { Game.Log("Drawing the profiler threw: " + e); }
         }
         finally
         {
@@ -318,7 +331,7 @@ internal static unsafe class Hooks
     private static int _guiObject = -2, _guiCheck = 25;
     internal static void KeepGuiObject()
     {
-        if (DrawGuiHandlers.Count == 0 || ++_guiCheck < 30)
+        if ((DrawGuiHandlers.Count == 0 && !Profiler.Visible) || ++_guiCheck < 30)
             return;
         _guiCheck = 0;
         if (_guiObject == -2)
@@ -351,6 +364,9 @@ internal static unsafe class Hooks
         Game.Running = true;
         // (Arrays and structs C# let go of since the last frame.)
         GmRef.ReleaseQueued();
+        // (The profiler: its hotkey, and the last frame's times.)
+        try { Profiler.NewFrame(); }
+        catch (Exception e) { Game.Log("The profiler threw: " + e.Message); }
         BeforeFrame?.Invoke();
         AssertScriptFlags();
         KeepGuiObject();

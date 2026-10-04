@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- **Profiler: where the frame goes.** **Ctrl+Shift+P** shows an overlay with the frame rate, the worst frame, and each mod's time per frame. Mods are listed slowest first, with the total of their code and their slowest parts: average and worst over the last second, and how many times each ran.
+  - StoneForge times every mod handler itself: `Tick`, frame and Draw GUI handlers, script hooks (before and after), code hooks, and so a mod's objects' events. Its own UI (mod screens and windows) is listed under StoneForge.
+  - `Profiler.Measure(context, "name", work)` (or with a result) times a part of a mod's own, listed under it.
+  - `Profiler.Timings`, `Fps` and `WorstFrameMs` give the last second's numbers to code; `Profiler.Visible` switches it.
+  - Nothing is timed while the overlay is off.
 - **Fix: `DsMap.FromJson` (and `DsList.FromJson`) read JSON written by .NET.**
   - System.Text.Json escapes characters that matter in HTML (an apostrophe, `<`, `>`, `&`, `+`) as backslash-u codes by default, and the game's json_decode gives up on some of them. A save with a dungeon named "Bernarhof's Cenotaph", passed through `JsonNode`, didn't decode at all.
   - The text is now handed to the game with its characters as they are; numbers keep their exact text.
