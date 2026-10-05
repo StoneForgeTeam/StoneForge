@@ -1,6 +1,6 @@
 # Rebuilds the third-party native binaries StoneForge ships, from their upstream source, into lib\:
 #   lib\Aurie\AurieCore.dll, lib\Aurie\AuriePatcher.exe   Aurie at $AurieCommit + lib\Aurie\stoneforge.patch
-#   lib\YYToolkit\YYToolkit.dll                           YYToolkit at $YYToolkitCommit, unmodified
+#   lib\YYToolkit\YYToolkit.dll                           YYToolkit at $YYToolkitCommit + lib\YYToolkit\stoneforge.patch
 # Both are AGPL-3.0 (see their LICENSE files in lib\). The clones go in build\.thirdparty (not part of the repo).
 # Needs git and Visual Studio's C++ tools. Usage: powershell -ExecutionPolicy Bypass -File build\BuildThirdParty.ps1
 param(
@@ -53,6 +53,8 @@ if ($LASTEXITCODE -ne 0) { throw "lib\Aurie\stoneforge.patch doesn't apply to Au
 Build (Join-Path $aurie "Aurie.sln") "AurieCore;AuriePatcher"
 
 $yytk = Checkout "YYToolkit" $YYToolkitRepo $YYToolkitCommit
+git -C $yytk apply --whitespace=nowarn (Join-Path $lib "YYToolkit\stoneforge.patch")
+if ($LASTEXITCODE -ne 0) { throw "lib\YYToolkit\stoneforge.patch doesn't apply to YYToolkit $YYToolkitCommit" }
 Build (Join-Path $yytk "YYToolkit.sln") "YYToolkit"
 
 Write-Host "Updated lib\ (SHA-256 - record them in lib\Aurie\README.md and lib\YYToolkit\README.md):"

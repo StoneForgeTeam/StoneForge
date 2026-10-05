@@ -76,6 +76,7 @@ Put "$lib\YYToolkit\LICENSE" "$out\LICENSES\YYToolkit-AGPL-3.0.txt"
 # (Where the AGPL binaries come from: upstream commits, and the patch for the modified Aurie.)
 Put "$lib\Aurie\README.md" "$out\LICENSES\Aurie-SOURCE.md"
 Put "$lib\Aurie\stoneforge.patch" "$out\LICENSES\Aurie-stoneforge.patch"
+Put "$lib\YYToolkit\stoneforge.patch" "$out\LICENSES\YYToolkit-stoneforge.patch"
 Put "$lib\YYToolkit\README.md" "$out\LICENSES\YYToolkit-SOURCE.md"
 Put "$lib\UndertaleModLib\LICENSE.txt" "$out\LICENSES\UndertaleModLib-GPL-3.0.txt"
 Put "$lib\UndertaleModLib\Underanalyzer-LICENSE.txt" "$out\LICENSES\Underanalyzer-MPL-2.0.txt"

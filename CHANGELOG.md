@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- **Fixed: every GML error crashed the game instead of showing its error.** YYToolkit's hook on GameMaker's error function walks the game's scripts to name its stack trace, and that walk faults on this GameMaker version, before anything is logged. StoneForge's YYToolkit is built with a patch now (`lib\YYToolkit\stoneforge.patch`, shipped in `LICENSES`) that leaves the names out: a GML error shows the game's own error message (the script and what went wrong), and YYToolkit.log gets the details.
 - **Events for what happens in the game**, each registered as `Area.OnSomething(context, handler)` like `ContextMenus.OnOpen`: a mod's handlers go with it, and an exception in one is that mod's.
   - `Doors.OnChanged(door, open)`: a door starts opening or closing, whoever does it (the player, NPCs and enemies, the game's scripts, `Doors.SetOpen`). Crypt doors too.
   - `Rooms.OnEntered(room)`, on the room's first frame, once its instances are set up; `Rooms.OnLeaving(room)`, as the game leaves it. A dungeon's floors count, since each is the same room started again.
@@ -14,7 +15,7 @@
   - The patcher makes `scr_global_turn`, `scr_slotLoad` and `scr_slotSaveUpdate` hookable itself for these: no `[assembly: HookScript]` needed.
 - **`MapMarkers`: the markers players put on the world map.** `All()` reads them, whether the map is open or closed: the save's list, or the open map's own markers. `Set(markers)` makes them those, `Add` and `Remove` change one. With the map open, its markers are made again on the spot, as the game places one. A `MapMarker` is its sprite's name, which image, and its `Position` in world-map pixels (`MapMarkers.CellSize`, 52 to a cell), with the `Tile` it's on. `MapMarkers.Sprites` are the 12 the map's menu offers. `MapMarkers.OnPlaced(context, marker => ...)` and `OnRemoved` run as the player places a marker on the map or takes one off (right-clicking it, or placing another over it), after the change; not for markers a mod sets.
 - **Crash windows with stack traces.**
-  - **The game crashes:** a window shows the GML that was running (innermost first, each code entry with the instance running it) and the native stack (module and offset). The full report goes to `dotnet\crash-report.txt`, with the last 512 code entries the game ran. The bridge traces code entries as they start and end for this, always on and cheap.
+  - **The game crashes:** a window shows the GML that was running (innermost first, each code entry with the instance running it), the game's own GML call stack (each script and line, from `debug_get_callstack`) and the native stack (module and offset). The full report goes to `dotnet\crash-report.txt`, with the last 512 code entries the game ran. The bridge traces code entries as they start and end for this, always on and cheap.
   - **C# crashes the game** (an exception nothing caught): a window shows its stack trace, and it's written to the same report.
   - **A mod's handler throws** (StoneForge catches it and the game goes on): a window shows its stack trace, the first time for each mod and place, without stopping the game. A mod that keeps failing is paused as before.
   - `"errorWindows": false` in `dotnet\stoneforge.json` turns the C# windows off. The game's own crash window always shows.

@@ -734,6 +734,38 @@ static void ReportEntry(const TraceEntry& Entry, const char* Indent)
 	Report("%s%s (self %d)\r\n", Indent, name ? name : "?", Entry.SelfId);
 }
 
+// The GML call stack at the fault, from the game itself (debug_get_callstack: each script and line, innermost first) -
+// what the trace can't see: scripts called as functions run inside their caller's code entry.
+static void ReportGmlCallStack()
+{
+	RValue stack;
+	if (!AurieSuccess(g_Yytk->CallBuiltinEx(stack, "debug_get_callstack", GlobalInstance(), GlobalInstance(), {})) || stack.m_Kind != VALUE_ARRAY)
+		return;
+	RValue length;
+	g_Yytk->CallBuiltinEx(length, "array_length", GlobalInstance(), GlobalInstance(), { stack });
+	int count = static_cast<int>(length.ToDouble());
+	for (int i = 0; i < count && i < 40; i++)
+	{
+		RValue entry;
+		g_Yytk->CallBuiltinEx(entry, "array_get", GlobalInstance(), GlobalInstance(), { stack, RValue(static_cast<double>(i)) });
+		if (entry.m_Kind == VALUE_STRING)
+			Report("  %s\r\n", entry.ToString().c_str());
+	}
+}
+
+// (The game is in a bad way: if asking it for its call stack faults too, the report goes on without it.)
+static void TryReportGmlCallStack()
+{
+	__try
+	{
+		ReportGmlCallStack();
+	}
+	__except (EXCEPTION_EXECUTE_HANDLER)
+	{
+		Report("  (couldn't be read)\r\n");
+	}
+}
+
 // The game faulted: the report written and shown - once - then the game's own crash handling goes on (it closes).
 static LONG CALLBACK OnFault(EXCEPTION_POINTERS* Info)
 {
@@ -762,6 +794,8 @@ static LONG CALLBACK OnFault(EXCEPTION_POINTERS* Info)
 		Report("  (%d more, deeper)\r\n", g_TraceDepth - StackSize);
 	for (int i = (g_TraceDepth < StackSize ? g_TraceDepth : StackSize) - 1; i >= 0; i--)
 		ReportEntry(g_Running[i], "  ");
+	Report("\r\nGML call stack (scripts and lines, innermost first):\r\n");
+	TryReportGmlCallStack();
 	Report("\r\nNative stack:\r\n");
 	ReportNativeStack(Info->ContextRecord);
 	int shown = g_ReportLength;

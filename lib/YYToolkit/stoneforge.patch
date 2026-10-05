@@ -1,0 +1,18 @@
+diff --git a/YYToolkit/source/YYTK/Module Internals/Hooks/Hooks.cpp b/YYToolkit/source/YYTK/Module Internals/Hooks/Hooks.cpp
+index 0b45aea..532bcbf 100644
+--- a/YYToolkit/source/YYTK/Module Internals/Hooks/Hooks.cpp	
++++ b/YYToolkit/source/YYTK/Module Internals/Hooks/Hooks.cpp	
+@@ -208,10 +208,9 @@ namespace YYTK
+ 			size_t function_index = 0;
+ 			for (auto& entry : stacktrace)
+ 			{
+-				// description will be empty if resolve_game_symbol fails.
+-				std::string description = GmResolveGameSymbolFromAddress(stacktrace._To_voidptr_array()[function_index]);
+-				if (description.empty())
+-					description = entry.description();
++				// (StoneForge: not GmResolveGameSymbolFromAddress - its walk of the game's scripts (GetScriptData) faults on
++				// GameMaker 2022.9, which turned every GML error into a crash before this logged anything.)
++				std::string description = entry.description();
+ 
+ 				yytk_crash_message.append(
+ 					std::format("{:02}\t{:016X}\t{}\n", 
