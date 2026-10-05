@@ -16,6 +16,10 @@ object	14	o_time_controller
 object	15	o_close_panel
 object	16	o_ingame_menu_button
 object	17	o_unit
+object	18	o_globalmap
+object	19	o_globalmapMarkUser
+object	20	o_globalmapInteractiveNormal
+object	21	o_enemy
 sprite	0	s_checkbox
 sprite	1	s_gui_arrow_down
 sprite	2	s_gui_arrow_up

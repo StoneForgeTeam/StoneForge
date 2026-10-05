@@ -6,7 +6,8 @@ namespace StoneForge;
 /// locationsRoomsDataMap). A location (by tag: its world-map cell, "12_7") has rooms - "r_global" outdoors,
 /// "r_dungeon_&lt;floor&gt;" a dungeon's floors, a building's own room name - and each room has presets, each with its
 /// saved entities and its <see cref="LocationFlags"/>. A location is saved as the player leaves it, so the one they're
-/// standing in is written over then. Game thread only, and only in a game (<see cref="Available"/>).</summary>
+/// standing in is written over then (<see cref="OnSaved"/>). Game thread only, and only in a game
+/// (<see cref="Available"/>).</summary>
 public static class Locations
 {
     /// <summary>Whether there are locations to read: a game loaded or begun.</summary>
@@ -64,6 +65,17 @@ public static class Locations
         preset["entitiesDataMapString"] = state.EntitiesJson ?? "N/A";
         return true;
     }
+
+    /// <summary>Runs as the game has saved the place the player is leaving (its room entity saver's user event 2): the
+    /// preset it saved - its entities and flags as they are now.</summary>
+    public static void OnSaved(ModContext context, Action<LocationPreset> handler)
+        => context.OnCode("gml_Object_o_roomEntitySaver_Other_12", after: (saver, _) =>
+        {
+            if (saver.IsNone || !saver.Exists || saver.Get("locationTag") is not { Kind: GmKind.String } location)
+                return;
+            if (Get(location.AsString)?.Room(saver.Get("roomTag"))?.Preset(saver.Get("presetTag")) is { } preset)
+                handler(preset);
+        });
 
     internal static DsMap? All => Game.Global["locationsRoomsDataMap"].AsDsMap;
 }

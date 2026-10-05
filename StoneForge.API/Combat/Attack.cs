@@ -1,7 +1,8 @@
 namespace StoneForge;
 
 /// <summary>An attack that has just happened - a melee blow or a shot - as an item sees it
-/// (<see cref="Weapon.OnAttack"/>, <see cref="Armor.OnAttacked"/>...). Its damage is already dealt.</summary>
+/// (<see cref="Weapon.OnAttack"/>, <see cref="Armor.OnAttacked"/>...) or a mod (<see cref="Combat.OnAttack"/>). Its
+/// damage is already dealt.</summary>
 public sealed class Attack
 {
     internal Attack(Instance attacker, Instance target, AttackResult result, double damage, bool ranged, bool byPlayer, bool onPlayer)

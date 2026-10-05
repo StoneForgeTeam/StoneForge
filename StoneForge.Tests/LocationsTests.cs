@@ -9,6 +9,13 @@ public class LocationsTests : FakeGame
     private readonly FakeScripts _scripts = new();
     private readonly List<(string Script, GmValue[] Args)> _calls = new();
     private DsMap _all;
+    private readonly ModContext _context = new("locations_test");
+
+    public override void Dispose()
+    {
+        Hooks.RemoveMod(_context.Id);
+        base.Dispose();
+    }
 
     public LocationsTests()
     {
@@ -41,6 +48,26 @@ public class LocationsTests : FakeGame
         _scripts.Add("scr_locationGenerateTag", a => $"{a[0].AsInt}_{a[1].AsInt}");
         foreach (string script in new[] { "scr_locationFlagSet", "scr_locationRoomPresetFlagSet", "scr_locationRoomPresetFlagUnset", "scr_locationRoomPresetDelete" })
             _scripts.Add(script, a => { _calls.Add((script, a)); return GmValue.Undefined; });
+    }
+
+    [Fact]
+    public void The_place_the_player_leaves_is_told_once_its_saved()
+    {
+        const int SaverId = 100_001;
+        Game();
+        Osbrook("default", LocationFlags.None, """{"mobsMap": {"static": {}}}""");
+        var world = new FakeWorld { LendsIds = true };
+        World = world;
+        world.Add(SaverId, 300);
+        world.Vars[SaverId] = new() { ["locationTag"] = "12_7", ["roomTag"] = "r_global", ["presetTag"] = "default" };
+        var saved = new List<LocationPreset>();
+        Locations.OnSaved(_context, saved.Add);
+
+        RunCode("gml_Object_o_roomEntitySaver_Other_12", SaverId);
+
+        var preset = Assert.Single(saved);
+        Assert.Equal(("12_7", "r_global", "default"), (preset.Location, preset.Room.AsString, preset.Tag.AsString));
+        Assert.Equal("""{"mobsMap": {"static": {}}}""", preset.EntitiesJson);
     }
 
     // A game whose saved locations are these.

@@ -26,6 +26,10 @@ internal static class ScriptHooks
         "scr_slotMapSave",
         // (ContextMenus: a menu as it opens.)
         "scr_create_context_menu",
+        // (Turns.OnTurn: the world's turn.)
+        "scr_global_turn",
+        // (SaveData.OnLoaded / OnSaving: a save read, or about to be written.)
+        "scr_slotLoad", "scr_slotSaveUpdate",
     };
 
     /// <summary>Each script made hookable; how many could be.</summary>

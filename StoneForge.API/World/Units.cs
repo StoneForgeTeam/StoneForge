@@ -233,6 +233,46 @@ public static class Units
         return true;
     }
 
+    /// <summary>Runs as a unit comes into play - summoned, spawned, made by a mod (<see cref="Create(int, Cell)"/>) - on
+    /// the frame after it's made, set up (one gone again by then: nothing). Not the units a place has as it loads, nor
+    /// those a room is built with.</summary>
+    public static void OnSpawned(ModContext context, Action<Instance> handler)
+    {
+        var loading = new PlaceLoading(context);
+        var made = new List<Instance>();
+        context.OnCode("gml_Object_o_enemy_Create_0", after: (unit, _) =>
+        {
+            if (!loading.Now && !unit.IsNone)
+                made.Add(unit.Persist());
+        });
+        context.Frame += () =>
+        {
+            loading.Frame();
+            if (made.Count == 0)
+                return;
+            var spawned = made.ToArray();
+            made.Clear();
+            foreach (Instance unit in spawned)
+                if (unit.Exists)
+                    handler(unit);
+        };
+    }
+
+    /// <summary>Runs as a unit dies (its health gone: its user event 6) - before it's destroyed, its loot dropped and
+    /// its corpse left, so it can still be read: the unit, and who killed it (its last attacker - the player, another
+    /// unit; none if nobody did).</summary>
+    public static void OnDied(ModContext context, Action<Instance, Instance> handler)
+        => context.OnCode("gml_Object_o_enemy_Other_16", before: (unit, _) =>
+        {
+            if (unit.IsNone)
+                return false;
+            // (The game keeps the player as their object, not their instance, now and then.)
+            GmValue attacker = unit.Get("last_attacker");
+            Instance killer = attacker.Kind == GmKind.Real && attacker.AsInt == (int)GameObjectId.o_player ? Player() : Instance.Of(attacker);
+            handler(unit.Persist(), killer.IsNone || !killer.Exists ? default : killer);
+            return false;
+        });
+
     // A unit's variables that name another unit - who it's after, who last hit it, what its skill or dash aims at -
     // which its AI reads (o_enemy's Create).
     private static readonly string[] References =

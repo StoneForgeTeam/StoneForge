@@ -1,7 +1,8 @@
 namespace StoneForge;
 
 /// <summary>The doors in a room that open and close (the game's o_door_parent and its kinds: a house's, a crypt's...),
-/// read and opened or closed as the game does it. (The ways out of a place are <see cref="Exits"/>.)</summary>
+/// read and opened or closed as the game does it, and <see cref="OnChanged"/> as anyone opens or closes one. (The ways
+/// out of a place are <see cref="Exits"/>.)</summary>
 public static class Doors
 {
     private static int _doors = -2;
@@ -42,4 +43,30 @@ public static class Doors
         }
         Game.CallBuiltinAs("event_user", door, door, 3);
     }
+
+    /// <summary>Runs as a door starts opening or closing - whoever does it: the player, an NPC or an enemy going through,
+    /// the game's own scripts, or a mod (<see cref="SetOpen"/>): the door, and whether it's opening.</summary>
+    public static void OnChanged(ModContext context, Action<Instance, bool> handler)
+    {
+        // (A door opens or shuts by its user event 3: o_door_parent's - its kinds' own call it first - or, for a crypt's,
+        // which only ever opens, o_cryptdoor_parent's own. Whether it changed: open or not, before and after.)
+        var before = new Stack<bool>();
+        foreach (string code in ToggleCodes)
+            context.OnCode(code,
+                before: (door, _) =>
+                {
+                    before.Push(IsOpen(door));
+                    return false;
+                },
+                after: (door, _) =>
+                {
+                    if (before.Count == 0)
+                        return;
+                    bool was = before.Pop();
+                    if (!door.IsNone && IsOpen(door) is var open && open != was)
+                        handler(door.Persist(), open);
+                });
+    }
+
+    private static readonly string[] ToggleCodes = { "gml_Object_o_door_parent_Other_13", "gml_Object_o_cryptdoor_parent_Other_13" };
 }

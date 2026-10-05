@@ -6,7 +6,8 @@ namespace StoneForge;
 /// sections - the character's (<see cref="CharacterSections"/>: who they are, their stats, skills, inventory, scrolls and
 /// the fog they've cleared) and the world's (the rest: the world map, its locations, quests, contracts, time,
 /// weather...). It's the live data: the game keeps changing it, and writes it to disk as it saves. A mod may keep its own
-/// values in it (<see cref="ModMap"/>): they're saved and loaded with it. Game thread only, and only in a game
+/// values in it (<see cref="ModMap"/>): they're saved and loaded with it. <see cref="OnLoaded"/> and
+/// <see cref="OnSaving"/> run as a save is read and as one's about to be written. Game thread only, and only in a game
 /// (<see cref="Available"/>).</summary>
 public static class SaveData
 {
@@ -16,6 +17,26 @@ public static class SaveData
     {
         "characterDataMap", "characterStatsDataMap", "skillsDataMap", "inventoryDataList", "scrollsDataList", "locationsFogDataMap",
     };
+
+    /// <summary>Runs as a save has been read (scr_slotLoad): its data is the save data now (<see cref="Map"/>), before
+    /// the game sets itself up from it - the save. Not when it couldn't be read. (StoneForge makes scr_slotLoad hookable
+    /// itself.)</summary>
+    public static void OnLoaded(ModContext context, Action<SaveFile> handler)
+        => context.OnScript("scr_slotLoad", after: call =>
+        {
+            if (Available && call.Args.Length > 1 && call.Args[0].Kind == GmKind.String && call.Args[1].Kind == GmKind.String)
+                handler(new SaveFile(new SaveSlot(call.Args[0].AsString), call.Args[1].AsString));
+        });
+
+    /// <summary>Runs as a save is about to be written (scr_slotSaveUpdate: saving, an autosave, an exit save) - what's in
+    /// the save data then is what goes to disk: the save. (StoneForge makes scr_slotSaveUpdate hookable itself.)</summary>
+    public static void OnSaving(ModContext context, Action<SaveFile> handler)
+        => context.OnScript("scr_slotSaveUpdate", before: call =>
+        {
+            if (Available && call.Args.Length > 1 && call.Args[0].Kind == GmKind.String && call.Args[1].Kind == GmKind.String)
+                handler(new SaveFile(new SaveSlot(call.Args[0].AsString), call.Args[1].AsString));
+            return false;
+        });
 
     /// <summary>Whether there's save data: a game loaded or begun.</summary>
     public static bool Available => Map != null;

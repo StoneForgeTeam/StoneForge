@@ -4,14 +4,50 @@ namespace StoneForge;
 
 /// <summary>Items lying on the ground (the game's o_loot and its children: o_loot_wine, o_weapon_loot...): finding them,
 /// an item's saved state in the game's own save format and an item made back from it, new items put down, and an item
-/// still in the air - the hop a drop makes onto a neighbouring tile - read and replayed. What a stash, trade or loot mod
-/// needs to move items between places, players or games. Game thread only.</summary>
+/// still in the air - the hop a drop makes onto a neighbouring tile - read and replayed; and an item coming onto the
+/// ground or leaving it (<see cref="OnAdded"/>, <see cref="OnRemoved"/>). What a stash, trade or loot mod needs to move
+/// items between places, players or games. Game thread only.</summary>
 public static class GroundItems
 {
     /// <summary>Every item on the ground in the room - those off screen too, unless <paramref name="includeCulled"/> is
     /// false (the game culls ground items it takes off screen: see <see cref="Instance.IsCulled"/>).</summary>
     public static IReadOnlyList<GroundItem> All(bool includeCulled = true)
         => Instances.All(GameObjectId.o_loot, includeCulled).Select(instance => new GroundItem(instance)).ToArray();
+
+    /// <summary>Runs as an item comes onto the ground in play - dropped or thrown by anyone, left by a kill, an arrow's
+    /// ammo, or made by a mod (<see cref="Create(string)"/>, <see cref="Spawn"/>) - on the frame after it's made, its data
+    /// set (one gone again by then: nothing). Not the items a place has as it loads, nor those a room is built with.</summary>
+    public static void OnAdded(ModContext context, Action<GroundItem> handler)
+    {
+        var loading = new PlaceLoading(context);
+        var added = new List<Instance>();
+        context.OnCode("gml_Object_o_loot_Create_0", after: (item, _) =>
+        {
+            if (!loading.Now && !item.IsNone)
+                added.Add(item.Persist());
+        });
+        context.Frame += () =>
+        {
+            loading.Frame();
+            if (added.Count == 0)
+                return;
+            var made = added.ToArray();
+            added.Clear();
+            foreach (Instance item in made)
+                if (!item.IsGone)
+                    handler(new GroundItem(item));
+        };
+    }
+
+    /// <summary>Runs as an item leaves the ground in play - picked up, destroyed (burnt...), or taken away by a mod -
+    /// while it's still there to read (its Destroy event). Not the items left behind as the room is left.</summary>
+    public static void OnRemoved(ModContext context, Action<GroundItem> handler)
+        => context.OnCode("gml_Object_o_loot_Destroy_0", before: (item, _) =>
+        {
+            if (!item.IsNone)
+                handler(new GroundItem(item.Persist()));
+            return false;
+        });
 
     /// <summary>An item made from its saved state (<see cref="GroundItem.ToJson"/>, perhaps another game's) as loading a
     /// location makes it (scr_locationRoomEntityLootInstanceCreate, then scr_locationRoomEntityLootSaveDataSet): where it

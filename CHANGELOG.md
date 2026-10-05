@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+- **Events for what happens in the game**, each registered as `Area.OnSomething(context, handler)` like `ContextMenus.OnOpen`: a mod's handlers go with it, and an exception in one is that mod's.
+  - `Doors.OnChanged(door, open)`: a door starts opening or closing, whoever does it (the player, NPCs and enemies, the game's scripts, `Doors.SetOpen`). Crypt doors too.
+  - `Rooms.OnEntered(room)`, on the room's first frame, once its instances are set up; `Rooms.OnLeaving(room)`, as the game leaves it. A dungeon's floors count, since each is the same room started again.
+  - `Turns.OnTurn()`: a world turn has passed (`scr_global_turn`).
+  - `Locations.OnSaved(preset)`: the game has saved the place the player is leaving.
+  - `GroundItems.OnAdded(item)`, on the frame after it's made, and `GroundItems.OnRemoved(item)`, while it can still be read: an item comes onto the ground in play (dropped, thrown, a kill's loot, a mod's) or leaves it (picked up, destroyed). Not the items a place has as it loads.
+  - `Units.OnSpawned(unit)`, on the frame after it's made; `Units.OnDied(unit, killer)`, before it's destroyed (its loot and corpse to come), with its last attacker. Not the units a place has as it loads.
+  - `Combat.OnAttack(attack)` for every attack resolved (hit, crit, block, dodge, fumble, its damage dealt) and `Combat.OnHit(attack)` for those that strike. The `Attack` keeps its attacker and target by id.
+  - `SaveData.OnLoaded(save)`, once a save has been read, before the game sets itself up from it; `SaveData.OnSaving(save)`, before one is written, when a mod can still change the save data.
+  - The patcher makes `scr_global_turn`, `scr_slotLoad` and `scr_slotSaveUpdate` hookable itself for these: no `[assembly: HookScript]` needed.
+- **`MapMarkers`: the markers players put on the world map.** `All()` reads them, whether the map is open or closed: the save's list, or the open map's own markers. `Set(markers)` makes them those, `Add` and `Remove` change one. With the map open, its markers are made again on the spot, as the game places one. A `MapMarker` is its sprite's name, which image, and its `Position` in world-map pixels (`MapMarkers.CellSize`, 52 to a cell), with the `Tile` it's on. `MapMarkers.Sprites` are the 12 the map's menu offers. `MapMarkers.OnPlaced(context, marker => ...)` and `OnRemoved` run as the player places a marker on the map or takes one off (right-clicking it, or placing another over it), after the change; not for markers a mod sets.
 - **Crash windows with stack traces.**
   - **The game crashes:** a window shows the GML that was running (innermost first, each code entry with the instance running it) and the native stack (module and offset). The full report goes to `dotnet\crash-report.txt`, with the last 512 code entries the game ran. The bridge traces code entries as they start and end for this, always on and cheap.
   - **C# crashes the game** (an exception nothing caught): a window shows its stack trace, and it's written to the same report.

@@ -3,7 +3,8 @@ namespace StoneForge;
 /// <summary>Moving between screens as the game does (scr_smoothRoomChange: a fade to black, the room changer's events,
 /// then the next room): going to another room in the game being played, back to the main menu, loading a save and
 /// starting a new game. Each returns false, doing nothing, when it can't be done now - another room change is already
-/// under way (<see cref="IsChanging"/>), or it isn't the screen for it. Game thread only.</summary>
+/// under way (<see cref="IsChanging"/>), or it isn't the screen for it. <see cref="OnEntered"/> and
+/// <see cref="OnLeaving"/> run as the game goes into a room and leaves it. Game thread only.</summary>
 public static class Rooms
 {
     // The room changer's events (o_smoothRoomChanger's user events), by what they do.
@@ -21,6 +22,34 @@ public static class Rooms
     /// <summary>Whether a room change is under way (the game's o_smoothRoomChanger): another can't start until it's
     /// done.</summary>
     public static bool IsChanging => Game.CallBuiltin("instance_exists", (int)GameObjectId.o_smoothRoomChanger).AsBool;
+
+    /// <summary>Runs once the game has gone into a room of the game being played - on the frame after it started, its
+    /// instances all set up (the game's controller's room start: also each floor of a dungeon, which is the same room
+    /// started again): the room.</summary>
+    public static void OnEntered(ModContext context, Action<int> handler)
+    {
+        int entered = -1;
+        context.OnCode(ControllerRoomStart, after: (_, _) => entered = Gm.Room);
+        context.Frame += () =>
+        {
+            if (entered < 0)
+                return;
+            int room = entered;
+            entered = -1;
+            handler(room);
+        };
+    }
+
+    /// <summary>Runs as the game leaves a room of the game being played (the controller's room end: also each floor of a
+    /// dungeon) - its instances still there, the place already saved if it's saved: the room.</summary>
+    public static void OnLeaving(ModContext context, Action<int> handler)
+        => context.OnCode(ControllerRoomEnd, before: (_, _) =>
+        {
+            handler(Gm.Room);
+            return false;
+        });
+
+    private const string ControllerRoomStart = "gml_Object_o_controller_Other_4", ControllerRoomEnd = "gml_Object_o_controller_Other_5";
 
     /// <summary>Goes to another room of the game being played, as a door does: the room being left is saved first, so
     /// it's as it was when the player comes back (the changer's event 4), unless <paramref name="saveLocation"/> is
