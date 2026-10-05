@@ -197,6 +197,29 @@ public static class Units
                 units.RemoveAt(i);
     }
 
+    /// <summary>Gives units back their own turns: their AI on, and in the player's list of units to run each turn again
+    /// (each once) - units another game ran, now ours to run. False with no player.</summary>
+    public static bool ReturnToTurns(IEnumerable<Instance> units)
+    {
+        Instance player = Player();
+        if (player.IsNone || player.Get("enemylist").AsDsList is not { } list)
+            return false;
+        var listed = new HashSet<Instance>();
+        for (int i = 0; i < list.Count; i++)
+            if (Instance.Of(list[i]) is { IsNone: false } unit)
+                listed.Add(unit);
+        foreach (Instance unit in units)
+        {
+            if (unit.IsNone || !unit.Exists)
+                continue;
+            Instance kept = unit.Persist();
+            kept["ai_is_on"] = true;
+            if (listed.Add(kept))
+                list.Add(kept);
+        }
+        return true;
+    }
+
     private static Instance Controller() => Instances.All(GameObjectId.o_controller).FirstOrDefault();
     private static Instance Player() => Instances.All(GameObjectId.o_player).FirstOrDefault();
 }
