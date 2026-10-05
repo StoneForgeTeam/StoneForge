@@ -32,6 +32,8 @@ internal static class ScriptHooks
         "scr_slotLoad", "scr_slotSaveUpdate",
         // (Quests: started, a step on, done, failed.)
         "scr_quest_start", "scr_quest_set_progress", "scr_quest_set_complete", "scr_quest_set_failed",
+        // (LootTables: a table's slots beyond the game's nine, rolled after its own roll.)
+        "scr_loot_from_tables",
     };
 
     /// <summary>Each script made hookable; how many could be.</summary>

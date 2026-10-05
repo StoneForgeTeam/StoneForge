@@ -1,6 +1,6 @@
 namespace StoneForge;
 
-/// <summary>One of a loot table's nine item slots (<see cref="LootTable.Slots"/>): what it may give - one of the game's
+/// <summary>One of a loot table's item slots (<see cref="LootTable.Slots"/>): what it may give - one of the game's
 /// items, or a kind of item the game picks one of ("gem", "valuable", "treatise"...; <see cref="Tags"/> narrow it), or
 /// several to choose one from at random - how many, and how likely, each time the table is rolled. Changed, every roll of
 /// the table after gives it so (for the rest of the game's run).</summary>
@@ -16,8 +16,12 @@ public sealed class LootSlot
         _key = "slot" + number;
     }
 
-    /// <summary>Its number in the table, 1 to 9.</summary>
+    /// <summary>Its number in the table: 1 to 9 the game's own, 10 on StoneForge's (<see cref="IsExtra"/>).</summary>
     public int Number { get; }
+
+    /// <summary>Whether it's one of StoneForge's beyond the game's nine: rolled just after the game's own roll, the same
+    /// way (by the game's own loot script).</summary>
+    public bool IsExtra => Number > LootTable.GameSlots;
 
     /// <summary>Whether it gives nothing.</summary>
     public bool IsEmpty => Items.Count == 0;

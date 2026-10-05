@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- **A loot table takes any number of items.** The game's roll reads nine item slots. With those taken,
+  `LootTable.Add` now puts an item in one of StoneForge's own, kept in the table's row as `slot10` onward, where the
+  game doesn't read. StoneForge rolls them just after the game's own roll (an after-hook on scr_loot_from_tables), by
+  the same script, for the same container and tier: nine at a time, from a copy of the table with those in its nine
+  slots and no equipment. Chances, counts, kinds, tags, gold and drop-once items all go as for the game's own slots.
+  `Add` never fails now (it returned null once nine were taken). `Slots` lists the extra slots after the game's nine,
+  and `LootSlot.IsExtra` tells which is which.
 - **Hook conflicts aren't silent any more.** When two mods' before hooks both replace the same call, StoneForge logs
   it once, naming both mods and the script or code entry, and shows it on both mods' pages in the Mods window. That's a
   script both replace (the game's code is skipped and the later hook's result is used) or a code entry both skip. It's

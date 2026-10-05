@@ -44,9 +44,11 @@ public static class LootTables
             Pending.Add((context.Id, which, edit));
     }
 
-    // The loader's: queued edits made as the game loads its tables (o_textLoader's step 38).
+    // The loader's: queued edits made as the game loads its tables (o_textLoader's step 38); and the slots beyond the
+    // game's nine rolled after its own roll (scr_loot_from_tables).
     internal static void Install(ModContext loader)
-        => loader.OnCode("gml_Object_o_textLoader_Other_25", after: (textLoader, _) =>
+    {
+        loader.OnCode("gml_Object_o_textLoader_Other_25", after: (textLoader, _) =>
         {
             if (Pending.Count == 0 || textLoader.IsNone || textLoader.Get("number").AsInt != 38 || !Loaded)
                 return;
@@ -55,6 +57,69 @@ public static class LootTables
             foreach (var (mod, which, edit) in edits)
                 Apply(mod, which, edit);
         });
+        loader.OnScript(LootScript, after: RollExtras);
+    }
+
+    private const string LootScript = "scr_loot_from_tables";
+    // (A table of the extra slots, made for a roll: no table of the game's is called this.)
+    private const string ExtrasKey = "__stoneforge_extra_slots";
+
+    // scr_loot_from_tables(key, tier, drop) done - the game's roll of a table: its slots beyond the nine, rolled by the
+    // same script, as the same container, nine at a time - each time from a copy of the table (its tier range) with
+    // those in its nine slots and no equipment.
+    private static void RollExtras(ScriptCall call)
+    {
+        if (call.Args.Length < 1 || call.Args[0].Kind != GmKind.String || call.Args[0].AsString is not { Length: > 0 } key
+            || Game.Global["drop_table"].AsDsMap is not { Exists: true } tables)
+            return;
+        double tier = call.Args.Length > 1 && call.Args[1].Kind == GmKind.Real ? call.Args[1].AsReal : 0;
+        GmValue drop = call.Args.Length > 2 ? call.Args[2] : false;
+        if (tier == 0)
+            tier = PlaceTier();
+        // (The row the game rolled: the tier's, else the key's own.)
+        string tierText = tier == Math.Floor(tier) ? ((long)tier).ToString(System.Globalization.CultureInfo.InvariantCulture)
+            : tier.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        if ((tables.GetMap(key + tierText) ?? tables.GetMap(key)) is not { } row)
+            return;
+        int count = LootTable.SlotCount(row);
+        var extras = Enumerable.Range(LootTable.GameSlots + 1, Math.Max(0, count - LootTable.GameSlots))
+            .Where(n => !new LootSlot(row, n).IsEmpty).ToList();
+        for (int start = 0; start < extras.Count; start += LootTable.GameSlots)
+            RollSlots(tables, row, extras.Skip(start).Take(LootTable.GameSlots).ToList(), call, tier, drop);
+    }
+
+    private static void RollSlots(DsMap tables, DsMap row, List<int> slots, ScriptCall call, double tier, GmValue drop)
+    {
+        var copy = DsMap.Create();
+        try
+        {
+            Game.CallBuiltin("ds_map_copy", copy.Id, row.Id);
+            for (int n = 1; n <= LootTable.GameSlots; n++)
+                foreach (string suffix in Suffixes)
+                    copy[$"slot{n}{suffix}"] = n <= slots.Count && row[$"slot{slots[n - 1]}{suffix}"] is { IsUndefined: false } value ? value : "";
+            for (int n = 1; n <= 5; n++)
+                copy[$"eq{n}_chance"] = "0";
+            tables[ExtrasKey] = copy.Id;
+            Hooks.CallOriginal(LootScript, call.Self, call.Other, new GmValue[] { ExtrasKey, tier, drop });
+        }
+        finally
+        {
+            tables.Remove(ExtrasKey);
+            copy.Destroy();
+        }
+    }
+
+    private static readonly string[] Suffixes = { "", "_chance", "_count", "_tags" };
+
+    // The place's tier, as the game's roll works it out for a table called with none: the world-map cell's, or its
+    // dungeon's.
+    private static double PlaceTier()
+    {
+        GmValue x = Game.Global["playerGridX"], y = Game.Global["playerGridY"];
+        return Game.Global["floor_counter"].AsReal == 0
+            ? Game.CallScript("scr_globaltile_generation_get", default, "spawnTier", x, y, 1).AsReal
+            : Game.CallScript("scr_globaltile_dungeon_get", default, "dungeon_tier", x, y, 1).AsReal;
+    }
 
     internal static void RemoveMod(string mod) => Pending.RemoveAll(p => p.Mod == mod);
 
