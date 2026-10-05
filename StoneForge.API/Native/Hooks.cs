@@ -278,7 +278,11 @@ internal static unsafe class Hooks
         var key = new FailureKey(mod, where, source);
         int count = Failures.GetValueOrDefault(key) + 1;
         Failures[key] = count;
-        if (count == 1) Game.Log($"[{mod}] {where} threw: {e}");
+        if (count == 1)
+        {
+            Game.Log($"[{mod}] {where} threw: {e}");
+            ErrorWindows.ModFailed(mod, where, e);
+        }
         if (count != Math.Max(1, FailureThreshold) || mod == "StoneForge") return;
         Suspended.Add(mod);
         string reason = $"{where} failed {count} consecutive times: {e.Message}";

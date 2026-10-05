@@ -33,7 +33,15 @@ public static unsafe class Bridge
         try
         {
             Game.Log($"StoneForge {LoaderVersion.Text} on .NET {Environment.Version}");
+            ErrorWindows.Enabled = true;
             LoaderOptions.Load();
+            // (An exception nothing caught - on a thread of a mod's own, say - closes the game: shown first.)
+            string report = Path.Combine(Path.GetDirectoryName(typeof(Bridge).Assembly.Location)!, "crash-report.txt");
+            AppDomain.CurrentDomain.UnhandledException += (_, args) =>
+            {
+                if (args.ExceptionObject is Exception e)
+                    ErrorWindows.Fatal(e, report);
+            };
             // (Which scripts mods may hook: those the patcher made hookable.)
             Hooks.LoadHookable(Path.Combine(Path.GetDirectoryName(typeof(Bridge).Assembly.Location)!, "stoneforge-hooks.txt"));
             // Main menu buttons (ours and mods'), the Mods window, mods' items, the Draw GUI pass.

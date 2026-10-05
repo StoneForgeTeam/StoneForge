@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- **Crash windows with stack traces.**
+  - **The game crashes:** a window shows the GML that was running (innermost first, each code entry with the instance running it) and the native stack (module and offset). The full report goes to `dotnet\crash-report.txt`, with the last 512 code entries the game ran. The bridge traces code entries as they start and end for this, always on and cheap.
+  - **C# crashes the game** (an exception nothing caught): a window shows its stack trace, and it's written to the same report.
+  - **A mod's handler throws** (StoneForge catches it and the game goes on): a window shows its stack trace, the first time for each mod and place, without stopping the game. A mod that keeps failing is paused as before.
+  - `"errorWindows": false` in `dotnet\stoneforge.json` turns the C# windows off. The game's own crash window always shows.
 - `Units.ReturnToTurns(units)` gives units back their own turns - their AI on, and in the player's list of units to run each turn again - after another game ran them (`RemoveFromTurns`). Their references to units that are gone (a target they fought meanwhile) are cleared first.
 - **Fixed: a room instance handed to the game while its pointer was lent (a callback's `self`) went as that pointer, not its id.** The game kept it as given: `Factions.Join(self)` put a raw pointer in the faction's list of units. Once the instance was destroyed, a unit looking through that list for enemies read freed memory and the game crashed, and `Factions.Leave` by id never found it to take it out. A room instance always goes as its id now, as the game's own code keeps one; only a struct or the global scope goes as its pointer.
 - **Fixed: a crash after `Units.Remove`.** Other units still named the removed one as their target (or as who last hit them...), and their AI read it once it was gone. `Remove` clears those references now. It also takes the unit out of its faction's list, as o_unit's Destroy event (which `Remove` skips) does: the units hostile to that faction looked for enemies there and read the removed unit once it was gone.

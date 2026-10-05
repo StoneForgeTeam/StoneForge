@@ -7,10 +7,15 @@
 // callbacks: every frame, and before / after each subscribed code entry (before can skip the original).
 // Only subscribed entries cross into .NET - the game runs thousands of code entries a second.
 // Log: <game>\dotnet\bridge.log (a second game running at once: bridge-2.log, and so on).
+// Crashes: the code entries the game runs are traced as they start and end (a ring of the last 512, and the ones
+// running now). When the game itself faults - an access violation in StoneShard.exe - the report goes to
+// <game>\dotnet\crash-report.txt (the GML running, innermost first; the native stack; the trace) and a window shows
+// it before the game closes.
 #include <YYToolkit/YYTK_Shared.hpp>
 #include <nethost/hostfxr.h>
 #include <nethost/coreclr_delegates.h>
 #include <climits>
+#include <cstdarg>
 #include <cstdio>
 #include <fstream>
 #include <share.h>
@@ -617,6 +622,184 @@ static void HookStringConcat(AurieModule* Module)
 	Log("Script hooks ready (string_concat)");
 }
 
+// ---- crashes ----
+
+struct TraceEntry
+{
+	CCode* Code;
+	int SelfId;
+	int Depth;
+	bool Start;
+};
+
+static constexpr int TraceSize = 512, StackSize = 64, ReportSize = 96 * 1024;
+static bool g_TraceOn = false;
+static TraceEntry g_Trace[TraceSize];
+static long long g_TraceNext = 0;
+// The code entries running now, outermost first (deeper than StackSize: counted, not kept).
+static TraceEntry g_Running[StackSize];
+static int g_TraceDepth = 0;
+static std::wstring g_ReportPath;
+static const BuiltinAccess* g_IdAccess = nullptr;
+// (The report and the window's text: kept off the stack and the heap - either may be what broke.)
+static char g_Report[ReportSize];
+static wchar_t g_ReportWide[16 * 1024];
+static volatile LONG g_Reported = 0;
+
+// An instance's id, through its accessor (looked up once): the trace keeps ids, never pointers - what crashes is
+// often an instance that's gone.
+static int TraceId(CInstance* Instance)
+{
+	if (!Instance || !g_IdAccess || !g_IdAccess->Get)
+		return -1;
+	if (static_cast<YYObjectBase*>(Instance)->m_ObjectKind != OBJECT_KIND_CINSTANCE)
+		return -1;
+	RValue id;
+	g_IdAccess->Get(Instance, INT_MIN, &id);
+	return id.m_Kind == VALUE_REF ? static_cast<int32_t>(id.m_i64 & 0xFFFFFFFF) : static_cast<int>(id.ToDouble());
+}
+
+static void TraceStart(CCode* Code, int SelfId)
+{
+	TraceEntry entry = { Code, SelfId, g_TraceDepth, true };
+	g_Trace[g_TraceNext++ % TraceSize] = entry;
+	if (g_TraceDepth < StackSize)
+		g_Running[g_TraceDepth] = entry;
+	g_TraceDepth++;
+}
+
+static void TraceEnd(CCode* Code, int SelfId)
+{
+	g_TraceDepth--;
+	g_Trace[g_TraceNext++ % TraceSize] = { Code, SelfId, g_TraceDepth, false };
+}
+
+// The report so far, appended to (cut short at its size).
+static int g_ReportLength = 0;
+static void Report(const char* Format, ...)
+{
+	if (g_ReportLength >= ReportSize - 1)
+		return;
+	va_list args;
+	va_start(args, Format);
+	int n = vsnprintf(g_Report + g_ReportLength, ReportSize - g_ReportLength, Format, args);
+	va_end(args);
+	if (n > 0)
+		g_ReportLength = g_ReportLength + n < ReportSize - 1 ? g_ReportLength + n : ReportSize - 1;
+}
+
+// Where an address is: its module's file name and the offset in it.
+static void ReportAddress(const char* Indent, DWORD64 Address)
+{
+	HMODULE module = nullptr;
+	char path[MAX_PATH] = "?";
+	if (GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+		reinterpret_cast<LPCSTR>(Address), &module) && module)
+	{
+		GetModuleFileNameA(module, path, MAX_PATH);
+		const char* name = strrchr(path, '\\');
+		Report("%s%s+0x%llx\r\n", Indent, name ? name + 1 : path, static_cast<unsigned long long>(Address - reinterpret_cast<DWORD64>(module)));
+	}
+	else
+		Report("%s0x%llx\r\n", Indent, static_cast<unsigned long long>(Address));
+}
+
+// The native stack at the fault, from its context (x64 unwind data: no symbols needed).
+static void ReportNativeStack(const CONTEXT* Fault)
+{
+	CONTEXT context = *Fault;
+	for (int frame = 0; frame < 24 && context.Rip; frame++)
+	{
+		ReportAddress("  ", context.Rip);
+		DWORD64 imageBase = 0;
+		PRUNTIME_FUNCTION function = RtlLookupFunctionEntry(context.Rip, &imageBase, nullptr);
+		if (!function)
+		{
+			// (A leaf function: its return address is on top of the stack.)
+			if (!context.Rsp)
+				break;
+			context.Rip = *reinterpret_cast<DWORD64*>(context.Rsp);
+			context.Rsp += 8;
+			continue;
+		}
+		PVOID handlerData = nullptr;
+		DWORD64 establisher = 0;
+		RtlVirtualUnwind(UNW_FLAG_NHANDLER, imageBase, context.Rip, function, &context, &handlerData, &establisher, nullptr);
+	}
+}
+
+static void ReportEntry(const TraceEntry& Entry, const char* Indent)
+{
+	const char* name = Entry.Code ? Entry.Code->GetName() : nullptr;
+	Report("%s%s (self %d)\r\n", Indent, name ? name : "?", Entry.SelfId);
+}
+
+// The game faulted: the report written and shown - once - then the game's own crash handling goes on (it closes).
+static LONG CALLBACK OnFault(EXCEPTION_POINTERS* Info)
+{
+	if (!g_TraceOn || Info->ExceptionRecord->ExceptionCode != EXCEPTION_ACCESS_VIOLATION)
+		return EXCEPTION_CONTINUE_SEARCH;
+	// (Only the game's own faults: .NET raises and handles access violations of its own.)
+	HMODULE game = GetModuleHandleW(nullptr);
+	HMODULE at = nullptr;
+	if (!GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+		static_cast<LPCWSTR>(Info->ExceptionRecord->ExceptionAddress), &at) || at != game)
+		return EXCEPTION_CONTINUE_SEARCH;
+	if (InterlockedExchange(&g_Reported, 1) != 0)
+		return EXCEPTION_CONTINUE_SEARCH;
+
+	g_ReportLength = 0;
+	const ULONG_PTR* info = Info->ExceptionRecord->ExceptionInformation;
+	bool hasAddress = Info->ExceptionRecord->NumberParameters > 1;
+	Report("Stoneshard crashed: an access violation %s 0x%llx at StoneShard.exe+0x%llx.\r\n\r\n",
+		hasAddress && info[0] == 1 ? "writing" : hasAddress && info[0] == 8 ? "executing" : "reading",
+		static_cast<unsigned long long>(hasAddress ? info[1] : 0),
+		static_cast<unsigned long long>(reinterpret_cast<uintptr_t>(Info->ExceptionRecord->ExceptionAddress) - reinterpret_cast<uintptr_t>(game)));
+	Report("GML running, innermost first:\r\n");
+	if (g_TraceDepth == 0)
+		Report("  (none - between code entries)\r\n");
+	if (g_TraceDepth > StackSize)
+		Report("  (%d more, deeper)\r\n", g_TraceDepth - StackSize);
+	for (int i = (g_TraceDepth < StackSize ? g_TraceDepth : StackSize) - 1; i >= 0; i--)
+		ReportEntry(g_Running[i], "  ");
+	Report("\r\nNative stack:\r\n");
+	ReportNativeStack(Info->ContextRecord);
+	int shown = g_ReportLength;
+	Report("\r\nThe last code entries, oldest first (> started, < ended; indented by depth):\r\n");
+	for (long long i = g_TraceNext > TraceSize ? g_TraceNext - TraceSize : 0; i < g_TraceNext; i++)
+	{
+		const TraceEntry& e = g_Trace[i % TraceSize];
+		char indent[96];
+		int width = (e.Depth < 40 ? e.Depth : 40) * 2;
+		snprintf(indent, sizeof(indent), "%*s%c ", width, "", e.Start ? '>' : '<');
+		ReportEntry(e, indent);
+	}
+
+	HANDLE file = CreateFileW(g_ReportPath.c_str(), GENERIC_WRITE, FILE_SHARE_READ, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
+	if (file != INVALID_HANDLE_VALUE)
+	{
+		DWORD written = 0;
+		WriteFile(file, g_Report, g_ReportLength, &written, nullptr);
+		CloseHandle(file);
+	}
+	// The window: what's shown above the trace, and where the rest is.
+	g_ReportLength = shown;
+	Report("\r\nThe full report, with the last 512 code entries, is in dotnet\\crash-report.txt. Ctrl+C copies this message.");
+	int wide = MultiByteToWideChar(CP_UTF8, 0, g_Report, g_ReportLength, g_ReportWide, static_cast<int>(sizeof(g_ReportWide) / sizeof(wchar_t)) - 1);
+	g_ReportWide[wide > 0 ? wide : 0] = L'\0';
+	MessageBoxW(nullptr, g_ReportWide, L"Stoneshard crashed - StoneForge", MB_OK | MB_ICONERROR | MB_TOPMOST | MB_SETFOREGROUND);
+	return EXCEPTION_CONTINUE_SEARCH;
+}
+
+static void StartCrashReports(const fs::path& DotnetDir)
+{
+	g_IdAccess = Builtin("id");
+	g_ReportPath = (DotnetDir / "crash-report.txt").wstring();
+	g_TraceOn = AddVectoredExceptionHandler(1, OnFault) != nullptr;
+	if (!g_TraceOn)
+		Log("Crash reports: couldn't add the fault handler");
+}
+
 // ---- game events ----
 
 static void FrameCallback(FWFrame& Context)
@@ -627,28 +810,30 @@ static void FrameCallback(FWFrame& Context)
 		g_Callbacks.OnFrame();
 }
 
-static void CodeCallback(FWCodeEvent& Context)
+// Whether a mod hooked this code entry (by name, looked up once per entry).
+static bool IsHooked(CCode* Code)
 {
-	g_GameThread = GetCurrentThreadId();
 	if (!g_ManagedReady || g_HookedNames.empty())
-		return;
-	CInstance* self = std::get<0>(Context.Arguments());
-	CInstance* other = std::get<1>(Context.Arguments());
-	CCode* code = std::get<2>(Context.Arguments());
-	if (!code)
-		return;
-	auto cached = g_HookedCache.find(code);
-	bool hooked;
+		return false;
+	auto cached = g_HookedCache.find(Code);
 	if (cached != g_HookedCache.end())
-		hooked = cached->second;
-	else
+		return cached->second;
+	const char* name = Code->GetName();
+	bool hooked = name && g_HookedNames.count(name) > 0;
+	g_HookedCache[Code] = hooked;
+	return hooked;
+}
+
+// A code entry: handed to C# if a mod hooked it (before can skip the original; after runs either way). One nobody
+// hooked is left to the game, which runs it after us - unless RunAnyway (the trace, to see where it ends).
+static void RunCode(FWCodeEvent& Context, CInstance* self, CInstance* other, CCode* code, bool RunAnyway)
+{
+	if (!IsHooked(code))
 	{
-		const char* name = code->GetName();
-		hooked = name && g_HookedNames.count(name) > 0;
-		g_HookedCache[code] = hooked;
-	}
-	if (!hooked)
+		if (RunAnyway)
+			Context.Call();
 		return;
+	}
 	const char* name = code->GetName();
 	const int selfId = ApiInstanceId(self), otherId = ApiInstanceId(other);
 	if (g_Callbacks.OnCodeBefore && g_Callbacks.OnCodeBefore(name, self, other))
@@ -660,6 +845,25 @@ static void CodeCallback(FWCodeEvent& Context)
 		Context.Call();
 	if (g_Callbacks.OnCodeAfter)
 		g_Callbacks.OnCodeAfter(name, InstanceStillExists(selfId) ? self : nullptr, InstanceStillExists(otherId) ? other : nullptr);
+}
+
+static void CodeCallback(FWCodeEvent& Context)
+{
+	g_GameThread = GetCurrentThreadId();
+	CInstance* self = std::get<0>(Context.Arguments());
+	CInstance* other = std::get<1>(Context.Arguments());
+	CCode* code = std::get<2>(Context.Arguments());
+	if (!code)
+		return;
+	if (!g_TraceOn)
+	{
+		RunCode(Context, self, other, code, false);
+		return;
+	}
+	int selfId = TraceId(self);
+	TraceStart(code, selfId);
+	RunCode(Context, self, other, code, true);
+	TraceEnd(code, selfId);
 }
 
 // ---- starting .NET ----
@@ -862,6 +1066,7 @@ EXPORTED AurieStatus ModuleInitialize(
 		Log("Registering the game callbacks failed");
 
 	HookStringConcat(Module);
+	StartCrashReports(dotnetDir);
 	g_ManagedReady = StartDotNet(dotnetDir);
 	return AURIE_SUCCESS;
 }
