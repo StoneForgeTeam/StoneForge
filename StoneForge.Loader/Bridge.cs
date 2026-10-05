@@ -59,6 +59,7 @@ public static unsafe class Bridge
             finally { MainMenu.EndLoad(); }
             Items.Install(loader);
             Containers.Install(loader);
+            LootTables.Install(loader);
             Consumables.Install(loader);
             Skills.Install(loader);
             GameObjects.Install(loader);

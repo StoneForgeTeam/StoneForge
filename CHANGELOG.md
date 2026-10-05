@@ -1,5 +1,9 @@
 # StoneForge changes
 
+## Unreleased
+
+- **`LootTables`: the game's loot tables**, what containers in the world roll as they're first opened (its `drop_table`). `Names`, `Get(name)`, and `Edit(context, name, table => ...)` / `EditAll(context, which, ...)`, which wait for the game to load its tables when called from a mod's Load. A `LootTable` has nine `Slots` (an item, a kind of item such as "gem", or several to choose from, with a chance, a count range and tags) and five `EquipmentSlots` (kinds, tags, rarities, a durability range and a chance), read and set, `Clear()`ed, or filled with `Add("wine", 33, 1, 2)` / `Add(myConsumable, ...)`. Changes last for the rest of the game's run. `Containers.SetLootTable(chest, key, tier)` and `LootTableOf(chest)` choose the table a container rolls from, before it's first opened.
+
 ## 0.6.0 — Events, containers and crash reports
 
 - **Fixed: `Game.CallBuiltin` with a name that isn't a built-in function crashed the game.** For a script's name, YYToolkit fetches the script as it looks the name up, and that faults on this GameMaker version. The bridge checks the name with the game's own lookup first (once a name): one that isn't a built-in is a `GameCallException` ("no built-in function named ...: a script's name? Game.CallScript"). Putting an item in a closed container hit it (`ds_map_clone` is one of the game's scripts).

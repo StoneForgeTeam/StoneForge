@@ -250,7 +250,7 @@ internal static class ModManager
         Action[] cleanup = {
             () => GameObjects.RemoveMod(name), () => GmlScripts.RemoveMod(name),
             () => Hooks.RemoveMod(name), () => MainMenu.RemoveMod(name), () => EscMenu.RemoveMod(name), () => GameDialogs.RemoveMod(name), () => Items.RemoveMod(name),
-            () => Consumables.RemoveMod(name), () => Skills.RemoveMod(name), () => Buffs.RemoveMod(name),
+            () => Consumables.RemoveMod(name), () => LootTables.RemoveMod(name), () => Skills.RemoveMod(name), () => Buffs.RemoveMod(name),
             () => UIWindow.ShutMod(name), () => ModSettings.RemoveMod(name), UITextBox.ReleaseFocus,
             () => ModContent.RemoveMod(name), () => Hooks.ResetFault(name)
         };

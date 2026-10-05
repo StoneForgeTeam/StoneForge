@@ -28,6 +28,30 @@ public static class Containers
     /// rolls its loot as it's first opened (unless <see cref="SetContents"/> gave it some). A bag: always.</summary>
     public static bool HasBeenOpened(Instance container) => !IsWorldContainer(container) || container.Get("is_execute").AsBool;
 
+    /// <summary>The loot table a container in the world rolls as it's first opened: its loot key, and its tier (0: the
+    /// place's) - the table is the key and the tier ("cryptTomb3", <see cref="LootTables"/>). Null if it doesn't roll from
+    /// the tables (its own loot, or not a container in the world).</summary>
+    public static (string Key, int Tier)? LootTableOf(Instance container)
+    {
+        if (!IsWorldContainer(container) || container.Get("loot_script").AsInt != Gm.AssetGetIndex("scr_loot_from_tables")
+            || container.Get("loot_script_key") is not { Kind: GmKind.String } key || key.AsString.Length == 0)
+            return null;
+        return (key.AsString, container.Get("loot_script_tier").AsInt);
+    }
+
+    /// <summary>Makes a container in the world roll from a loot table as it's first opened: its loot key ("cryptBossChest")
+    /// and tier (0: the place's) - <see cref="LootTables"/>. Too late once it's been opened (its loot's rolled then). False
+    /// if it isn't a container in the world, or has been opened.</summary>
+    public static bool SetLootTable(Instance container, string key, int tier = 0)
+    {
+        if (!IsWorldContainer(container) || HasBeenOpened(container))
+            return false;
+        container["loot_script"] = Gm.AssetGetIndex("scr_loot_from_tables");
+        container["loot_script_key"] = key;
+        container["loot_script_tier"] = tier;
+        return true;
+    }
+
     /// <summary>A closed container's items, as JSON - an array, one entry an item in the game's own save format (its
     /// name, its data, where it lay, its look, charge, stack, whether it was on...); for one never opened, the items
     /// waiting to join its loot (<see cref="AddItem"/>). Null if it's open (its window's slots are its items then:
