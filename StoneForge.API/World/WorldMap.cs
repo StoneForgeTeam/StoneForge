@@ -48,6 +48,18 @@ public static class WorldMap
         }
     }
 
+    /// <summary>Writes the world map's fog (which cells the player has seen) and its paper into the save data, as the
+    /// game's save does (scr_globalmapFogSave, scr_globalmapPaperSave). The save data holds them as of the last save
+    /// otherwise - a new world's not at all, until it's first saved - so do this before handing the save data to anyone
+    /// who'll load it (<see cref="SaveData.ToJson"/>). Nothing without a world map.</summary>
+    public static void Save()
+    {
+        if (!Available)
+            return;
+        Game.CallScript("scr_globalmapFogSave", default);
+        Game.CallScript("scr_globalmapPaperSave", default);
+    }
+
     /// <summary>The world-map cell at (<paramref name="x"/>, <paramref name="y"/>). Outside the map throws, as does no
     /// world map.</summary>
     public static WorldTile Tile(int x, int y)

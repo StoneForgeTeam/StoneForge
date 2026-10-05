@@ -3,6 +3,7 @@
 ## Unreleased
 
 - **Fixed: every GML error crashed the game instead of showing its error.** YYToolkit's hook on GameMaker's error function walks the game's scripts to name its stack trace, and that walk faults on this GameMaker version, before anything is logged. StoneForge's YYToolkit is built with a patch now (`lib\YYToolkit\stoneforge.patch`, shipped in `LICENSES`) that leaves the names out: a GML error shows the game's own error message (the script and what went wrong), and YYToolkit.log gets the details.
+- `WorldMap.Save()` writes the world map's fog and paper into the save data, as the game's save does. The save data holds them as of the last save otherwise (a new world's not at all), so call it before handing the save data to anything that will load it.
 - **Events for what happens in the game**, each registered as `Area.OnSomething(context, handler)` like `ContextMenus.OnOpen`: a mod's handlers go with it, and an exception in one is that mod's.
   - `Doors.OnChanged(door, open)`: a door starts opening or closing, whoever does it (the player, NPCs and enemies, the game's scripts, `Doors.SetOpen`). Crypt doors too.
   - `Rooms.OnEntered(room)`, on the room's first frame, once its instances are set up; `Rooms.OnLeaving(room)`, as the game leaves it. A dungeon's floors count, since each is the same room started again.
