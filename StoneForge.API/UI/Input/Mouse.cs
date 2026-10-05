@@ -16,6 +16,8 @@ public static class Mouse
     /// <summary>Where it is on the screen, in GUI coordinates (as <see cref="Draw"/> and mods' UI).</summary>
     public static double X => Game.CallBuiltin("device_mouse_x_to_gui", 0).AsReal / Draw.Scale;
     public static double Y => Game.CallBuiltin("device_mouse_y_to_gui", 0).AsReal / Draw.Scale;
+    /// <summary>Both at once: where it is on the screen, in GUI coordinates.</summary>
+    public static Point Position => new(X, Y);
     /// <summary>Pressed this frame.</summary>
     public static bool Pressed(int button = Left) => Game.CallBuiltin("mouse_check_button_pressed", button).AsBool;
     /// <summary>Released this frame.</summary>
@@ -33,17 +35,16 @@ public static class Mouse
     /// account), as units' x / y are.</summary>
     public static double WorldX => Game.Global["mouse_x"].AsReal;
     public static double WorldY => Game.Global["mouse_y"].AsReal;
+    /// <summary>Both at once: where it is in the world, in the room's coordinates.</summary>
+    public static Point World => new(WorldX, WorldY);
 
     /// <summary>The world cell it's over (the game's 26-pixel grid, as units stand on it: x div 26, y div 26).</summary>
-    public static (int X, int Y) Cell => (CellOf(WorldX), CellOf(WorldY));
-
-    private const int CellSize = 26;
-    private static int CellOf(double position) => (int)Math.Floor(position / CellSize);
+    public static Cell Cell => StoneForge.Cell.At(WorldX, WorldY);
 
     /// <summary>The unit standing on the cell it's over - an enemy, an NPC, the player, another mod's unit - as the game
     /// finds who stands where (its position grid: targeting, the cursor); none for an empty cell, off the room, or with
     /// no game.</summary>
-    public static Instance Unit { get { var (x, y) = Cell; return Units.At(x, y); } }
+    public static Instance Unit => Units.At(Cell);
 
     // ---- what it's over ----
 

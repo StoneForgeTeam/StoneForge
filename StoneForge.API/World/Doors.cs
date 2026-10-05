@@ -7,12 +7,15 @@ public static class Doors
     private static int _doors = -2;
 
     /// <summary>The way out nearest a room position; none if the room has none.</summary>
-    public static Instance Nearest(double x, double y)
+    public static Instance Nearest(Point position)
     {
         if (_doors == -2)
             _doors = Gm.AssetGetIndex("o_transitions_door");
-        return Instances.Nearest(x, y, _doors);
+        return Instances.Nearest(position.X, position.Y, _doors);
     }
+
+    /// <summary>The way out nearest a cell (its middle).</summary>
+    public static Instance Nearest(Cell cell) => Nearest(cell.Center);
 
     /// <summary>Uses a way out as the player clicking it does: through it at once when the player can reach it from where
     /// it stands (scr_can_interract_posgrid), else walked to and then through (scr_delay_move_grid).</summary>

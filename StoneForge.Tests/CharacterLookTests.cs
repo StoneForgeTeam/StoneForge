@@ -11,7 +11,7 @@ public class CharacterLookTests : FakeGame
     private readonly FakeSprites _sprites = new();
     // What the compositor saw: its layer count, and the shirt's origin while it ran.
     private int _builds, _layersSeen;
-    private (double, double) _shirtOriginSeen;
+    private Point _shirtOriginSeen;
 
     public CharacterLookTests()
     {
@@ -19,10 +19,10 @@ public class CharacterLookTests : FakeGame
         GameScripts = _scripts;
         Sprites = _sprites;
         KeepGlobalWrites = true;
-        _sprites.Origins[Body] = (16, 40);
-        _sprites.Origins[Shirt] = (10, 20);
-        _sprites.Origins[Helmet] = (5, 5);
-        _sprites.Origins[HelmetMask] = (1, 1);
+        _sprites.Origins[Body] = new Point(16, 40);
+        _sprites.Origins[Shirt] = new Point(10, 20);
+        _sprites.Origins[Helmet] = new Point(5, 5);
+        _sprites.Origins[HelmetMask] = new Point(1, 1);
         // (As the game's compositor: it reads the globals and fills playerSpriteArray - four rows and a mask.)
         _scripts.Add("scr_playerSpriteUpdate", _ =>
         {
@@ -34,8 +34,8 @@ public class CharacterLookTests : FakeGame
             var built = GmArray.From(Enumerable.Range(0, 4).Select(i => (GmValue)(Built + i)).Append(BuiltMask));
             Globals["playerSpriteArray"] = built;
             for (int i = 0; i < 4; i++)
-                _sprites.Origins[Built + i] = (0, 0);
-            _sprites.Origins[BuiltMask] = (0, 0);
+                _sprites.Origins[Built + i] = new Point(0, 0);
+            _sprites.Origins[BuiltMask] = new Point(0, 0);
             return GmValue.Undefined;
         });
     }
@@ -67,9 +67,9 @@ public class CharacterLookTests : FakeGame
         Assert.Equal((9, 4, Body), (look.FramesX, look.FramesY, look.Body.AsInt));
         Assert.Equal(2, look.Layers.Count);
         Assert.Equal((Shirt, 0, -4), (look.Layers[0].Sprite.AsInt, look.Layers[0].Frame.AsInt, look.Layers[0].Mask.AsInt));
-        Assert.Equal((10.0, 20.0), look.Layers[0].SpriteOrigin);
-        Assert.Equal((0.0, 0.0), look.Layers[0].MaskOrigin);
-        Assert.Equal((1.0, 1.0), look.Layers[1].MaskOrigin);
+        Assert.Equal(new Point(10, 20), look.Layers[0].SpriteOrigin);
+        Assert.Equal(new Point(0, 0), look.Layers[0].MaskOrigin);
+        Assert.Equal(new Point(1, 1), look.Layers[1].MaskOrigin);
 
         var back = CharacterLook.FromJson(look.ToJson())!;
         Assert.Equal((look.FramesX, look.FramesY, look.Body, look.Ground), (back.FramesX, back.FramesY, back.Body, back.Ground));
@@ -86,15 +86,15 @@ public class CharacterLookTests : FakeGame
         Player();
         var look = CharacterLook.OfPlayer()!;
         // (Here the shirt sits elsewhere - set for another wearer.)
-        _sprites.Origins[Shirt] = (0, 0);
+        _sprites.Origins[Shirt] = new Point(0, 0);
 
         using var sprites = look.Build()!;
         Assert.Equal(1, _builds);
         Assert.Equal(2, _layersSeen);
-        Assert.Equal((10.0, 20.0), _shirtOriginSeen);
+        Assert.Equal(new Point(10, 20), _shirtOriginSeen);
         Assert.Equal((Built, Built + 3, BuiltMask), (sprites.Normal, sprites.FlashPositive, sprites.Mask));
         // (Ours again: the shirt's origin, and the player's globals - their sprites untouched.)
-        Assert.Equal((0.0, 0.0), _sprites.Origins[Shirt]);
+        Assert.Equal(new Point(0, 0), _sprites.Origins[Shirt]);
         Assert.Equal(Body, Globals["playerSpriteBody"].AsInt);
         Assert.Equal(51, Globals["playerSpriteArray"].AsArray![1].AsInt);
         Assert.Empty(_sprites.Deleted);

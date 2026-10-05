@@ -43,7 +43,7 @@ public class WorldMapTests : FakeGame
         World(12, 7);
         Assert.True(WorldMap.Available);
         Assert.False(WorldMap.InPrologue);
-        Assert.Equal((12, 7), WorldMap.PlayerCell);
+        Assert.Equal(new WorldTile(12, 7), WorldMap.PlayerCell);
         Assert.Equal(new WorldTile(12, 7), WorldMap.Here);
         Assert.Equal("12_7", WorldMap.Here!.Value.Tag);
         Assert.Equal((20, 10), (WorldMap.Width, WorldMap.Height));

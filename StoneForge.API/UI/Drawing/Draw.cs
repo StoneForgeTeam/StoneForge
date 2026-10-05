@@ -261,8 +261,8 @@ public static class Draw
     public static string SpriteName(int sprite) => SpriteExists(sprite) ? Game.CallBuiltin("sprite_get_name", sprite).AsString : "";
 
     /// <summary>A sprite's origin: the point of it that's drawn at (x, y).</summary>
-    public static (double X, double Y) SpriteOrigin(int sprite)
-        => SpriteExists(sprite) ? (Game.CallBuiltin("sprite_get_xoffset", sprite).AsReal, Game.CallBuiltin("sprite_get_yoffset", sprite).AsReal) : (0, 0);
+    public static Point SpriteOrigin(int sprite)
+        => SpriteExists(sprite) ? new Point(Game.CallBuiltin("sprite_get_xoffset", sprite).AsReal, Game.CallBuiltin("sprite_get_yoffset", sprite).AsReal) : default;
 
     /// <summary>A sprite (e.g. from <see cref="ModContext.LoadSprite"/>), scaled.</summary>
     public static void Sprite(int sprite, double x, double y, double scale = 1, int frame = 0, double alpha = 1)

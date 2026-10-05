@@ -2,12 +2,15 @@
 
 ## Unreleased
 
+- **`Cell` and `Point` instead of `(x, y)` tuples.** A `Cell` is a cell of the room's grid (`X`, `Y`), with its `Center` and `Corner` as `Point`s, `DistanceTo` (the game's tile distance, diagonals counting one), `IsNextTo`, `Neighbours`, `Offset` and `+` / `-`; `Cell.At(x, y)` is the cell a room position is in, and `Cell.Size` its 26 pixels. A `Point` is a position or offset in pixels, with `DistanceTo` and `+` / `-` / `*`. Both deconstruct (`var (x, y) = cell`).
+  - `Units`, `Mouse.Cell`, `Player.WalkTo` and `Doors.Nearest` take and give them, in place of `(int X, int Y)` tuples and `x, y` pairs. `Units.CellSize`, `CellOf(position)` and `PositionOf(cell)` are gone: `Cell.Size`, `Cell.At` and `Center`.
+  - **Changed from 0.4.0:** `WorldMap.PlayerCell` is a `WorldTile?` (the world map's cells are `WorldTile`s), `Draw.SpriteOrigin` a `Point`, and a `LookLayer`'s `SpriteOrigin` / `MaskOrigin` `Point`s. A mod comparing them with a tuple (`== (12, 7)`) compares with a `WorldTile` / `Point` instead; deconstructing them still works.
 - **`"stoneforge": "latest"` for a mod in development.** In mod.json, it means the mod is built against StoneForge
   as it is now. Any StoneForge loads it; the version check is skipped, and the log says "development build". Its
   release names the StoneForge it was built against. `ModManifest.InDevelopment` tells which a mod is.
 - **`Units`: the room's units on the game's grid.**
-  - `CellOf(unit)` and `CellOf(position)` give the cell, `PositionOf(cell)` its middle, and `At(x, y)` who stands there (the game's position grid).
-  - `CanTake(unit, x, y)` checks a unit may take a cell. `Move(unit, x, y)` moves it as its own movement does, through the collision grid, the position grid and a big unit's extra cells. `NearestFreeCell(unit, x, y)` finds the nearest free cell.
+  - `CellOf(unit)` gives the cell it stands on, and `At(cell)` who stands there (the game's position grid).
+  - `CanTake(unit, cell)` checks a unit may take a cell. `Move(unit, cell)` moves it as its own movement does, through the collision grid, the position grid and a big unit's extra cells. `NearestFreeCell(unit, cell)` finds the nearest free cell.
   - `Remove(unit)` takes a unit out quietly, with no loot or corpse, together with the effects on it. `Create(obj, x, y)` spawns one as the game does. `SetRecord(unit, "Caravan Dummy")` gives it a mob record.
   - Also `IsPlayer`, `EndTurn(unit)`, and the player's list of units to run each turn (`TurnsCount`, `RemoveFromTurns`).
 - **`UnitEffects`: the game's effects on any unit.**
@@ -17,7 +20,7 @@
 - **`Player`: the player's character.**
   - `Attribute(name)` (scr_atr), `Level`, `HealthCap` / `EnergyCap` (its thresholds), `InCombat`, and `IsHuntedBy(unit)`.
   - `GiveXp(xp, killed)` gives XP as the game does, logged as a kill. `KillXp(unit)` is what a unit's death is worth.
-  - `WalkTo(x, y)` walks there as a click does, and `CrossAreaEdge()` crosses into the next area. `AddStat` and `ChangePsyche` change its stats and psyche.
+  - `WalkTo(cell)` walks there as a click does, and `CrossAreaEdge()` crosses into the next area. `AddStat` and `ChangePsyche` change its stats and psyche.
 - **Combat:** `Combat.Attack(attacker, target, forced)` (scr_attack), `Combat.Hit(target, amount, source)` (plain damage), `DamageShare` / `AddDamageShare` (a unit's damage list, for kills), and `Factions.Join` / `Leave`.
 - **`Draw`:** `Circle`, `Triangle`, `Line`, `SpriteExt` (scale, angle, tint, alpha), `Text` in a `GameFont` (`Default` or `Digits`), `PlainText` (the current font with a shadow, for the world), `SpriteExists` / `SpriteName` / `SpriteOrigin`, and `Frame(..., alpha)`.
 - **`Blackout`:** the screen held black, with a line of text, until `Hide()` or the next room change.
@@ -34,7 +37,7 @@
 - `Mouse.Unit` uses `Units.At`.
 
 - **`Mouse` in the world, and what it's over.** Alongside its screen position, buttons and wheel:
-  - `Mouse.WorldX` / `WorldY` are the mouse in the room's coordinates (the game's mouse_x / mouse_y, its camera taken into account), and `Mouse.Cell` the grid cell under it.
+  - `Mouse.WorldX` / `WorldY` are the mouse in the room's coordinates (the game's mouse_x / mouse_y, its camera taken into account), and `Mouse.Cell` the grid cell under it (`Mouse.World` and `Mouse.Position` give the room and screen positions as a `Point`).
   - `Mouse.Unit` is the unit standing on that cell, as the game finds who stands where (its position grid): an enemy, an NPC, the player, another mod's unit. It's none for an empty cell or off the room.
   - `Mouse.OverGameUI` (any of the game's shown GUI elements under it), `OverModUI` (any mod's UI, as of the last frame drawn) and `OverUI` (either), and `Mouse.HasFocus` (the game's window has the focus).
   - `Mouse.ClickedWorld(button)`: pressed this frame on the world, in the focused window and not on any UI - a click meant for the world, as the game takes one to move or attack.

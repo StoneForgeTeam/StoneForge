@@ -102,7 +102,7 @@ public sealed record CharacterLook(int FramesX, int FramesY, GmValue Ground, GmV
         }).ToList();
         var saved = Globals.ToDictionary(name => name, name => Game.Global[name]);
         // (Origins: ours noted first, put back in reverse - a sprite used by several layers ends as it was.)
-        var origins = new List<(GmValue Sprite, double X, double Y)>();
+        var origins = new List<(GmValue Sprite, Point Origin)>();
         using var partsArray = GmArray.From(parts.Select(p => (GmValue)p));
         // (Nothing of the player's in it to be freed: the compositor deletes what it replaces.)
         using var built = GmArray.Create(CharacterSprites.Count, -4);
@@ -132,7 +132,7 @@ public sealed record CharacterLook(int FramesX, int FramesY, GmValue Ground, GmV
         finally
         {
             for (int i = origins.Count - 1; i >= 0; i--)
-                Game.CallBuiltin("sprite_set_offset", origins[i].Sprite, origins[i].X, origins[i].Y);
+                Game.CallBuiltin("sprite_set_offset", origins[i].Sprite, origins[i].Origin.X, origins[i].Origin.Y);
             foreach (var (name, value) in saved)
                 Game.Global[name] = value;
             foreach (var part in parts)
@@ -145,19 +145,18 @@ public sealed record CharacterLook(int FramesX, int FramesY, GmValue Ground, GmV
     private static bool SpriteExists(GmValue sprite) => sprite.Kind == GmKind.Real && sprite.AsInt >= 0 && Game.CallBuiltin("sprite_exists", sprite).AsBool;
 
     // A sprite's origin here (0, 0 for none).
-    private static (double X, double Y) Origin(GmValue sprite)
-        => SpriteExists(sprite) ? (Game.CallBuiltin("sprite_get_xoffset", sprite).AsReal, Game.CallBuiltin("sprite_get_yoffset", sprite).AsReal) : (0, 0);
+    private static Point Origin(GmValue sprite)
+        => SpriteExists(sprite) ? new Point(Game.CallBuiltin("sprite_get_xoffset", sprite).AsReal, Game.CallBuiltin("sprite_get_yoffset", sprite).AsReal) : default;
 
-    private static void SetOrigin(List<(GmValue, double, double)> origins, GmValue sprite, (double X, double Y) origin)
+    private static void SetOrigin(List<(GmValue, Point)> origins, GmValue sprite, Point origin)
     {
         if (!SpriteExists(sprite))
             return;
-        var (x, y) = Origin(sprite);
-        origins.Add((sprite, x, y));
+        origins.Add((sprite, Origin(sprite)));
         Game.CallBuiltin("sprite_set_offset", sprite, origin.X, origin.Y);
     }
 
     private static double? Number(JsonNode? node) => node is JsonValue v && v.TryGetValue(out double d) ? d : null;
-    private static (double, double) Pair(JsonNode? node)
-        => node is JsonArray a && a.Count == 2 && Number(a[0]) is { } x && Number(a[1]) is { } y ? (x, y) : (0, 0);
+    private static Point Pair(JsonNode? node)
+        => node is JsonArray a && a.Count == 2 && Number(a[0]) is { } x && Number(a[1]) is { } y ? new Point(x, y) : default;
 }

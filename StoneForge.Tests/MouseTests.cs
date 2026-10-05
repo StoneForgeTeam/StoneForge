@@ -17,7 +17,8 @@ public class MouseTests : FakeGame
         Globals["mouse_x"] = 60.5;
         Globals["mouse_y"] = 27;
         Assert.Equal(60.5, Mouse.WorldX);
-        Assert.Equal((2, 1), Mouse.Cell);
+        Assert.Equal(new Cell(2, 1), Mouse.Cell);
+        Assert.Equal(new Point(60.5, 27), Mouse.World);
         Globals["mouse_x"] = -1;
         Assert.Equal(-1, Mouse.Cell.X);
     }

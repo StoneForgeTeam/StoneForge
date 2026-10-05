@@ -5,25 +5,16 @@ namespace StoneForge;
 /// as its own movement does (the collision grid, the position grid, a big unit's extra cells), taking one out quietly,
 /// making one, and the player's list of units to run each turn.
 /// <code>
-/// var (x, y) = Units.CellOf(enemy);
-/// if (Units.CanTake(enemy, x + 1, y))
-///     Units.Move(enemy, x + 1, y);
+/// Cell next = Units.CellOf(enemy).Offset(1, 0);
+/// if (Units.CanTake(enemy, next))
+///     Units.Move(enemy, next);
 /// </code>
 /// For units the game doesn't move itself - a mod's stand-in for someone, a unit kept in step with another game's.
 /// Game thread only, in a game.</summary>
 public static class Units
 {
-    /// <summary>A cell's size, in pixels.</summary>
-    public const int CellSize = 26;
-
     /// <summary>The cell a unit stands on (its xx / yy: where it is on the grid, which its drawn x / y follow).</summary>
-    public static (int X, int Y) CellOf(Instance unit) => (CellOf(unit.Get("xx").AsReal), CellOf(unit.Get("yy").AsReal));
-
-    /// <summary>The cell a room position is in (x div 26).</summary>
-    public static int CellOf(double position) => (int)Math.Floor(position / CellSize);
-
-    /// <summary>A cell's middle, in room coordinates - where a unit standing on it is (its xx / yy).</summary>
-    public static double PositionOf(int cell) => cell * CellSize + CellSize / 2;
+    public static Cell CellOf(Instance unit) => Cell.At(unit.Get("xx").AsReal, unit.Get("yy").AsReal);
 
     /// <summary>The game's controller and its grids - the collision grid (newgrid) and the position grid (posgrid) - for
     /// moving units, found once for many.</summary>
@@ -34,8 +25,9 @@ public static class Units
         => Controller() is { IsNone: false } controller ? new Grids(controller, controller.Get("newgrid"), controller.Get("posgrid")) : null;
 
     /// <summary>Who stands on a cell, as the game's position grid has it (none: no one, off the room, or no game).</summary>
-    public static Instance At(int cellX, int cellY)
+    public static Instance At(Cell cell)
     {
+        var (cellX, cellY) = cell;
         if (_controller == -2)
             _controller = Gm.AssetGetIndex("o_controller");
         if (_controller < 0 || cellX < 0 || cellY < 0)
@@ -57,17 +49,17 @@ public static class Units
     // (Tests: the game's objects looked up again.)
     internal static void ResetForTests() => _controller = _unitObject = -2;
 
-    private static Instance At(Grids grids, int x, int y)
-        => Instance.Of(Game.CallScript("ds_grid_get_ext", grids.Controller, grids.Positions, x, y, -4));
+    private static Instance At(Grids grids, Cell cell)
+        => Instance.Of(Game.CallScript("ds_grid_get_ext", grids.Controller, grids.Positions, cell.X, cell.Y, -4));
 
     /// <summary>Whether a unit may take a cell in the position grid: it's free, or it's the unit's own. Another unit there
     /// (the player, an area unit, for a moment) would be overwritten in it, and the game would then read the wrong unit
     /// there.</summary>
-    public static bool CanTake(Instance unit, int cellX, int cellY)
+    public static bool CanTake(Instance unit, Cell cell)
     {
         if (Current() is not { } grids)
             return false;
-        Instance occupant = At(grids, cellX, cellY);
+        Instance occupant = At(grids, cell);
         return occupant.IsNone || !occupant.Exists || occupant.Equals(unit.Persist())
             || !Gm.ObjectIsAncestor(occupant.Get("object_index").AsInt, UnitObject);
     }
@@ -80,26 +72,28 @@ public static class Units
     /// grid and the position grid (and a big unit's extra cells). Its drawn x / y follow only for a jump of more than two
     /// cells - for a short move, it walks there by its own step - or always with <paramref name="snap"/> (a unit drawn
     /// from elsewhere, which never walks). Check <see cref="CanTake"/> first: this takes the cell whoever's on it.</summary>
-    public static void Move(Instance unit, int cellX, int cellY, bool snap = false)
+    public static void Move(Instance unit, Cell cell, bool snap = false)
     {
         if (Current() is { } grids)
-            Move(unit, cellX, cellY, grids, snap: snap);
+            Move(unit, cell, grids, snap: snap);
     }
 
-    /// <summary>As <see cref="Move(Instance, int, int, bool)"/>, with the room's grids already found
+    /// <summary>As <see cref="Move(Instance, Cell, bool)"/>, with the room's grids already found
     /// (<see cref="Current"/>) and whether it's a big unit (is_poly_cell: it never changes) if that's known - for moving
     /// many units.</summary>
-    public static void Move(Instance unit, int cellX, int cellY, Grids grids, bool? poly = null, bool snap = false)
+    public static void Move(Instance unit, Cell cell, Grids grids, bool? poly = null, bool snap = false)
     {
         if (!unit.Exists)
             return;
         // (By its id: what the position grid holds, and what the game's scripts are handed.)
         unit = unit.Persist();
-        double x = PositionOf(cellX), y = PositionOf(cellY);
+        var (cellX, cellY) = cell;
+        var (x, y) = cell.Center;
         double oldXx = unit.Get("xx").AsReal, oldYy = unit.Get("yy").AsReal;
         if (oldXx == x && oldYy == y)
             return;
-        int oldX = CellOf(oldXx), oldY = CellOf(oldYy);
+        Cell old = Cell.At(oldXx, oldYy);
+        var (oldX, oldY) = old;
         var (controller, collisions, positions) = grids;
         bool isPoly = poly ?? unit.Get("is_poly_cell").AsBool;
         Game.CallScript("scr_collision_clear", controller, collisions, oldX, oldY, true);
@@ -111,13 +105,13 @@ public static class Units
         }
         else
         {
-            if (At(grids, oldX, oldY).Equals(unit))
+            if (At(grids, old).Equals(unit))
                 Game.CallScript("ds_grid_set_ext", controller, positions, oldX, oldY, -4);
             Game.CallScript("ds_grid_set_ext", controller, positions, cellX, cellY, unit);
         }
         unit["xx"] = x;
         unit["yy"] = y;
-        if (snap || Math.Abs(cellX - oldX) > 2 || Math.Abs(cellY - oldY) > 2)
+        if (snap || cell.DistanceTo(old) > 2)
         {
             unit["x"] = x;
             unit["y"] = y;
@@ -133,12 +127,12 @@ public static class Units
 
     /// <summary>The free cell nearest one, for <paramref name="unit"/> to stand on, as the game finds one (its collision
     /// grid: scr_mpgridFindNearestFreeCell); null if there's none, or no game.</summary>
-    public static (int X, int Y)? NearestFreeCell(Instance unit, int cellX, int cellY)
+    public static Cell? NearestFreeCell(Instance unit, Cell cell)
     {
         if (Current() is not { } grids)
             return null;
-        using GmArray? free = Game.CallScript("scr_mpgridFindNearestFreeCell", unit, grids.Collisions, cellX, cellY).AsArray;
-        return free is { Length: >= 2 } && free[0].AsReal >= 0 && free[1].AsReal >= 0 ? (free[0].AsInt, free[1].AsInt) : null;
+        using GmArray? free = Game.CallScript("scr_mpgridFindNearestFreeCell", unit, grids.Collisions, cell.X, cell.Y).AsArray;
+        return free is { Length: >= 2 } && free[0].AsReal >= 0 && free[1].AsReal >= 0 ? new Cell(free[0].AsInt, free[1].AsInt) : null;
     }
 
     /// <summary>Takes a unit out of the world quietly: out of the grids and the player's list of units to run each turn,
@@ -149,11 +143,12 @@ public static class Units
         if (!unit.Exists)
             return;
         unit = unit.Persist();
-        var (x, y) = CellOf(unit);
+        Cell cell = CellOf(unit);
+        var (x, y) = cell;
         if (Current() is { } grids)
         {
             Game.CallScript("scr_collision_clear", grids.Controller, grids.Collisions, x, y, true);
-            if (At(grids, x, y).Equals(unit))
+            if (At(grids, cell).Equals(unit))
                 Game.CallScript("ds_grid_set_ext", grids.Controller, grids.Positions, x, y, -4);
         }
         Game.CallScript("scr_enemy_poly_cell_clear", unit, x, y);
@@ -166,11 +161,11 @@ public static class Units
 
     /// <summary>Makes a unit of <paramref name="obj"/> (an enemy, an animal...) on a cell, as the game spawns one
     /// (scr_enemy_create); none if it wasn't made.</summary>
-    public static Instance Create(int obj, int cellX, int cellY)
-        => Instance.Of(Game.CallScript("scr_enemy_create", default, PositionOf(cellX), PositionOf(cellY), obj, false, false));
+    public static Instance Create(int obj, Cell cell)
+        => Instance.Of(Game.CallScript("scr_enemy_create", default, cell.Center.X, cell.Center.Y, obj, false, false));
 
-    /// <inheritdoc cref="Create(int, int, int)"/>
-    public static Instance Create(GameObjectId obj, int cellX, int cellY) => Create((int)obj, cellX, cellY);
+    /// <inheritdoc cref="Create(int, Cell)"/>
+    public static Instance Create(GameObjectId obj, Cell cell) => Create((int)obj, cell);
 
     /// <summary>Gives a unit one of the game's mob records (scr_param: its type, stats, resistances, icons - "Caravan
     /// Dummy", "Bandit Thug"...), as the game sets a mob up.</summary>

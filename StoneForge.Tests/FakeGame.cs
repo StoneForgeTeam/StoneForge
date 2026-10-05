@@ -475,7 +475,7 @@ public abstract unsafe class FakeGame : IDisposable
     /// <summary>The game's sprites: each one's origin, which ones were deleted, and every origin set in turn.</summary>
     protected sealed class FakeSprites
     {
-        public readonly Dictionary<int, (double X, double Y)> Origins = new();
+        public readonly Dictionary<int, Point> Origins = new();
         public readonly List<int> Deleted = new();
         public readonly List<(int Sprite, double X, double Y)> Set = new();
 
@@ -488,7 +488,7 @@ public abstract unsafe class FakeGame : IDisposable
                 case "sprite_get_xoffset": result->Real = Origins[sprite].X; return true;
                 case "sprite_get_yoffset": result->Real = Origins[sprite].Y; return true;
                 case "sprite_set_offset":
-                    Origins[sprite] = (args[1].Real, args[2].Real);
+                    Origins[sprite] = new Point(args[1].Real, args[2].Real);
                     Set.Add((sprite, args[1].Real, args[2].Real));
                     return true;
                 case "sprite_delete":

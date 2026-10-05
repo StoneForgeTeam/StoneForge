@@ -19,8 +19,8 @@ public static class WorldMap
 
     /// <summary>The cell the player is on (the whole area they're in - its rooms, its dungeon's floors); null without a
     /// world map.</summary>
-    public static (int X, int Y)? PlayerCell
-        => Available ? (Game.Global["playerGridX"].AsInt, Game.Global["playerGridY"].AsInt) : null;
+    public static WorldTile? PlayerCell
+        => Available ? new WorldTile(Game.Global["playerGridX"].AsInt, Game.Global["playerGridY"].AsInt) : null;
 
     /// <summary>The dungeon floor the player is on: 0 on the surface (the game's floor_counter).</summary>
     public static int Floor => Game.Global["floor_counter"] is { Kind: GmKind.Real } floor ? floor.AsInt : 0;
@@ -60,5 +60,5 @@ public static class WorldMap
     }
 
     /// <summary>The cell the player is on; null without a world map.</summary>
-    public static WorldTile? Here => PlayerCell is var (x, y) ? new WorldTile(x, y) : null;
+    public static WorldTile? Here => PlayerCell;
 }

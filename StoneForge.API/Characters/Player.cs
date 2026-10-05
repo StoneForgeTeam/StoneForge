@@ -54,11 +54,11 @@ public static class Player
     public static double KillXp(Instance unit)
         => unit.Get("gain_xp").AsReal * Math.Min(1 - 0.15 * (Level / 5.0 - unit.Get("Tier").AsReal), 1);
 
-    /// <summary>Walks it to a room position, as a click on the world does (scr_player_move: its path, one cell a turn).</summary>
-    public static void WalkTo(double x, double y)
+    /// <summary>Walks it to a cell, as a click on the world does (scr_player_move: its path, one cell a turn).</summary>
+    public static void WalkTo(Cell cell)
     {
         if (Instance is { IsNone: false } player)
-            Game.CallScript("scr_player_move", player, x, y);
+            Game.CallScript("scr_player_move", player, cell.Center.X, cell.Center.Y);
     }
 
     /// <summary>Takes it across the edge of the area to the next one of the world map, as walking off it does
