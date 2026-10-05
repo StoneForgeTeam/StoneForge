@@ -20,8 +20,20 @@ internal sealed class ModsWindow : UISettingsWindow
     private readonly Dictionary<string, int> _icons = new();
     // Mods whose every possibly conflicting hook is listed (Possible Conflicts' toggle; collapsed until opened).
     private readonly HashSet<string> _hooksShown = new();
+    // (The mods' state as last shown: changed since - a mod switched on or off, with the mods it requires or that require
+    // it - the open page is made again.)
+    private int _shownChanges;
 
     public ModsWindow() : base("Mods") { }
+
+    protected override void OnUpdate(double deltaTime)
+    {
+        base.OnUpdate(deltaTime);
+        if (!IsOpen || _shownChanges == ModRegistry.Changes || _mods.Count == 0)
+            return;
+        _shownChanges = ModRegistry.Changes;
+        Tabs.Tabs[Math.Clamp(_lastTab, 0, _mods.Count - 1)].Open();
+    }
 
     protected override void OnOpen()
     {
@@ -41,6 +53,7 @@ internal sealed class ModsWindow : UISettingsWindow
     protected override void OnTabOpened(UITab tab)
     {
         _lastTab = tab.Index;
+        _shownChanges = ModRegistry.Changes;
         var mod = ModRegistry.All.FirstOrDefault(m => m.Id == _mods[tab.Index].Id) ?? _mods[tab.Index];
         Page.Clear();
         Page.AddHeader(mod.Name);
@@ -64,6 +77,16 @@ internal sealed class ModsWindow : UISettingsWindow
         Page.AddText("Version " + mod.Version + (mod.Author.Length > 0 ? "  -  by " + mod.Author : ""), Draw.Muted);
         if (mod.Description.Length > 0)
             Page.AddText(mod.Description);
+        // (The mods it needs: each by name, if it's there.)
+        if (mod.Requires is { Count: > 0 } requires)
+            Page.AddText("Requires " + string.Join(", ", requires.Select(id => ModRegistry.All.FirstOrDefault(m => m.Id == id) is { } other
+                ? other.Name : id + " (not installed)")), Draw.Muted);
+        // (Switched off for a mod it requires - with it, or as that wasn't running: why.)
+        if (!IsEnabled(mod) && ModManager.WhyOff(mod.Id) is { } why)
+            Page.AddText(why, WarningColour);
+        // (Mods running that need it: switched off with it.)
+        if (ModManager.RequiredBy(mod.Id) is { Count: > 0 } requiredBy)
+            Page.AddText($"Required by {string.Join(", ", requiredBy)} - switching this off switches {(requiredBy.Count == 1 ? "it" : "them")} off too.", WarningColour);
         _enabled = Page.AddCheckbox("Enabled", IsEnabled(mod), EnabledTooltip);
         _enabled.Changed += on => SetEnabled(mod, on);
         // (Its settings, if it's loaded and has some.)

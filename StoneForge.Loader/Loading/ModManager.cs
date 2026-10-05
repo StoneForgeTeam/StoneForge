@@ -10,7 +10,10 @@ namespace StoneForge.Loader;
 /// is compiled again (so edits to it show) and it's loaded.
 /// At start the folders are compiled one after another on a background thread (pure Roslyn - nothing of the
 /// game) while the game waits in its first room, its own loading held (LoadingScreen); each is loaded on the
-/// game's thread at the start of the frame after it's ready, and the loading screen (LoadingScreen) shows how far it's got (<see cref="Startup"/>).</summary>
+/// game's thread at the start of the frame after it's ready, and the loading screen (LoadingScreen) shows how far it's got (<see cref="Startup"/>).
+/// They load in folder order, but each after the mods it requires and loads after (mod.json "requires", "after":
+/// LoadOrder) - compiled against the ones it requires, and loaded only if they are. Switching a mod off switches off the
+/// mods requiring it (their code uses its), and they come back with it; switching one on switches on what it requires.</summary>
 internal static class ModManager
 {
     private sealed class Loaded
@@ -20,6 +23,10 @@ internal static class ModManager
         public required string Folder;
         public required IStoneMod Mod;
         public required ModLoadContext Context;
+        public required ModManifest Manifest;
+        // Its code, as loaded and as compiled: what the mods requiring it are loaded with, and compiled against.
+        public required Assembly Assembly;
+        public required byte[] Image;
     }
 
     // A folder's mod.json (null: none, or invalid - then Result says why) and its source compiled.
@@ -35,7 +42,19 @@ internal static class ModManager
     private static readonly List<(string Name, WeakReference Context, int Frames)> Unloading = new();
     // Start-up: the folders, and their compiles (each after the one before).
     private static List<string> _folders = new();
+    private static List<ModManifest?> _manifests = new();
+    private static Dictionary<string, string> _orderProblems = new();
     private static Task<Compiled>[] _compiles = Array.Empty<Task<Compiled>>();
+    // The mods switched off because a mod they require was (by its ID): switched on again with it - unless they're
+    // switched on (or it's switched on for them) first.
+    private static readonly Dictionary<string, List<string>> OffWith = new();
+
+    // Why a mod was switched off for a mod it requires (by its ID): its page says so.
+    private static readonly Dictionary<string, string> OffBecause = new();
+
+    /// <summary>Why a mod was switched off for a mod it requires - switched off with it, or that mod wasn't running when
+    /// it would have started; null if it wasn't.</summary>
+    internal static string? WhyOff(string id) => OffBecause.GetValueOrDefault(id);
 
     internal static string ModsDir => Path.GetFullPath(Path.Combine(Path.GetDirectoryName(typeof(Bridge).Assembly.Location)!, "..", "mods"));
 
@@ -50,7 +69,17 @@ internal static class ModManager
     {
         string modsDir = ModsDir;
         Directory.CreateDirectory(modsDir);
-        _folders = Directory.GetDirectories(modsDir).OrderBy(d => d, StringComparer.OrdinalIgnoreCase).ToList();
+        var folders = Directory.GetDirectories(modsDir).OrderBy(d => d, StringComparer.OrdinalIgnoreCase).ToList();
+        // (In the order to load them: each after those it requires and loads after.)
+        var manifests = folders.Select(TryManifest).ToList();
+        var order = LoadOrder.Sort(manifests);
+        _folders = order.Order.Select(i => folders[i]).ToList();
+        _manifests = order.Order.Select(i => manifests[i]).ToList();
+        _orderProblems = order.Problems.ToDictionary(p => folders[p.Key], p => p.Value);
+        foreach (string warning in order.Warnings)
+            Game.Log(warning);
+        if (!_folders.SequenceEqual(folders))
+            Game.Log("Load order (mod.json \"requires\", \"after\"): " + string.Join(", ", _folders.Select(Path.GetFileName)));
         GmlRuntime.Snapshot();
         Game.Log($"{_folders.Count} mod folder(s) in {modsDir}");
         foreach (string folder in _folders)
@@ -63,8 +92,8 @@ internal static class ModManager
         Task previous = Task.CompletedTask;
         for (int i = 0; i < _folders.Count; i++)
         {
-            string folder = _folders[i];
-            _compiles[i] = previous.ContinueWith(_ => CompileSource(folder), TaskScheduler.Default);
+            int index = i;
+            _compiles[i] = previous.ContinueWith(_ => CompileAtStart(index), TaskScheduler.Default);
             previous = _compiles[i];
         }
         if (_folders.Count == 0)
@@ -100,7 +129,9 @@ internal static class ModManager
             }
             catch (Exception e) { Game.Log($"Switching {name} {(on ? "on" : "off")} failed: {e}"); }
         }
-        for (int i = Unloading.Count - 1; i >= 0; i--)
+        // (In the order they were unloaded: a mod's code is held by the mods requiring it until theirs goes - they're
+        // unloaded first.)
+        for (int i = 0; i < Unloading.Count; i++)
         {
             var (name, context, frames) = Unloading[i];
             if (++frames < 180)
@@ -108,7 +139,7 @@ internal static class ModManager
                 Unloading[i] = (name, context, frames);
                 continue;
             }
-            Unloading.RemoveAt(i);
+            Unloading.RemoveAt(i--);
             GC.Collect();
             GC.WaitForPendingFinalizers();
             GC.Collect();
@@ -155,11 +186,20 @@ internal static class ModManager
             string folder = _folders[done];
             var timer = Stopwatch.StartNew();
             var compiled = _compiles[done].Result;
-            var (context, mod) = Instantiate(folder, compiled);
-            if (context == null || mod == null)
-                Startup.Failed++;
+            // (A mod it requires not running - switched off, or it failed: it's switched off too, saying why.)
+            if (compiled.Manifest is { } manifest && compiled.Result.Assembly != null && Unmet(manifest) is { } unmet)
+            {
+                if (Register(folder, manifest))
+                    SwitchOffFor(manifest.Id, manifest.Name, unmet);
+            }
             else
-                LoadFolder(folder, compiled.Manifest!, context, mod);
+            {
+                var loaded = Instantiate(folder, compiled);
+                if (loaded == null)
+                    Startup.Failed++;
+                else
+                    LoadFolder(folder, loaded);
+            }
             if (timer.Elapsed.TotalSeconds >= 1)
                 Game.Log($"{Path.GetFileName(folder)}: loading took {timer.Elapsed.TotalSeconds:0.0} s - the game waits while a mod's Load runs");
             Startup.Done = ++done;
@@ -181,7 +221,16 @@ internal static class ModManager
     }
 
     // A folder's mod: its details registered (the Mods window), and loaded if it's switched on.
-    private static void LoadFolder(string folder, ModManifest manifest, ModLoadContext context, IStoneMod mod)
+    private static void LoadFolder(string folder, Loaded loaded)
+    {
+        if (Register(folder, loaded.Manifest))
+            Start(loaded);
+        UnloadIfUnused(loaded.Context, Path.GetFileName(folder));
+    }
+
+    // A folder's mod's details registered (the Mods window); whether it may start - not if a folder before it has its
+    // ID, or it's switched off or not allowed (the log says so).
+    private static bool Register(string folder, ModManifest manifest)
     {
         string folderName = Path.GetFileName(folder);
         // (A second folder with an ID already taken isn't loaded.)
@@ -189,25 +238,72 @@ internal static class ModManager
         {
             Game.Log($"{folderName}: mod ID \"{manifest.Id}\" is already {Path.GetFileName(taken.Folder)}'s - not loaded");
             ModRegistry.All.Add(Info(folder, manifest, false, $"Not loaded: mod ID \"{manifest.Id}\" is already used by {Path.GetFileName(taken.Folder)}", idSuffix: "@" + folderName));
-            UnloadIfUnused(context, folderName);
-            return;
+            return false;
         }
         bool enabled = ModRegistry.MayRun(manifest.Id, manifest.Trusted);
         ModRegistry.All.Add(Info(folder, manifest, enabled));
         if (enabled)
-            Start(manifest, folder, mod, context);
-        else if (manifest.Trusted && !ModRegistry.Disabled.Contains(manifest.Id))
+            return true;
+        if (manifest.Trusted && !ModRegistry.Disabled.Contains(manifest.Id))
             Game.Log($"{manifest.Name} {manifest.Version} asks for full access (trusted) - not loaded until it's allowed in the Mods window");
         else
             Game.Log($"{manifest.Name} {manifest.Version} is switched off (Mods window) - not loaded");
-        UnloadIfUnused(context, folderName);
+        return false;
     }
+
+    // The first mod it requires that isn't running, and why (null: they all are).
+    private static (string Required, string Why)? Unmet(ModManifest manifest)
+    {
+        foreach (string id in manifest.Requires)
+        {
+            if (Mods.Any(m => m.Id == id))
+                continue;
+            var info = ModRegistry.All.FirstOrDefault(m => m.Id == id);
+            return (id, info == null ? Missing(id)
+                : $"needs {info.Name} ({id}), which " + (info.Error != null || info.RuntimeError != null ? "didn't load"
+                    : info.Trusted && !ModRegistry.Allowed.Contains(id) ? "isn't allowed yet (it asks for full access)"
+                    : "is switched off"));
+        }
+        return null;
+    }
+
+    // A mod whose required mod isn't running: switched off (for the next start too), its page saying why - and back on
+    // with that mod, if it's there to be switched on.
+    private static void SwitchOffFor(string id, string name, (string Required, string Why) unmet)
+    {
+        bool installed = ModRegistry.All.Any(m => m.Id == unmet.Required);
+        Game.Log($"{name}: switched off - {unmet.Why}");
+        ModRegistry.SetEnabled(id, false);
+        ModRegistry.Update(id, enabled: false);
+        OffBecause[id] = "Switched off: it " + unmet.Why + (installed ? $" - it comes back on with {NameOf(unmet.Required)}." : ".");
+        if (installed)
+            WaitFor(unmet.Required, id);
+    }
+
+    // A mod to switch back on with one it requires.
+    private static void WaitFor(string required, string id)
+    {
+        if (!OffWith.TryGetValue(required, out var list))
+            OffWith[required] = list = new();
+        if (!list.Contains(id))
+            list.Add(id);
+    }
+
+    private static string NameOf(string id) => ModRegistry.All.FirstOrDefault(m => m.Id == id)?.Name ?? id;
+
+    /// <summary>The mods (their names) running now that require this one: switched off with it.</summary>
+    internal static List<string> RequiredBy(string id) => Mods.Where(m => m.Manifest.Requires.Contains(id)).Select(m => m.Name).ToList();
+
+    private static string Missing(string id) => $"needs the mod \"{id}\", which isn't installed (mod.json \"requires\") - put it in the mods folder";
 
     private static ModInfo Info(string folder, ModManifest manifest, bool enabled, string? error = null, string idSuffix = "")
         => new(manifest.Id + idSuffix, manifest.Name, manifest.Description, manifest.Author, manifest.Version, enabled, folder,
-            error, ContainsGml: GmlRuntime.ContainsGml(folder), Trusted: manifest.Trusted);
+            error, ContainsGml: GmlRuntime.ContainsGml(folder), Trusted: manifest.Trusted, Requires: manifest.Requires);
 
-    private static void SwitchOn(string id)
+    private static void SwitchOn(string id) => SwitchOn(id, new HashSet<string> { id });
+
+    // (Visiting: the mods being switched on, so requires in a loop don't go round.)
+    private static void SwitchOn(string id, HashSet<string> visiting)
     {
         if (Hooks.IsSuspended(id)) SwitchOff(id);
         if (Mods.Any(m => m.Id == id))
@@ -223,28 +319,68 @@ internal static class ModManager
             Game.Log($"{info?.Name ?? id}: can't be switched on{(info?.Error != null ? " - " + info.Error : "")}");
             return;
         }
+        // The mods it requires first: switched on (for the next start too), if they can be.
+        if (TryManifest(info.Folder) is { } manifest)
+        {
+            foreach (string required in manifest.Requires)
+                if (!Mods.Any(m => m.Id == required) && ModRegistry.All.Any(m => m.Id == required) && visiting.Add(required))
+                {
+                    Game.Log($"{info.Name}: requires {required} - switching it on");
+                    ModRegistry.SetEnabled(required, true);
+                    SwitchOn(required, visiting);
+                }
+            if (Unmet(manifest) is { } unmet)
+            {
+                SwitchOffFor(id, info.Name, unmet);
+                return;
+            }
+        }
         var timer = Stopwatch.StartNew();
-        var compiled = CompileSource(info.Folder);
-        var (context, mod) = Instantiate(info.Folder, compiled);
-        if (context == null || mod == null)
+        var compiled = CompileSource(info.Folder, required => Mods.FirstOrDefault(m => m.Id == required) is { } running
+            ? (running.Manifest, running.Image)
+            : (ModRegistry.All.FirstOrDefault(m => m.Id == required) is { } other ? TryManifest(other.Folder) : null, null), "isn't loaded");
+        if (Instantiate(info.Folder, compiled) is not { } loaded)
             return;
-        if (compiled.Manifest!.Id != id)
-            Game.Log($"{info.Name}: its mod.json's id is now \"{compiled.Manifest.Id}\" - restart the game to load it");
+        if (loaded.Manifest.Id != id)
+            Game.Log($"{info.Name}: its mod.json's id is now \"{loaded.Manifest.Id}\" - restart the game to load it");
         else
         {
-            Start(compiled.Manifest, info.Folder, mod, context);
+            Start(loaded);
             ModRegistry.Update(id, enabled: true);
             Game.Log($"{info.Name} switched on ({timer.ElapsedMilliseconds} ms)");
         }
-        UnloadIfUnused(context, info.Name);
+        UnloadIfUnused(loaded.Context, info.Name);
+        // (Back with it, on for the next start too: the mods that were switched off with it.)
+        if (Mods.Any(m => m.Id == id) && OffWith.Remove(id, out var dependents))
+            foreach (string dependent in dependents)
+                if (visiting.Add(dependent))
+                {
+                    Game.Log($"{NameOf(dependent)}: switched back on with {info.Name}");
+                    ModRegistry.SetEnabled(dependent, true);
+                    SwitchOn(dependent, visiting);
+                }
     }
 
     private static void SwitchOff(string id)
     {
         var loaded = Mods.FirstOrDefault(m => m.Id == id);
         ModRegistry.Update(id, enabled: false);
+        // (Switched off itself: not waiting to come back with anything.)
+        OffBecause.Remove(id);
+        foreach (var waiting in OffWith.Values)
+            waiting.Remove(id);
         if (loaded == null)
             return;
+        // (First the mods that require it: their code uses its - off for the next start too, as the Mods window shows.
+        // They're back when it is.)
+        foreach (var dependent in Mods.Where(m => m.Manifest.Requires.Contains(id)).ToList())
+        {
+            Game.Log($"{dependent.Name}: switched off with {loaded.Name} (it requires it)");
+            ModRegistry.SetEnabled(dependent.Id, false);
+            SwitchOff(dependent.Id);
+            OffBecause[dependent.Id] = $"Switched off with {loaded.Name}, which it requires - it comes back on with it.";
+            WaitFor(id, dependent.Id);
+        }
         try { loaded.Mod.Unload(); }
         catch (Exception e) { Game.Log($"{loaded.Name}: Unload threw: {e}"); }
         TakeBack(id);
@@ -260,7 +396,7 @@ internal static class ModManager
         // One failing cleanup must not strand every later resource or prevent the load context unloading.
         Action[] cleanup = {
             () => GameObjects.RemoveMod(name), () => GmlScripts.RemoveMod(name),
-            () => Hooks.RemoveMod(name), () => MainMenu.RemoveMod(name), () => EscMenu.RemoveMod(name), () => GameDialogs.RemoveMod(name), () => Items.RemoveMod(name),
+            () => Hooks.RemoveMod(name), () => ModList.RemoveMod(name), () => MainMenu.RemoveMod(name), () => EscMenu.RemoveMod(name), () => GameDialogs.RemoveMod(name), () => Items.RemoveMod(name),
             () => Consumables.RemoveMod(name), () => LootTables.RemoveMod(name), () => Skills.RemoveMod(name), () => Buffs.RemoveMod(name),
             () => UIWindow.ShutMod(name), () => ModSettings.RemoveMod(name), UITextBox.ReleaseFocus,
             () => ModContent.RemoveMod(name), () => Hooks.ResetFault(name)
@@ -270,8 +406,9 @@ internal static class ModManager
             catch (Exception e) { Game.Log($"[{name}] Cleanup failed: {e.Message}"); }
     }
 
-    private static void Start(ModManifest manifest, string folder, IStoneMod mod, ModLoadContext context)
+    private static void Start(Loaded loaded)
     {
+        var (manifest, folder, mod) = (loaded.Manifest, loaded.Folder, loaded.Mod);
         string id = manifest.Id, name = manifest.Name;
         try
         {
@@ -290,9 +427,14 @@ internal static class ModManager
                 EscMenu.EndLoad();
             }
             Hooks.Mods.Add((id, mod));
+            ModList.Add(manifest, mod);
+            // (Running again: no longer waiting to come back with what it requires.)
+            OffBecause.Remove(id);
+            foreach (var waiting in OffWith.Values)
+                waiting.Remove(id);
             if (mod is ITickable tickable)
                 modContext.AddTickable(tickable);
-            Mods.Add(new Loaded { Id = id, Name = name, Folder = folder, Mod = mod, Context = context });
+            Mods.Add(loaded);
             Game.Log($"Loaded {name} ({id}) {manifest.Version}" + (manifest.InDevelopment ? " (development build: \"stoneforge\": \"latest\")" : "")
                 + (manifest.Author.Length > 0 ? $" by {manifest.Author}" : "")
                 + (manifest.Description.Length > 0 ? $" - {manifest.Description}" : ""));
@@ -306,9 +448,24 @@ internal static class ModManager
         }
     }
 
-    // A folder's source compiled and checked - on any thread: nothing of the game is touched.
-    // (Its mod.json first: without a valid one - or needing a newer StoneForge - it isn't compiled.)
-    private static Compiled CompileSource(string folder)
+    // At start: a folder compiled (after those before it) - against the mods it requires, compiled before it.
+    private static Compiled CompileAtStart(int index)
+    {
+        string folder = _folders[index];
+        if (_orderProblems.TryGetValue(folder, out string? problem))
+            return new Compiled(_manifests[index], new ModCompiler.Result(null, new List<string> { problem }), 0);
+        return CompileSource(folder, id =>
+        {
+            int at = _manifests.FindIndex(m => m?.Id == id);
+            return at < 0 ? (null, null)
+                : (_manifests[at], at < index && _compiles[at].IsCompleted ? _compiles[at].Result.Result.Assembly : null);
+        }, "didn't compile");
+    }
+
+    // A folder's source compiled and checked - on any thread: nothing of the game is touched. Required: a mod by its ID
+    // - its mod.json and its code as compiled (null: not there; no code: it isn't ready, as notReady says).
+    // (Its mod.json first: without a valid one - needing a newer StoneForge, or a mod that isn't there - it isn't compiled.)
+    private static Compiled CompileSource(string folder, Func<string, (ModManifest? Manifest, byte[]? Image)> required, string notReady)
     {
         var timer = Stopwatch.StartNew();
         ModManifest manifest;
@@ -320,15 +477,24 @@ internal static class ModManager
                     $"needs StoneForge {manifest.StoneForge} or newer (this is {LoaderVersion.Text})" }), 0);
         }
         catch (Exception e) { return new Compiled(null, new ModCompiler.Result(null, new List<string> { e.Message }), 0); }
+        var images = new List<byte[]>();
+        foreach (string id in LoadOrder.AllRequired(manifest, id => required(id).Manifest))
+        {
+            var (other, image) = required(id);
+            if (image == null)
+                return new Compiled(manifest, new ModCompiler.Result(null, new List<string> {
+                    other == null ? Missing(id) : $"needs {other.Name} ({id}), which {notReady}" }), 0);
+            images.Add(image);
+        }
         ModCompiler.Result result;
-        try { result = ModCompiler.Compile(folder, manifest.Trusted); }
+        try { result = ModCompiler.Compile(folder, manifest.Trusted, images); }
         catch (Exception e) { result = new ModCompiler.Result(null, new List<string> { e.Message }); }
         return new Compiled(manifest, result, Math.Max(1, timer.ElapsedMilliseconds));
     }
 
-    // A compiled folder loaded into a new context, with its IStoneMod class made (on the game's thread) - one per
-    // folder; the Mods window's entry says why when it didn't load.
-    private static (ModLoadContext? Context, IStoneMod? Mod) Instantiate(string folder, Compiled compiled)
+    // A compiled folder loaded into a new context (with the mods it requires, running), with its IStoneMod class made (on
+    // the game's thread) - one per folder; the Mods window's entry says why when it didn't load.
+    private static Loaded? Instantiate(string folder, Compiled compiled)
     {
         string folderName = Path.GetFileName(folder);
         void Failed(string why, IEnumerable<string> details)
@@ -347,15 +513,18 @@ internal static class ModManager
         if (compiled.Manifest == null || compiled.Milliseconds == 0)
         {
             Failed(compiled.Result.Errors.FirstOrDefault() ?? "no mod.json", Array.Empty<string>());
-            return (null, null);
+            return null;
         }
         if (compiled.Result.Assembly == null)
         {
             Failed("it doesn't compile", compiled.Result.Errors);
-            return (null, null);
+            return null;
         }
         Game.Log($"{folderName}: compiled and checked in {compiled.Milliseconds} ms");
-        var context = new ModLoadContext(folderName, compiled.Manifest.Trusted ? ModCompiler.Libraries(folder) : null);
+        var manifest = compiled.Manifest;
+        var required = LoadOrder.AllRequired(manifest, id => Mods.FirstOrDefault(m => m.Id == id)?.Manifest)
+            .Select(id => Mods.FirstOrDefault(m => m.Id == id)?.Assembly).OfType<Assembly>();
+        var context = new ModLoadContext(folderName, manifest.Trusted ? ModCompiler.Libraries(folder) : null, required);
         try
         {
             Assembly assembly = context.LoadFromStream(new MemoryStream(compiled.Result.Assembly));
@@ -365,23 +534,28 @@ internal static class ModManager
                 Failed(types.Count == 0 ? "it has no public IStoneMod class" : "it has more than one IStoneMod class ("
                     + string.Join(", ", types.Select(t => t.Name)) + ") - one mod per folder", Array.Empty<string>());
                 context.Unload();
-                return (null, null);
+                return null;
             }
-            return (context, (IStoneMod)Activator.CreateInstance(types[0])!);
+            var mod = (IStoneMod)Activator.CreateInstance(types[0])!;
+            return new Loaded { Id = manifest.Id, Name = manifest.Name, Folder = folder, Mod = mod, Context = context, Manifest = manifest,
+                Assembly = assembly, Image = compiled.Result.Assembly };
         }
         catch (Exception e)
         {
             Failed("couldn't load: " + (e is TargetInvocationException { InnerException: { } inner } ? inner.Message : e.Message), Array.Empty<string>());
             context.Unload();
-            return (null, null);
+            return null;
         }
     }
 
     // Whether a folder's mod.json asks for full access (false: it doesn't, or it has no valid one).
-    private static bool IsTrusted(string folder)
+    private static bool IsTrusted(string folder) => TryManifest(folder)?.Trusted ?? false;
+
+    // A folder's mod.json; null if it has no valid one.
+    private static ModManifest? TryManifest(string folder)
     {
-        try { return ModManifest.Read(folder).Trusted; }
-        catch { return false; }
+        try { return ModManifest.Read(folder); }
+        catch { return null; }
     }
 
     // A context no loaded mod uses any more (its mods switched off, or never on): unloaded.

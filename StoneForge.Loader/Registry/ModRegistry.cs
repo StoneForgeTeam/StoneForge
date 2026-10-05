@@ -56,9 +56,13 @@ internal static class ModRegistry
         }
     }
 
+    /// <summary>Goes up each time a mod's entry or its being switched on changes (the Mods window, open, shows it again).</summary>
+    internal static int Changes { get; private set; }
+
     // Its entry this run (the Mods window shows it).
     internal static void Update(string id, bool enabled)
     {
+        Changes++;
         int index = All.FindIndex(m => m.Id == id);
         if (index >= 0)
             All[index] = All[index] with { Enabled = enabled };
@@ -90,6 +94,7 @@ internal static class ModRegistry
 
     internal static void SetFault(string id, string? reason)
     {
+        Changes++;
         int index = All.FindIndex(m => m.Id == id);
         if (index >= 0) All[index] = All[index] with { RuntimeError = reason };
     }
@@ -97,6 +102,7 @@ internal static class ModRegistry
     /// <summary>Switches a mod on or off for the next start.</summary>
     internal static void SetEnabled(string id, bool enabled)
     {
+        Changes++;
         if (enabled)
             Disabled.Remove(id);
         else
@@ -107,6 +113,7 @@ internal static class ModRegistry
     /// <summary>Allows a trusted mod to run (or takes that back), for this start and the next.</summary>
     internal static void SetAllowed(string id, bool allowed)
     {
+        Changes++;
         if (allowed)
             Allowed.Add(id);
         else

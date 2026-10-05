@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- **Mods can need other mods, and use them.** In mod.json, `"requires": ["othermod"]` names mods that must be there, and `"after": ["othermod"]` names mods to load after if they're there. Mods still load in folder order, except that each one waits for the mods it names.
+  - A mod whose required mod isn't running is switched off, and that's saved for the next start. The log and its page in the Mods window say which mod it needs and why it isn't running: not installed, didn't load, switched off, or not allowed yet. It comes back on when that mod is switched on. Switching it on yourself switches on what it requires, or it goes back off and says why. Requires that form a loop are refused. An "after" that forms a loop is ignored, with a warning.
+  - A mod is compiled against the mods it requires, so it can use their public types as its own. It's loaded with the copy of each that is running.
+  - Switching off a required mod switches off the mods that require it too, and they come back when it's switched on again. Switching on a mod switches on what it requires. Both are saved for the next start.
+  - The Mods window shows what a mod requires. It warns on a mod's page when other running mods require it and would be switched off with it, and it says when a mod was switched off along with one it requires. It refreshes as mods switch on and off.
+- **`context.Mods`: find another running mod.** `Get("othermod")` returns its mod class as an `IStoneMod`, or `Get<OtherMod>("othermod")` returns it as its own type, from a mod you require. `Get<T>()` finds one by its class. There are also `IsLoaded`, `Manifest(id)` and `All`, the mods loaded so far, in load order. `ModManifest` has `Requires` and `After`.
 - **`ModData`: a mod's own values in what the game keeps, under keys only that mod uses**, so two mods' `"kills"` are two values and neither touches the game's. `item.ModData(context)["kills"]` on an `InventoryItem`, `Item` or `GroundItem` (in the item's data: kept and saved with it wherever it goes), `SaveData.ModData(context)` (saved with the game), and `instance.ModData(context)` (variables on any instance). It has `Has`, `Remove`, `Keys` (the mod's own) and `GameKey` ("mymod:kills" in a map, "mymod__kills" as a variable). `SetData` with a hand-made prefix still works.
 - **A loot table takes any number of items.** The game's roll reads nine item slots. With those taken,
   `LootTable.Add` now puts an item in one of StoneForge's own, kept in the table's row as `slot10` onward, where the

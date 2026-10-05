@@ -100,14 +100,16 @@ internal static class ModSecurity
     // The only attributes a mod may put on its assembly or module.
     private static readonly HashSet<string> AllowedAssemblyAttributes = new(StringComparer.Ordinal) { "StoneForge.HookScriptAttribute" };
 
-    /// <summary>Every violation in the compilation's source (empty: allowed).</summary>
-    internal static List<string> Check(CSharpCompilation compilation)
+    /// <summary>Every violation in the compilation's source (empty: allowed). <paramref name="mods"/>: the assemblies of
+    /// the mods it requires, by name - their public types are allowed like its own (each was checked as it was compiled,
+    /// or is trusted).</summary>
+    internal static List<string> Check(CSharpCompilation compilation, IReadOnlySet<string>? mods = null)
     {
         var problems = new List<string>();
         foreach (var tree in compilation.SyntaxTrees)
         {
             var model = compilation.GetSemanticModel(tree, ignoreAccessibility: false);
-            new Walker(compilation, model, problems).Visit(tree.GetRoot());
+            new Walker(compilation, model, problems, mods).Visit(tree.GetRoot());
         }
         return problems;
     }
@@ -118,9 +120,11 @@ internal static class ModSecurity
         private readonly SemanticModel _model;
         private readonly List<string> _problems;
         private readonly HashSet<(string, int)> _seen = new();
+        private readonly IReadOnlySet<string>? _mods;
 
-        internal Walker(CSharpCompilation compilation, SemanticModel model, List<string> problems)
+        internal Walker(CSharpCompilation compilation, SemanticModel model, List<string> problems, IReadOnlySet<string>? mods)
         {
+            _mods = mods;
             _compilation = compilation;
             _model = model;
             _problems = problems;
@@ -432,7 +436,9 @@ internal static class ModSecurity
             }
         }
 
-        private bool FromSource(ISymbol symbol) => SymbolEqualityComparer.Default.Equals(symbol.ContainingAssembly, _compilation.Assembly);
+        // Its own source's - or a required mod's.
+        private bool FromSource(ISymbol symbol) => SymbolEqualityComparer.Default.Equals(symbol.ContainingAssembly, _compilation.Assembly)
+            || (_mods != null && symbol.ContainingAssembly is { } assembly && _mods.Contains(assembly.Name));
     }
 
     private static bool TypeAllowed(INamedTypeSymbol type)

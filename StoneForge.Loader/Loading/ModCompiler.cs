@@ -10,7 +10,9 @@ namespace StoneForge.Loader;
 // game starts: against a few assemblies only (the core types, collections, LINQ, Regex, and this loader), with
 // unsafe code off, and checked by ModSecurity before the result is ever loaded. A mod that doesn't compile or
 // isn't allowed isn't loaded; why is logged and shown in the Mods window. A trusted mod (mod.json "trusted": true)
-// is compiled against the whole framework and its own DLLs instead, unchecked: it can do anything.
+// is compiled against the whole framework and its own DLLs instead, unchecked: it can do anything. A mod is compiled
+// against the mods it requires (mod.json "requires") too, as they were compiled: their public types are its to use, as
+// StoneForge's are (each was checked itself, or is trusted - allowed by the player).
 internal static class ModCompiler
 {
     internal sealed record Result(byte[]? Assembly, List<string> Errors);
@@ -83,7 +85,9 @@ internal static class ModCompiler
         .Where(f => !Path.GetRelativePath(folder, f).Split(Path.DirectorySeparatorChar).Any(p => p is "bin" or "obj"))
         .OrderBy(f => f, StringComparer.OrdinalIgnoreCase).ToList();
 
-    internal static Result Compile(string folder, bool trusted = false)
+    /// <summary>A mod's source compiled - against <paramref name="required"/> too: the mods it requires (and theirs), as
+    /// compiled.</summary>
+    internal static Result Compile(string folder, bool trusted = false, IReadOnlyList<byte[]>? required = null)
     {
         var files = SourceFiles(folder);
         if (files.Count == 0)
@@ -100,7 +104,9 @@ internal static class ModCompiler
         var references = trusted
             ? TrustedReferences.Value.AddRange(Libraries(folder).Where(IsManaged).Select(f => MetadataReference.CreateFromFile(f)))
             : References.Value;
-        Compilation compilation = CSharpCompilation.Create(assemblyName, trees, references, options);
+        var modReferences = (required ?? Array.Empty<byte[]>()).Select(image => MetadataReference.CreateFromImage(image)).ToList();
+        Compilation compilation = CSharpCompilation.Create(assemblyName, trees, references.AddRange(modReferences), options);
+        var mods = modReferences.Select(r => compilation.GetAssemblyOrModuleSymbol(r)).OfType<IAssemblySymbol>().Select(a => a.Name).ToHashSet(StringComparer.Ordinal);
         // (Its GML\**\*.gml, for its bindings: <Folder>.Gml.)
         var additional = GmlCatalog.Files(folder).Select(path => (AdditionalText)new GmlText(Path.GetFullPath(path))).ToArray();
         GeneratorDriver driver = CSharpGeneratorDriver.Create(new[] { new GmlBindingGenerator() }, additional, parse);
@@ -113,7 +119,7 @@ internal static class ModCompiler
             .Select(Format).Take(20).ToList();
         if (errors.Count > 0)
             return new Result(null, errors);
-        var problems = trusted ? new List<string>() : ModSecurity.Check((CSharpCompilation)compilation);
+        var problems = trusted ? new List<string>() : ModSecurity.Check((CSharpCompilation)compilation, mods);
         if (problems.Count > 0)
             return new Result(null, problems.Take(20).Prepend("not allowed:").ToList());
 

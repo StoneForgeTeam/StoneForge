@@ -50,6 +50,10 @@ public sealed class ModContext
     /// <summary>The mod's own game objects (<see cref="GameObject"/>).</summary>
     public GameObjects Objects { get; }
 
+    /// <summary>The other mods running now, to find one by its ID and use what it offers (<see cref="ModList"/>; its
+    /// mod.json's <c>"requires"</c> lets a mod use another's types).</summary>
+    public ModList Mods { get; } = new();
+
     /// <summary>The mod's files: its own folder, the game's and Stoneshard's data folder (see <see cref="ModFiles"/>).</summary>
     public ModFiles Files => _files ?? throw new InvalidOperationException("No mod folder");
 
