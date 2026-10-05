@@ -119,8 +119,9 @@ public static unsafe partial class Game
     /// hooks run too (<see cref="Script.CallOriginal(ScriptCall)"/> skips them).</summary>
     public static GmValue CallScript(string name, Instance self, params GmValue[] args) => CallScript(name, self, self, args);
 
-    // A script with its own self and other.
-    internal static GmValue CallScript(string name, Instance self, Instance other, GmValue[] args)
+    // A script with its own self and other. With lent, a self or other the game lent for the call under way goes back as
+    // that pointer as it is - the original of a hooked call, whose self may be on its way out (its own Destroy event).
+    internal static GmValue CallScript(string name, Instance self, Instance other, GmValue[] args, bool lent = false)
     {
         CheckRunning(name);
         if (!ScriptIndexes.TryGetValue(name, out int index))
@@ -133,8 +134,12 @@ public static unsafe partial class Game
         var all = new GmValue[args.Length + 1];
         all[0] = index;
         args.CopyTo(all, 1);
-        return CallBuiltinTrusted("script_execute", self, other, all);
+        return lent
+            ? Call(Api->CallBuiltin, "script_execute", LentPointerOf(self), LentPointerOf(other), all)
+            : CallBuiltinTrusted("script_execute", self, other, all);
     }
+
+    private static IntPtr LentPointerOf(Instance instance) => instance.IsLentNow ? instance.Pointer : PointerOf(instance);
 
     /// <summary>Writes a line to the loader's log (dotnet\bridge.log - a second game running at once: bridge-2.log...).</summary>
     public static void Log(string text)

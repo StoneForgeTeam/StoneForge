@@ -138,4 +138,27 @@ public class ScriptHookTests : FakeGame
     [Fact]
     public void A_hook_needs_a_handler()
         => Assert.Throws<ArgumentException>(() => Hooks.AddScript("testmod", Double, null, null));
+
+    [Fact]
+    public void A_call_as_an_instance_on_its_way_out_still_runs_for_its_after_hooks()
+    {
+        // (A thrown item's turn: the game runs the script as the item, which its own Destroy event already counts gone.)
+        const int Thrown = 100_001;
+        var world = new FakeWorld { LendsIds = true };
+        World = world;
+        world.Add(Thrown, 300);
+        world.Active.Remove(Thrown);
+        var seen = new List<double>();
+        Hooks.AddScript("testmod", Double, null, call => seen.Add(call.Result.AsReal));
+
+        GmValue result;
+        bool replaced;
+        using (new CallbackLifetime())
+            replaced = Hooks.ScriptCalled(Double, new Instance((IntPtr)(FakeWorld.PointerBase + Thrown)), default, new GmValue[] { 4 }, out result);
+
+        Assert.True(replaced);
+        Assert.Equal(8, result.AsReal);
+        Assert.Equal(new[] { 8.0 }, seen);
+        Assert.Equal((IntPtr)(FakeWorld.PointerBase + Thrown), _scripts.LastSelf);
+    }
 }

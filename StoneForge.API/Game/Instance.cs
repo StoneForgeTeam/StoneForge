@@ -22,6 +22,10 @@ public readonly struct Instance : IEquatable<Instance>
     }
     private Instance(int id) { Pointer = IntPtr.Zero; _idPlusOne = id < 0 ? 0 : checked(id + 1); _lifetime = null; }
 
+    // Whether it's a pointer the game lent for the callback under way - good while that runs, even in the instance's own
+    // Destroy event, where the game already counts it gone (instance_exists: false).
+    internal bool IsLentNow => Pointer != IntPtr.Zero && _lifetime?.Active == true;
+
     internal bool CanUsePointer => Pointer != IntPtr.Zero && _lifetime?.Active == true
         && (Id < 0 || Game.CallBuiltin("instance_exists", Id).AsBool);
 

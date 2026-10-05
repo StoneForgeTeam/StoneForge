@@ -173,7 +173,8 @@ internal static unsafe class Hooks
     internal static GmValue CallOriginal(string name, Instance self, Instance other, GmValue[] args)
     {
         _passThrough = name;
-        try { return Game.CallScript(name, self, other, args); }
+        // (Its self and other as the game lent them: a thrown item's turn runs as it's destroyed, say.)
+        try { return Game.CallScript(name, self, other, args, lent: true); }
         // (Let go of if it wasn't used: the script isn't hooked in the game data, or its flag is off.)
         finally { _passThrough = null; }
     }

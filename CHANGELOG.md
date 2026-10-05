@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- **Fixed: a hooked script run as an instance on its way out failed.** The game runs some scripts as an instance in its own Destroy event (a thrown item's world turn, say), when it already counts the instance gone. Calling the game's own script for the after hooks, and `Script.CallOriginal`, looked the instance up by id and threw. That paused the mod after a few throws: for StoneshardMP, the other players lost the game. The original is called with the very instance the game lent for the call now.
 - **YYToolkit's console window ("YYToolkit Log") no longer opens with the game.** It opens only on request: a file named `yytoolkit-console.on` in the game's `dotnet` folder. `YYToolkit.log` in the game folder is written either way. (Part of `lib\YYToolkit\stoneforge.patch`.)
 - **Fixed: every GML error crashed the game instead of showing its error.** YYToolkit's hook on GameMaker's error function walks the game's scripts to name its stack trace, and that walk faults on this GameMaker version, before anything is logged. StoneForge's YYToolkit is built with a patch now (`lib\YYToolkit\stoneforge.patch`, shipped in `LICENSES`) that leaves the names out: a GML error shows the game's own error message (the script and what went wrong), and YYToolkit.log gets the details.
 - `WorldMap.Save()` writes the world map's fog and paper into the save data, as the game's save does. The save data holds them as of the last save otherwise (a new world's not at all), so call it before handing the save data to anything that will load it.
