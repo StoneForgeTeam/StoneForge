@@ -1,7 +1,7 @@
 using StoneForge;
 
-// The game's units on its grid (Units): cells and their positions, and who stands on a cell (the position grid, laid
-// out with FakeGame's input).
+// The game's units on its grid (Units): cells and their positions, who stands on a cell (the position grid, laid out
+// with FakeGame's input), and a unit taken out quietly (laid out with FakeGame's room and scripts).
 public class UnitsTests : FakeGame
 {
     public UnitsTests() => Units.ResetForTests();
@@ -40,5 +40,32 @@ public class UnitsTests : FakeGame
         // (One that's gone: no one.)
         Input.Units.Clear();
         Assert.True(Units.At(new Cell(1, 2)).IsNone);
+    }
+
+    [Fact]
+    public void A_removed_unit_leaves_its_faction_and_is_no_one_s_target_any_more()
+    {
+        const int Removed = 100_001, Other = 100_002, Third = 100_003;
+        var scripts = new FakeScripts();
+        scripts.Add("scr_enemy_poly_cell_clear", _ => GmValue.Undefined);
+        scripts.Add("scr_enemy_poly_cell_posgrid_clear", _ => GmValue.Undefined);
+        var leftFaction = new List<double>();
+        scripts.Add("scr_faction_map_remove", args => { leftFaction.Add(args[0].AsReal); return GmValue.Undefined; });
+        GameScripts = scripts;
+        var world = new FakeWorld();
+        World = world;
+        foreach (int id in new[] { Removed, Other, Third })
+            world.Add(id, (int)GameObjectId.o_unit);
+        world.Vars[Removed] = new() { ["x"] = 13, ["y"] = 13 };
+        world.Vars[Other] = new() { ["target"] = Removed, ["last_attacker"] = Third, ["skill_target"] = Removed };
+
+        Units.Remove(Instance.FromId(Removed));
+
+        Assert.Equal(new[] { Removed }, world.Destroyed);
+        Assert.Equal(new double[] { Removed }, leftFaction);
+        Assert.Equal(-4, world.Vars[Other]["target"].AsReal);
+        Assert.Equal(-4, world.Vars[Other]["skill_target"].AsReal);
+        // (One naming a unit still here keeps it.)
+        Assert.Equal(Third, world.Vars[Other]["last_attacker"].AsReal);
     }
 }

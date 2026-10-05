@@ -258,9 +258,11 @@ public static unsafe partial class Game
                 break;
             case GmKind.Instance:
                 var inst = value.AsInstance;
-                if (inst.CanUsePointer) { v.Kind = 6; v.Ptr = inst.Pointer; }
-                // (An instance known by its id goes over as that id - what GameMaker's functions take.)
-                else if (inst.Id >= 0) { v.Kind = 0; v.Real = inst.Id; }
+                // (A room instance goes over as its id - as the game's own code keeps one - even while its pointer is
+                // lent: a pointer kept in the game - in a list, a variable - outlives the instance, and reading through
+                // it once it's destroyed crashes the game. Only a struct or the global scope goes as its pointer.)
+                if (inst.Id >= 0) { v.Kind = 0; v.Real = inst.Id; }
+                else if (inst.CanUsePointer) { v.Kind = 6; v.Ptr = inst.Pointer; }
                 else if (inst.IsNone) v.Kind = 5;
                 else throw new InvalidOperationException("A temporary game handle was used after its callback returned.");
                 break;

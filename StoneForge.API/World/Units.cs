@@ -135,9 +135,10 @@ public static class Units
         return free is { Length: >= 2 } && free[0].AsReal >= 0 && free[1].AsReal >= 0 ? new Cell(free[0].AsInt, free[1].AsInt) : null;
     }
 
-    /// <summary>Takes a unit out of the world quietly: out of the grids and the player's list of units to run each turn,
-    /// the effects on it with it (<see cref="UnitEffects.RemoveAll"/>), then destroyed without its Destroy event - no
-    /// loot, corpse or kill credit.</summary>
+    /// <summary>Takes a unit out of the world quietly: out of the grids, the player's list of units to run each turn and
+    /// its faction's list, the effects on it with it (<see cref="UnitEffects.RemoveAll"/>), then destroyed without its Destroy event - no
+    /// loot, corpse or kill credit. The other units' references to it (their target, who last hit them...) are cleared:
+    /// their AI would read a unit that's gone.</summary>
     public static void Remove(Instance unit)
     {
         if (!unit.Exists)
@@ -155,8 +156,16 @@ public static class Units
         Game.CallScript("scr_enemy_poly_cell_posgrid_clear", unit, x, y);
         // (Even mid-turn: a destroyed unit can't stay in the list the turn walks.)
         RemoveFromTurns(listed => listed.Equals(unit), betweenTurnsOnly: false);
+        // (Out of its faction's list - o_unit's Destroy event, skipped below, does it: the units hostile to that
+        // faction look for their enemies there, and would read a unit that's gone.)
+        Factions.Leave(unit);
         UnitEffects.RemoveAll(unit);
         unit.Destroy(runDestroyEvent: false);
+        // (The others' references to it go too: a unit's AI reads its target - and who last hit it... - and one left
+        // naming a destroyed unit crashes the game.)
+        int gone = unit.Id;
+        foreach (Instance other in Instances.All(GameObjectId.o_unit))
+            ClearReferences(other, named => named.Id == gone);
     }
 
     /// <summary>Makes a unit of <paramref name="obj"/> (an enemy, an animal...) on a cell, as the game spawns one
@@ -198,7 +207,8 @@ public static class Units
     }
 
     /// <summary>Gives units back their own turns: their AI on, and in the player's list of units to run each turn again
-    /// (each once) - units another game ran, now ours to run. False with no player.</summary>
+    /// (each once) - units another game ran, now ours to run. Their references to units that are gone (a target they
+    /// fought while the other game ran them) are cleared first. False with no player.</summary>
     public static bool ReturnToTurns(IEnumerable<Instance> units)
     {
         Instance player = Player();
@@ -213,11 +223,32 @@ public static class Units
             if (unit.IsNone || !unit.Exists)
                 continue;
             Instance kept = unit.Persist();
+            // (What it was set on while another game ran it - the units it fought there - may be gone: its AI would
+            // read them.)
+            ClearReferences(kept, named => named.IsGone);
             kept["ai_is_on"] = true;
             if (listed.Add(kept))
                 list.Add(kept);
         }
         return true;
+    }
+
+    // A unit's variables that name another unit - who it's after, who last hit it, what its skill or dash aims at -
+    // which its AI reads (o_enemy's Create).
+    private static readonly string[] References =
+    {
+        "target", "last_attacker", "last_attacker_phantasm", "move_target", "skill_target", "target_choosed",
+        "counterattack_target", "dash_temp_target", "reflection_attacker", "target_out_VSN",
+    };
+
+    // Sets a unit's references to units that match to noone.
+    private static void ClearReferences(Instance unit, Func<Instance, bool> clear)
+    {
+        if (!unit.Exists)
+            return;
+        foreach (string name in References)
+            if (Instance.Of(unit.Get(name)) is { IsNone: false } named && clear(named))
+                unit[name] = -4;
     }
 
     private static Instance Controller() => Instances.All(GameObjectId.o_controller).FirstOrDefault();

@@ -67,6 +67,23 @@ public class ReliabilityTests : FakeGame
     }
 
     [Fact]
+    public void A_room_instance_goes_to_the_game_as_its_id_even_with_its_pointer_lent()
+    {
+        // (A pointer the game keeps - in a faction's list of units, a variable - outlives the instance: read once it's
+        // destroyed, it crashes the game. The game's own code keeps ids.)
+        using (new CallbackLifetime())
+        {
+            NValue instance = Game.ToNative(new Instance((IntPtr)42), new List<IntPtr>());
+            Assert.Equal(0, instance.Kind);
+            Assert.Equal(123, instance.Real);
+            // (A struct, with no id, still goes as its pointer.)
+            NValue structure = Game.ToNative(new Instance((IntPtr)43), new List<IntPtr>());
+            Assert.Equal(6, structure.Kind);
+            Assert.Equal((IntPtr)43, structure.Ptr);
+        }
+    }
+
+    [Fact]
     public void Expired_struct_cannot_be_dereferenced_or_passed_back()
     {
         Instance temporary;
