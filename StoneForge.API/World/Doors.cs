@@ -1,31 +1,45 @@
 namespace StoneForge;
 
-/// <summary>The ways out of a place - doors, stairs, a dungeon's entrance and exit (the game's o_transitions_door and its
-/// children) - found and used as the player clicking one does.</summary>
+/// <summary>The doors in a room that open and close (the game's o_door_parent and its kinds: a house's, a crypt's...),
+/// read and opened or closed as the game does it. (The ways out of a place are <see cref="Exits"/>.)</summary>
 public static class Doors
 {
     private static int _doors = -2;
 
-    /// <summary>The way out nearest a room position; none if the room has none.</summary>
-    public static Instance Nearest(Point position)
-    {
-        if (_doors == -2)
-            _doors = Gm.AssetGetIndex("o_transitions_door");
-        return Instances.Nearest(position.X, position.Y, _doors);
-    }
+    // (Tests: the game's objects looked up again.)
+    internal static void ResetForTests() => _doors = -2;
 
-    /// <summary>The way out nearest a cell (its middle).</summary>
-    public static Instance Nearest(Cell cell) => Nearest(cell.Center);
+    private static int DoorObject => _doors == -2 ? _doors = Gm.AssetGetIndex("o_door_parent") : _doors;
 
-    /// <summary>Uses a way out as the player clicking it does: through it at once when the player can reach it from where
-    /// it stands (scr_can_interract_posgrid), else walked to and then through (scr_delay_move_grid).</summary>
-    public static void Use(Instance door)
+    /// <summary>The room's doors - those off screen too with <paramref name="includeCulled"/> (whose own state can't be
+    /// read till they're back: <see cref="Instance.IsCulled"/>).</summary>
+    public static IReadOnlyList<Instance> All(bool includeCulled = false)
+        => DoorObject < 0 ? Array.Empty<Instance>() : Instances.All(DoorObject, includeCulled);
+
+    /// <summary>Whether it's a door (one of o_door_parent's kinds).</summary>
+    public static bool IsDoor(Instance instance)
+        => DoorObject >= 0 && instance.Exists && instance.Get("object_index").AsInt is var obj
+            && (obj == DoorObject || Gm.ObjectIsAncestor(obj, DoorObject));
+
+    /// <summary>Whether it's open, or opening (the game's scr_door_is_closed: by its animation).</summary>
+    public static bool IsOpen(Instance door) => !Game.CallScript("scr_door_is_closed", default, door).AsBool;
+
+    /// <summary>Whether it's locked.</summary>
+    public static bool IsLocked(Instance door) => door.Get("is_lock").AsBool;
+
+    /// <summary>Opens or closes it as the game does (its user event 3: the animation and its sound - and the noise, which
+    /// units nearby hear; its collision follows when the animation's done). Opening a locked door unlocks it, unless
+    /// <paramref name="unlock"/> is false (then it stays shut). Nothing if it's that way already.</summary>
+    public static void SetOpen(Instance door, bool open, bool unlock = true)
     {
-        if (door.IsNone || !door.Exists)
+        if (door.IsNone || !door.Exists || IsOpen(door) == open)
             return;
-        if (Game.CallScript("scr_can_interract_posgrid", door, door, door.Get("in_grid")).AsBool)
-            Game.CallBuiltinAs("event_user", door, door, 0);
-        else
-            Game.CallScript("scr_delay_move_grid", door);
+        if (open && IsLocked(door))
+        {
+            if (!unlock)
+                return;
+            door["is_lock"] = false;
+        }
+        Game.CallBuiltinAs("event_user", door, door, 3);
     }
 }

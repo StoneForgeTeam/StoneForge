@@ -2,8 +2,9 @@
 
 ## Unreleased
 
+- **`Doors`: the doors in a room that open and close** (the game's o_door_parent and its kinds). `Doors.All()` finds them (off-screen ones too with `includeCulled`), `IsOpen` and `IsLocked` read them, and `SetOpen(door, open)` opens or closes one as the game does - its own animation, sound and noise, its collision following - unlocking a locked one it opens unless `unlock: false`. The ways out of a place (an entrance, stairs, a map edge), which were `Doors`, are `Exits` now.
 - **`Cell` and `Point` instead of `(x, y)` tuples.** A `Cell` is a cell of the room's grid (`X`, `Y`), with its `Center` and `Corner` as `Point`s, `DistanceTo` (the game's tile distance, diagonals counting one), `IsNextTo`, `Neighbours`, `Offset` and `+` / `-`; `Cell.At(x, y)` is the cell a room position is in, and `Cell.Size` its 26 pixels. A `Point` is a position or offset in pixels, with `DistanceTo` and `+` / `-` / `*`. Both deconstruct (`var (x, y) = cell`).
-  - `Units`, `Mouse.Cell`, `Player.WalkTo` and `Doors.Nearest` take and give them, in place of `(int X, int Y)` tuples and `x, y` pairs. `Units.CellSize`, `CellOf(position)` and `PositionOf(cell)` are gone: `Cell.Size`, `Cell.At` and `Center`.
+  - `Units`, `Mouse.Cell`, `Player.WalkTo` and `Exits.Nearest` take and give them, in place of `(int X, int Y)` tuples and `x, y` pairs. `Units.CellSize`, `CellOf(position)` and `PositionOf(cell)` are gone: `Cell.Size`, `Cell.At` and `Center`.
   - **Changed from 0.4.0:** `WorldMap.PlayerCell` is a `WorldTile?` (the world map's cells are `WorldTile`s), `Draw.SpriteOrigin` a `Point`, and a `LookLayer`'s `SpriteOrigin` / `MaskOrigin` `Point`s. A mod comparing them with a tuple (`== (12, 7)`) compares with a `WorldTile` / `Point` instead; deconstructing them still works.
 - **`"stoneforge": "latest"` for a mod in development.** In mod.json, it means the mod is built against StoneForge
   as it is now. Any StoneForge loads it; the version check is skipped, and the log says "development build". Its
@@ -25,7 +26,7 @@
 - **`Draw`:** `Circle`, `Triangle`, `Line`, `SpriteExt` (scale, angle, tint, alpha), `Text` in a `GameFont` (`Default` or `Digits`), `PlainText` (the current font with a shadow, for the world), `SpriteExists` / `SpriteName` / `SpriteOrigin`, and `Frame(..., alpha)`.
 - **`Blackout`:** the screen held black, with a line of text, until `Hide()` or the next room change.
 - **`GameDialogs.Confirm(context, text, onYes, onNo)`:** the game's own confirmation panel asking a mod's question. Yes runs C#.
-- **`Journal`** (its task lists, `AddTask` / `RemoveTask`, the diary page), **`Contracts.Delete` / `DeleteQuestItems`**, **`ActionsLog.NameOf` / `Write`**, **`Steam.PersonaName`**, **`Doors.Nearest` / `Use`** (ways out, used as a click), and **`Turns.PassWorld` / `RunUnits`** (the game's turns, run by hand).
+- **`Journal`** (its task lists, `AddTask` / `RemoveTask`, the diary page), **`Contracts.Delete` / `DeleteQuestItems`**, **`ActionsLog.NameOf` / `Write`**, **`Steam.PersonaName`**, **`Exits.Nearest` / `Use`** (ways out, used as a click), and **`Turns.PassWorld` / `RunUnits`** (the game's turns, run by hand).
 - **Smaller additions:**
   - `Instance.Of(value)`: the instance a reference or id names.
   - `Instances.Count` and `Instances.Nearest`, by object index.
