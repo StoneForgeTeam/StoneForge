@@ -1,6 +1,6 @@
 # StoneForge changes
 
-## Unreleased
+## 0.6.0 — Events, containers and crash reports
 
 - **Fixed: `Game.CallBuiltin` with a name that isn't a built-in function crashed the game.** For a script's name, YYToolkit fetches the script as it looks the name up, and that faults on this GameMaker version. The bridge checks the name with the game's own lookup first (once a name): one that isn't a built-in is a `GameCallException` ("no built-in function named ...: a script's name? Game.CallScript"). Putting an item in a closed container hit it (`ds_map_clone` is one of the game's scripts).
 - **More events:**
