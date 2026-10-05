@@ -648,17 +648,29 @@ public abstract unsafe class FakeGame : IDisposable
     // (Code entries' names, each at one address for good - as the game's are, which the hooks cache by address.)
     private static readonly Dictionary<string, IntPtr> CodeNames = new();
 
-    /// <summary>A code entry run as the game runs it, on a room instance of the fake world (its pointer lent, by id):
-    /// the mods' before, the game's own - <paramref name="game"/>, what it changes - and their after.</summary>
-    protected static void RunCode(string code, int self, Action? game = null)
+    /// <summary>A code entry run as the game runs it, on a room instance of the fake world (its pointer lent, by id) -
+    /// with <paramref name="other"/>, that one as its other: the mods' before, the game's own - <paramref name="game"/>,
+    /// what it changes - and their after.</summary>
+    protected static void RunCode(string code, int self, Action? game = null, int other = -1)
+    {
+        if (!CodeNames.TryGetValue(code, out IntPtr name))
+            CodeNames[code] = name = (IntPtr)Game.Utf8(code);
+        IntPtr otherPointer = other < 0 ? IntPtr.Zero : (IntPtr)(FakeWorld.PointerBase + other);
+        delegate* unmanaged<byte*, IntPtr, IntPtr, int> before = &Hooks.OnCodeBefore;
+        delegate* unmanaged<byte*, IntPtr, IntPtr, void> after = &Hooks.OnCodeAfter;
+        before((byte*)name, (IntPtr)(FakeWorld.PointerBase + self), otherPointer);
+        game?.Invoke();
+        after((byte*)name, (IntPtr)(FakeWorld.PointerBase + self), otherPointer);
+    }
+
+    /// <summary>The mods' before handlers of a code entry alone, as the bridge runs them: 1 if one of them stops the game's
+    /// own code.</summary>
+    protected static int RunBefore(string code, int self)
     {
         if (!CodeNames.TryGetValue(code, out IntPtr name))
             CodeNames[code] = name = (IntPtr)Game.Utf8(code);
         delegate* unmanaged<byte*, IntPtr, IntPtr, int> before = &Hooks.OnCodeBefore;
-        delegate* unmanaged<byte*, IntPtr, IntPtr, void> after = &Hooks.OnCodeAfter;
-        before((byte*)name, (IntPtr)(FakeWorld.PointerBase + self), IntPtr.Zero);
-        game?.Invoke();
-        after((byte*)name, (IntPtr)(FakeWorld.PointerBase + self), IntPtr.Zero);
+        return before((byte*)name, (IntPtr)(FakeWorld.PointerBase + self), IntPtr.Zero);
     }
 
     /// <summary>A frame, as the game's: the mods' frame handlers.</summary>
@@ -670,6 +682,7 @@ public abstract unsafe class FakeGame : IDisposable
 
     protected FakeGame()
     {
+        Game.ResetScriptIndexesForTests();
         Game.Api = Api;
         Game.MarkGameThread();
         Game.Running = true;

@@ -1,7 +1,8 @@
 namespace StoneForge;
 
 /// <summary>The player's character: its attributes as the game reads them (scr_atr - level, head, name...), whether enemies
-/// are after it, XP as the game gives it, its own stats and psyche, and walking it somewhere as a click does.
+/// are after it, XP as the game gives it, its own stats and psyche, and walking it somewhere as a click does; and as it
+/// dies (<see cref="OnDying"/>) or levels up (<see cref="OnLevelUp"/>).
 /// <code>
 /// if (!Player.InCombat)
 ///     Player.GiveXp(50);
@@ -22,6 +23,35 @@ public static class Player
 
     /// <summary>Its level.</summary>
     public static int Level => (int)Attribute("LVL").AsReal;
+
+    /// <summary>Runs as the player is about to die (their health gone, nothing that saves them left: o_player's user
+    /// event 6), before the game's death - its corpse, the death screen, the end of a permadeath character. Return true
+    /// to stop it: the player stays as they are, and bringing them back - their health, a place to come back to - is the
+    /// mod's. Any handler returning true stops it.</summary>
+    public static void OnDying(ModContext context, Func<bool> handler)
+        => context.OnCode("gml_Object_o_player_Other_16", before: (_, _) => handler());
+
+    /// <summary>Runs as the player levels up (in its Step, as its XP passes the next level - more than one level at once
+    /// counts once): the level it's at now. Not a level a save loads with.</summary>
+    public static void OnLevelUp(ModContext context, Action<int> handler)
+    {
+        int before = -1;
+        context.OnCode("gml_Object_o_player_Step_0",
+            before: (_, _) =>
+            {
+                before = Level;
+                return false;
+            },
+            after: (_, _) =>
+            {
+                if (before < 0)
+                    return;
+                int was = before, now = Exists ? Level : was;
+                before = -1;
+                if (now > was)
+                    handler(now);
+            });
+    }
 
     /// <summary>The share of its maximum health it can have now, in % (the game's Health_Threshold: wounds and hunger lower
     /// it) - 100 without one. Its HUD's bar fills to max_hp × this / 100.</summary>

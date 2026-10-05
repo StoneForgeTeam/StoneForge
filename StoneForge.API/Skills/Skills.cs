@@ -4,7 +4,8 @@ namespace StoneForge;
 /// game's own - its objects the patcher added (an active's o_skill_&lt;key&gt; and its icon, children of the game skill's;
 /// a passive's o_pass_skill_&lt;key&gt;, one of the game's passives), an active's row of the skills table, its name, icon
 /// and effect (<see cref="ModSkill.OnCast"/>, a passive's stats and reactions) from StoneForge - on its tab of the skills
-/// menu (its Tab, in its Group), learnt with ability points.</summary>
+/// menu (its Tab, in its Group), learnt with ability points. And any skill used, the game's or a mod's
+/// (<see cref="OnUsed"/>).</summary>
 public static class Skills
 {
     // A page holds 9 (three rows of three, as the game's); a mod with more has more pages.
@@ -23,6 +24,19 @@ public static class Skills
     private static readonly Dictionary<int, Entry> ByObject = new();
     // The pages' backgrounds, by how many skills a page has (drawn once).
     private static readonly Dictionary<int, int> Backgrounds = new();
+
+    /// <summary>Runs as a skill has been used - anyone's, the player's or a unit's, the game's or a mod's: its energy
+    /// spent, its cooldown started, a spell's miracle or fumble rolled (the skill's user event 3). Not the plain actions
+    /// that are skills in name only - moving, throwing an item, crafting, setting a trap, dousing, disarming, a bed or a
+    /// dummy set up, a shot's attack mode. Its skill, caster and target are kept by id.</summary>
+    public static void OnUsed(ModContext context, Action<SkillCast> handler)
+        => context.OnCode("gml_Object_o_skill_Other_13", after: (skill, _) =>
+        {
+            if (skill.IsNone || !skill.Exists)
+                return;
+            Instance caster = Instance.Of(skill.Get("owner")), target = Instance.Of(skill.Get("target"));
+            handler(new SkillCast(skill.Persist(), caster, target, skill.Get("is_crit").AsBool));
+        });
 
     /// <summary>Adds a mod's skill, active or passive. Call it from <see cref="IStoneMod.Load"/>.</summary>
     public static void Add(ModContext context, ModSkillBase skill)

@@ -114,6 +114,9 @@ public static unsafe partial class Game
 
     private static readonly Dictionary<string, int> ScriptIndexes = new();
 
+    // (Tests: each fake game numbers its scripts its own way.)
+    internal static void ResetScriptIndexesForTests() => ScriptIndexes.Clear();
+
     /// <summary>Calls a GML script of the game ("scr_atr"), as <paramref name="self"/> (the global scope if
     /// none) - through the game's own script_execute, which works on the bytecode runner. A hooked script's
     /// hooks run too (<see cref="Script.CallOriginal(ScriptCall)"/> skips them).</summary>

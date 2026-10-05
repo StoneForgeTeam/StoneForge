@@ -60,6 +60,12 @@ public static class Items
     public static bool Give(ModItem item, ItemQuality quality = ItemQuality.Rolled, double? durabilityPercent = null)
         => Give(item.GameKey, quality, durabilityPercent);
 
+    /// <summary>The mod item of type <typeparamref name="T"/> a mod added (<see cref="Add(ModContext, ModItem)"/>).
+    /// Throws if none was.</summary>
+    public static T Get<T>() where T : ModItem
+        => ByName.Values.OfType<T>().FirstOrDefault(item => item.GetType() == typeof(T))
+            ?? throw new InvalidOperationException($"No {typeof(T).Name} has been added: add it first (Items.Add, in the mod's Load).");
+
     /// <summary>Whether the game knows a weapon or armour by this name (its own, or a mod's once added).</summary>
     public static bool Exists(string name)
     {
@@ -248,7 +254,7 @@ public static class Items
             Game.Log($"Removed {removed.Count} item(s) of mods that aren't loaded: {string.Join(", ", removed.GroupBy(n => n).Select(g => g.Count() > 1 ? $"{g.Key} x{g.Count()}" : g.Key))}");
     }
 
-    private static string? IdName(Instance instance)
+    internal static string? IdName(Instance instance)
     {
         GmValue data = instance.Get("data");
         if (data.Kind != GmKind.Real)

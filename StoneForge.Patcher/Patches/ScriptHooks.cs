@@ -30,6 +30,8 @@ internal static class ScriptHooks
         "scr_global_turn",
         // (SaveData.OnLoaded / OnSaving: a save read, or about to be written.)
         "scr_slotLoad", "scr_slotSaveUpdate",
+        // (Quests: started, a step on, done, failed.)
+        "scr_quest_start", "scr_quest_set_progress", "scr_quest_set_complete", "scr_quest_set_failed",
     };
 
     /// <summary>Each script made hookable; how many could be.</summary>

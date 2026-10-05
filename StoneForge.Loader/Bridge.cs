@@ -58,6 +58,7 @@ public static unsafe class Bridge
             try { ModsMenu.Install(loader); }
             finally { MainMenu.EndLoad(); }
             Items.Install(loader);
+            Containers.Install(loader);
             Consumables.Install(loader);
             Skills.Install(loader);
             GameObjects.Install(loader);
