@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- **Fixed: `Game.CallBuiltin` with a name that isn't a built-in function crashed the game.** For a script's name, YYToolkit fetches the script as it looks the name up, and that faults on this GameMaker version. The bridge checks the name with the game's own lookup first (once a name): one that isn't a built-in is a `GameCallException` ("no built-in function named ...: a script's name? Game.CallScript"). Putting an item in a closed container hit it (`ds_map_clone` is one of the game's scripts).
 - **More events:**
   - `Player.OnDying(() => bool)`: the player is about to die, before the game's death. Return true to stop it; bringing them back is the mod's. `Player.OnLevelUp(level)`: a level-up in play, not a level a save loads with.
   - **`Inventory`: what the player carries** (the items the player's inventory owns, worn and in hand included, as the game's save counts them): `Items()`, with `OnAdded(item)`, `OnRemoved(item)` and `OnEquipped(item, on)`, compared once a frame so every way an item comes or goes counts. A game loaded starts afresh. An `InventoryItem` has its `Slot`, `Name`, `IsEquipped`, `Stack` and `Owner`. What's in a bag isn't in it: a bag's contents are saved in the bag while it's closed (`Containers`).

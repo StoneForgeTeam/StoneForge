@@ -286,10 +286,33 @@ static void ApiLog(const char* Text)
 	Log(std::string("[C#] ") + (Text ? Text : ""));
 }
 
+// Whether a name is one of the game's built-in functions, as the game looks it up (Code_Function_Find: safe for any
+// name) - asked once a name. A script's name (index 100000 up) isn't: calling one as a built-in has YYToolkit fetch the
+// script (GetScriptData), which faults on this GameMaker version - a crash for a misspelt call. Scripts go through
+// script_execute (Game.CallScript).
+static std::unordered_map<std::string, int> g_BuiltinIndexes;
+static bool IsBuiltinFunction(const char* Name)
+{
+	auto found = g_BuiltinIndexes.find(Name);
+	if (found == g_BuiltinIndexes.end())
+	{
+		int index = -1;
+		if (!AurieSuccess(g_Yytk->GetNamedRoutineIndex(Name, &index)))
+			index = -1;
+		found = g_BuiltinIndexes.emplace(Name, index).first;
+	}
+	return found->second >= 0 && found->second < 100000;
+}
+
 static int ApiCallBuiltin(const char* Name, void* Self, void* Other, const NValue* Args, int ArgCount, NValue* Result)
 {
 	*Result = {}; Result->Kind = 5;
 	if (!RequireGameThread()) return 0;
+	if (!IsBuiltinFunction(Name))
+	{
+		t_LastError = std::string("no built-in function named ") + Name + " (a script's name? Game.CallScript)";
+		return 0;
+	}
 	RValue result;
 	// (Called with no instance: as the global scope, as GML's own code at global scope is. With none at all,
 	// a script run through script_execute reads and writes its variables through a null instance and
