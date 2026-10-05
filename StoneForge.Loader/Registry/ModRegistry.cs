@@ -64,6 +64,30 @@ internal static class ModRegistry
             All[index] = All[index] with { Enabled = enabled };
     }
 
+    // Hook conflicts found this session (Hooks.Conflicted), each on both mods' pages.
+    private static readonly List<HookConflict> HookConflicts = new();
+
+    internal static void AddConflict(HookConflict conflict) => HookConflicts.Add(conflict);
+
+    /// <summary>The hook conflicts a mod is in, by the other mod (its name): each call, and whose result the game got.</summary>
+    internal static List<(string With, List<string> Calls)> ConflictsOf(string id)
+        => HookConflicts.Where(c => c.Earlier == id || c.Winner == id)
+            .GroupBy(c => c.Earlier == id ? c.Winner : c.Earlier)
+            .Select(g => (NameOf(g.Key), g.Select(c => c.IsScript ? $"{c.Name} - {NameOf(c.Winner)}'s result is used" : $"{c.Name} - skipped for both")
+                .Distinct().ToList()))
+            .ToList();
+
+    /// <summary>Where a mod might conflict (Hooks.Overlaps, as the hooks are now), by each other mod (its name): the calls
+    /// both hook before they run, at the same order.</summary>
+    internal static List<(string With, List<string> Calls)> OverlapsOf(string id)
+        => Hooks.Overlaps().Where(o => o.Mods.Contains(id))
+            .SelectMany(o => o.Mods.Where(other => other != id).Select(other => (Other: other, Call: $"{o.Name} ({HookOrder.Name(o.Order)})")))
+            .GroupBy(pair => pair.Other)
+            .Select(g => (NameOf(g.Key), g.Select(pair => pair.Call).Distinct().ToList()))
+            .ToList();
+
+    private static string NameOf(string id) => All.FirstOrDefault(m => m.Id == id)?.Name ?? id;
+
     internal static void SetFault(string id, string? reason)
     {
         int index = All.FindIndex(m => m.Id == id);

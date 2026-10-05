@@ -2,6 +2,23 @@
 
 ## Unreleased
 
+- **Hook conflicts aren't silent any more.** When two mods' before hooks both replace the same call, StoneForge logs
+  it once, naming both mods and the script or code entry, and shows it on both mods' pages in the Mods window. That's a
+  script both replace (the game's code is skipped and the later hook's result is used) or a code entry both skip. It's
+  found as it happens: a hook that only sometimes replaces isn't a conflict until it does. A mod's own hooks never
+  conflict with each other.
+- **Hook order: when a hook runs among every mod's on the same call.** It's an `order` number, lower first, then load
+  order within the same number. It's an optional last parameter on `Script.Before` / `After` / `Replace`, on code
+  events' `Before` / `After`, and on `ModContext.OnScript` / `OnCode`. `HookOrder` names some values: `First` (-200),
+  `Early` (-100), `Normal` (0, the default), `Late` (100) and `Last` (200). Any number between works too, such as
+  `HookOrder.Late + 10` for just after the Late ones. A mod that must have the last word on a script hooks it `Last`
+  (its result's the one used), and one that only watches hooks it `First`.
+- **Where mods might conflict, before they do.** Two or more mods with before hooks on the same script or code entry at
+  the same `HookOrder` (so which runs first is only load order) are logged once the mods have loaded, a line for each
+  pair of mods ("Possible hook conflicts"). Each mod's page in the Mods window gets a Possible Conflicts section at the
+  bottom, under its settings and only when there's something in it. It has a line for each other mod: yellow for calls
+  both replaced, grey for calls both hook at the same order. The tooltips list the calls, so the page isn't flooded.
+  Moving a hook to another order ends it.
 - **`LootTables`: the game's loot tables**, what containers in the world roll as they're first opened (its `drop_table`). `Names`, `Get(name)`, and `Edit(context, name, table => ...)` / `EditAll(context, which, ...)`, which wait for the game to load its tables when called from a mod's Load. A `LootTable` has nine `Slots` (an item, a kind of item such as "gem", or several to choose from, with a chance, a count range and tags) and five `EquipmentSlots` (kinds, tags, rarities, a durability range and a chance), read and set, `Clear()`ed, or filled with `Add("wine", 33, 1, 2)` / `Add(myConsumable, ...)`. Changes last for the rest of the game's run. `Containers.SetLootTable(chest, key, tier)` and `LootTableOf(chest)` choose the table a container rolls from, before it's first opened.
 
 ## 0.6.0 — Events, containers and crash reports

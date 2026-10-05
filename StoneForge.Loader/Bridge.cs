@@ -30,6 +30,8 @@ public static unsafe class Bridge
         callbacks->OnScript = &Hooks.OnScript;
         Hooks.BeforeFrame = () => { ModManager.Frame(); DevelopmentHost.Frame(); };
         Hooks.Faulted = (name, reason) => { ModRegistry.SetFault(name, reason); ModManager.QueueFault(name); };
+        // (Two mods replacing the same call: on both mods' pages in the Mods window.)
+        Hooks.Conflicted = ModRegistry.AddConflict;
         try
         {
             Game.Log($"StoneForge {LoaderVersion.Text} on .NET {Environment.Version}");

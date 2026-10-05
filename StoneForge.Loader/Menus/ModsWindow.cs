@@ -18,6 +18,8 @@ internal sealed class ModsWindow : UISettingsWindow
     private int _lastTab;
     // Icons, loaded once (-1: none).
     private readonly Dictionary<string, int> _icons = new();
+    // Mods whose every possibly conflicting hook is listed (Possible Conflicts' toggle; collapsed until opened).
+    private readonly HashSet<string> _hooksShown = new();
 
     public ModsWindow() : base("Mods") { }
 
@@ -66,9 +68,61 @@ internal sealed class ModsWindow : UISettingsWindow
         _enabled.Changed += on => SetEnabled(mod, on);
         // (Its settings, if it's loaded and has some.)
         SettingsPage.Add(Page, mod.Id, () => tab.Open());
+        Conflicts(mod.Id, () => tab.Open());
+    }
+
+    // Possible Conflicts, at the bottom, out of the way (only when there are any): a line for each other mod - the calls
+    // themselves in its tooltip. Calls both mods' hooks replaced (a conflict that happened: whose result the game got),
+    // then calls both hook before they run at the same order (one that might: which runs first is load order).
+    private void Conflicts(string id, Action reopen)
+    {
+        var conflicts = ModRegistry.ConflictsOf(id);
+        var overlaps = ModRegistry.OverlapsOf(id);
+        if (conflicts.Count == 0 && overlaps.Count == 0)
+            return;
+        Page.AddHeader("Possible Conflicts");
+        foreach (var (with, calls) in conflicts)
+            HoverLine($"With {with}: both replaced {Count(calls.Count, "call")}", WarningColour,
+                "Both mods' hooks replaced these calls (the game's own code was skipped):", calls);
+        foreach (var (with, calls) in overlaps)
+            HoverLine($"With {with}: both hook {Count(calls.Count, "call")} at the same order", Draw.Muted,
+                "Both mods hook these before they run, at the same order - which runs first is load order. A conflict only if "
+                + "both replace one of them (HookOrder sets the order):", calls);
+        // Every one of them, a line each - collapsed until asked for (the page made again, open or shut).
+        int total = conflicts.Sum(c => c.Calls.Count) + overlaps.Sum(o => o.Calls.Count);
+        bool shown = _hooksShown.Contains(id);
+        var toggle = Page.AddText(shown ? "[-] Hide the hooks" : $"[+] Show every hook ({total})", Draw.Muted);
+        toggle.HitTest = true;
+        toggle.Tooltip = shown ? "Collapse the list" : "List every call above, with the mod it's shared with";
+        toggle.Clicked += _ =>
+        {
+            if (!_hooksShown.Remove(id))
+                _hooksShown.Add(id);
+            reopen();
+        };
+        if (!shown)
+            return;
+        foreach (var (with, calls) in conflicts)
+            foreach (string call in calls)
+                Page.AddText($"    {call}  (with {with})", WarningColour);
+        foreach (var (with, calls) in overlaps)
+            foreach (string call in calls)
+                Page.AddText($"    {call}  (with {with})", Draw.Muted);
     }
 
     protected override void OnClosed() => _enabled = null;
+
+    // A line with a list in its tooltip (the first few, and how many more).
+    private void HoverLine(string text, int colour, string heading, List<string> items)
+    {
+        const int Shown = 12;
+        var label = Page.AddText(text, colour);
+        label.HitTest = true;
+        label.Tooltip = heading + "\n" + string.Join("\n", items.Take(Shown))
+            + (items.Count > Shown ? $"\n... and {items.Count - Shown} more" : "");
+    }
+
+    private static string Count(int count, string what) => $"{count} {what}{(count == 1 ? "" : "s")}";
 
     // Every mod switched on / off, the open page's checkbox with them.
     private void SetAll(bool on)

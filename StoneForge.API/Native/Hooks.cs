@@ -88,11 +88,12 @@ internal static unsafe class Hooks
     internal static readonly List<(string Name, IStoneMod Mod)> Mods = new();
     private static readonly System.Diagnostics.Stopwatch Clock = System.Diagnostics.Stopwatch.StartNew();
     private static double _lastFrame;
-    private static readonly Dictionary<string, List<(string Mod, Func<Instance, Instance, bool>? Before, Action<Instance, Instance>? After)>> Code = new();
+    private static readonly Dictionary<string, List<(string Mod, Func<Instance, Instance, bool>? Before, Action<Instance, Instance>? After, int Order)>> Code = new();
     // Code names by the engine's pointer to them (stable for the game's lifetime): no string per call.
     private static readonly Dictionary<IntPtr, string> Names = new();
 
-    internal static void Add(string mod, string codeName, Func<Instance, Instance, bool>? before, Action<Instance, Instance>? after)
+    internal static void Add(string mod, string codeName, Func<Instance, Instance, bool>? before, Action<Instance, Instance>? after,
+        int order = HookOrder.Normal)
     {
         if (!Code.TryGetValue(codeName, out var list))
         {
@@ -102,7 +103,64 @@ internal static unsafe class Hooks
             try { Game.Api->HookCode(p); }
             finally { NativeMemory.Free(p); }
         }
-        list.Add((mod, before, after));
+        list.Insert(Place(list.Select(h => h.Order), order), (mod, before, after, order));
+    }
+
+    // Where a hook of this order goes among a name's: after every one of its order or earlier - by order, then in the
+    // order they were added.
+    private static int Place(IEnumerable<int> orders, int order)
+    {
+        int at = 0, i = 0;
+        foreach (var existing in orders)
+        {
+            i++;
+            if (existing <= order)
+                at = i;
+        }
+        return at;
+    }
+
+    // ---- two mods replacing the same call ----
+
+    /// <summary>A conflict found (once per name and pair of mods): the loader shows it in the Mods window.</summary>
+    internal static Action<HookConflict>? Conflicted;
+    private static readonly HashSet<(string Name, string Earlier, string Winner)> Conflicts = new();
+
+    // Another mod's before hook replaced (skipped) a call one had already: said once.
+    private static void Conflict(string name, bool script, string earlier, string winner)
+    {
+        if (!Conflicts.Add((name, earlier, winner)))
+            return;
+        var conflict = new HookConflict(name, script, earlier, winner);
+        Game.Log("Hook conflict: " + conflict.Describe(mod => mod));
+        Conflicted?.Invoke(conflict);
+    }
+
+    /// <summary>The conflicts found so far.</summary>
+    internal static IReadOnlyCollection<(string Name, string Earlier, string Winner)> ConflictsFound => Conflicts;
+
+    // (Tests: none found yet.)
+    internal static void ResetConflictsForTests() => Conflicts.Clear();
+
+    /// <summary>Where mods might conflict: two or more of them with before hooks on the same script or code entry at the
+    /// same order (StoneForge's own aside), by name.</summary>
+    internal static List<HookOverlap> Overlaps()
+    {
+        var overlaps = new List<HookOverlap>();
+        void Find(string name, bool script, IEnumerable<(string Mod, int Order)> befores)
+        {
+            foreach (var group in befores.Where(b => b.Mod != LoaderId).GroupBy(b => b.Order))
+            {
+                var mods = group.Select(b => b.Mod).Distinct().ToList();
+                if (mods.Count > 1)
+                    overlaps.Add(new HookOverlap(name, script, group.Key, mods));
+            }
+        }
+        foreach (var (name, list) in Scripts)
+            Find(name, true, list.Where(h => h.Before != null).Select(h => (h.Mod, h.Order)));
+        foreach (var (name, list) in Code)
+            Find(name, false, list.Where(h => h.Before != null).Select(h => (h.Mod, h.Order)));
+        return overlaps.OrderBy(o => o.Name, StringComparer.Ordinal).ToList();
     }
 
     private static string Name(byte* p)
@@ -118,7 +176,7 @@ internal static unsafe class Hooks
     // Hooked scripts: handlers by script name. Each one's global.__smh_<name> flag (StoneModHooks' block
     // checks it) is set when the first handler arrives, and set again about once a second in case the game
     // ever clears globals.
-    private static readonly Dictionary<string, List<(string Mod, Func<ScriptCall, bool>? Before, Action<ScriptCall>? After)>> Scripts = new();
+    private static readonly Dictionary<string, List<(string Mod, Func<ScriptCall, bool>? Before, Action<ScriptCall>? After, int Order)>> Scripts = new();
     // A script being called as the game's own version (CallOriginal): its hook block's call into C# is let through
     // once - the call's own, the first thing its body does - so calls it makes in turn are hooked as ever.
     private static string? _passThrough;
@@ -149,7 +207,8 @@ internal static unsafe class Hooks
     // (StoneForge's own scripts - scr_stonemod_* - call into C# themselves: only mods' hooks are checked.)
     internal const string LoaderId = "StoneForge";
 
-    internal static void AddScript(string mod, string scriptName, Func<ScriptCall, bool>? before, Action<ScriptCall>? after = null)
+    internal static void AddScript(string mod, string scriptName, Func<ScriptCall, bool>? before, Action<ScriptCall>? after = null,
+        int order = HookOrder.Normal)
     {
         if (before == null && after == null)
             throw new ArgumentException("A script hook needs a before or an after handler.");
@@ -165,7 +224,7 @@ internal static unsafe class Hooks
             if (Game.Running)
                 Game.Global["__smh_" + scriptName] = true;
         }
-        list.Add((mod, before, after));
+        list.Insert(Place(list.Select(h => h.Order), order), (mod, before, after, order));
     }
 
     /// <summary>Calls a script's own code, skipping its hooks for this call only (not for the calls it makes, a
@@ -244,11 +303,17 @@ internal static unsafe class Hooks
             return false;
         var call = new ScriptCall(name, self, other, args);
         bool replace = false;
+        // (Which mod's before hook replaced it - another's doing it too is a conflict.)
+        string? replacedBy = null;
         var handlers = list.ToArray();
-        foreach (var (mod, before, _) in handlers)
+        foreach (var (mod, before, _, _) in handlers)
         {
-            if (before != null)
-                replace |= Invoke(mod, name + " (script)", () => before(call), before);
+            if (before == null || !Invoke(mod, name + " (script)", () => before(call), before))
+                continue;
+            if (replacedBy != null && replacedBy != mod)
+                Conflict(name, script: true, replacedBy, mod);
+            replacedBy = mod;
+            replace = true;
         }
         // (After handlers: the call is made here - the game's own version, unless a before handler replaced it - and
         // they see its result, and can change it.)
@@ -264,7 +329,7 @@ internal static unsafe class Hooks
                 }
                 replace = true;
             }
-            foreach (var (mod, _, after) in handlers)
+            foreach (var (mod, _, after, _) in handlers)
             {
                 if (after != null)
                     Invoke(mod, name + " (script after)", () => { after(call); return false; }, after);
@@ -454,14 +519,16 @@ internal static unsafe class Hooks
         Game.Running = true;
         if (!Code.TryGetValue(Name(codeName), out var list))
             return 0;
-        bool skip = false;
-        foreach (var (mod, before, _) in list.ToArray())
+        string? skippedBy = null;
+        foreach (var (mod, before, _, _) in list.ToArray())
         {
-            if (before == null)
+            if (before == null || !Invoke(mod, Name(codeName) + " (before)", () => before(new Instance(self), new Instance(other)), before))
                 continue;
-            skip |= Invoke(mod, Name(codeName) + " (before)", () => before(new Instance(self), new Instance(other)), before);
+            if (skippedBy != null && skippedBy != mod)
+                Conflict(Name(codeName), script: false, skippedBy, mod);
+            skippedBy = mod;
         }
-        return skip ? 1 : 0;
+        return skippedBy != null ? 1 : 0;
     }
 
     private static void CodeAfterCore(byte* codeName, IntPtr self, IntPtr other)
@@ -469,7 +536,7 @@ internal static unsafe class Hooks
         Game.Running = true;
         if (!Code.TryGetValue(Name(codeName), out var list))
             return;
-        foreach (var (mod, _, after) in list.ToArray())
+        foreach (var (mod, _, after, _) in list.ToArray())
         {
             if (after == null)
                 continue;

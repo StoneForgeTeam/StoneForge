@@ -167,6 +167,17 @@ internal static class ModManager
         }
         Startup.Finish(Mods.Count, Startup.Failed);
         Game.Log($"{Mods.Count} mod(s) loaded" + (Startup.Failed > 0 ? $", {Startup.Failed} folder(s) not" : ""));
+        // (Where mods might conflict - the same calls hooked before they run at the same order: said once they're all in,
+        // a line for each pair of mods.)
+        var pairs = Hooks.Overlaps()
+            .SelectMany(o => o.Mods.SelectMany(m => o.Mods.Where(n => string.CompareOrdinal(m, n) < 0).Select(n => (Pair: (m, n), o.Name))))
+            .GroupBy(p => p.Pair);
+        foreach (var pair in pairs)
+        {
+            var names = pair.Select(p => p.Name).Distinct().ToList();
+            Game.Log($"Possible hook conflicts: {pair.Key.m} and {pair.Key.n} both hook {names.Count} call(s) before they run, at the same order "
+                + $"({string.Join(", ", names.Take(8))}{(names.Count > 8 ? ", ..." : "")}) - a conflict only if both replace one");
+        }
     }
 
     // A folder's mod: its details registered (the Mods window), and loaded if it's switched on.
