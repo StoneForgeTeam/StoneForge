@@ -1,9 +1,8 @@
-using System.Runtime.InteropServices;
 using StoneForge;
 
 // The game's confirmation panel asking a mod's question (GameDialogs): Yes runs the action and closes it, closed
 // otherwise runs No (laid out with FakeGame's room and scripts, its Yes fired as the game's code hook).
-public unsafe class GameDialogsTests : FakeGame
+public class GameDialogsTests : FakeGame
 {
     private const int PanelObject = 310, PanelId = 100_080;
     private readonly FakeScripts _scripts = new();
@@ -34,16 +33,7 @@ public unsafe class GameDialogsTests : FakeGame
     }
 
     // The panel's Yes (its user event 0), on it.
-    private int Yes()
-    {
-        byte* name = Game.Utf8("gml_Object_o_exit_confirm_panel_Other_10");
-        try
-        {
-            delegate* unmanaged<byte*, IntPtr, IntPtr, int> before = &Hooks.OnCodeBefore;
-            return before(name, (IntPtr)(FakeWorld.PointerBase + PanelId), IntPtr.Zero);
-        }
-        finally { NativeMemory.Free(name); }
-    }
+    private static int Yes() => RunBefore("gml_Object_o_exit_confirm_panel_Other_10", PanelId);
 
     private static void Frame()
     {

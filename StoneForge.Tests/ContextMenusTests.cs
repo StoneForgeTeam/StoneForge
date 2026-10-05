@@ -1,10 +1,9 @@
-using System.Runtime.InteropServices;
 using StoneForge;
 
 // Right-click menus (ContextMenus, ContextMenu): a menu changed as the game opens it - options added, removed, renamed,
 // greyed out, the menu sized again or closed when none's left - and a mod's option run when clicked, on what the menu's
 // for (laid out with FakeGame's room, ds lists and scripts).
-public unsafe class ContextMenusTests : FakeGame
+public class ContextMenusTests : FakeGame
 {
     private const int MenuObject = 300, ButtonObject = 301, Wolf = 302, WolfId = 100_050, MenuId = 100_060, ButtonId = 100_070;
     private readonly FakeDs _ds = new();
@@ -69,16 +68,7 @@ public unsafe class ContextMenusTests : FakeGame
     {
         _world.Add(ButtonId, ButtonObject);
         _world.Vars[ButtonId] = new() { ["func"] = key, ["is_activate"] = enabled, ["interact_id"] = WolfId };
-        byte* name = Game.Utf8("gml_Object_o_context_button_Mouse_4");
-        try
-        {
-            delegate* unmanaged<byte*, IntPtr, IntPtr, int> before = &Hooks.OnCodeBefore;
-            before(name, (IntPtr)(FakeWorld.PointerBase + ButtonId), IntPtr.Zero);
-        }
-        finally
-        {
-            NativeMemory.Free(name);
-        }
+        RunBefore("gml_Object_o_context_button_Mouse_4", ButtonId);
     }
 
     [Fact]
