@@ -93,6 +93,13 @@ public static class SaveData
     /// they're in. Null outside a game.</summary>
     public static string? CharacterJson() => ToJson(CharacterSections);
 
+    /// <summary>A mod's own values in the save data - saved with the game, back when it's loaded - under keys only that mod
+    /// uses (<see cref="StoneForge.ModData"/>). Nothing's kept with no game (<see cref="Available"/>).</summary>
+    public static ModData ModData(ModContext context) => StoneForge.ModData.InMap(context, () => Available ? ModMap(ModsKey) : null);
+
+    // (The save data's map for mods' values: theirs by mod, in one.)
+    private const string ModsKey = "stoneforge_mods";
+
     /// <summary>A map of a mod's own in the save data, by <paramref name="key"/> (made empty the first time): what's in it
     /// is saved with the game and back when it's loaded. Use a key of the mod's own ("mymod_stash"): the game's sections
     /// are the save data's other keys.</summary>

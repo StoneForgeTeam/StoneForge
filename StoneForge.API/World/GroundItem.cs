@@ -6,6 +6,14 @@ namespace StoneForge;
 /// changed of it wakes it for the moment and puts it back.</summary>
 public readonly record struct GroundItem(Instance Instance)
 {
+    /// <summary>A mod's own values on this item as it lies on the ground (its data, which it takes into an inventory and
+    /// back) - under keys only that mod uses (<see cref="StoneForge.ModData"/>).</summary>
+    public ModData ModData(ModContext context)
+    {
+        Instance item = Instance;
+        return StoneForge.ModData.InMap(context, () => item.Get("data").AsDsMap);
+    }
+
     /// <summary>Whether it's still on the ground (on screen or off): false once picked up or destroyed.</summary>
     public bool IsOnGround => !Instance.IsGone;
 

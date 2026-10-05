@@ -8,7 +8,7 @@ namespace StoneForge;
 /// if (Inventory.Add&lt;MyBlade&gt;() is { } blade)
 /// {
 ///     blade.Durability = 50;
-///     blade.SetData("mymod:kills", 0);
+///     blade.ModData(context)["kills"] = 0;
 /// }
 /// </code></example>
 public readonly record struct InventoryItem(Instance Slot)
@@ -62,8 +62,16 @@ public readonly record struct InventoryItem(Instance Slot)
     public GmValue Data(string key)
         => Slot.Get("data") is { Kind: GmKind.Real } data ? Game.CallBuiltin("ds_map_find_value", data, key) : GmValue.Undefined;
 
+    /// <summary>A mod's own values on this item - kept with it, and saved with it, wherever it goes - under keys only that
+    /// mod uses ("kills" is the mod's own: <see cref="StoneForge.ModData"/>).</summary>
+    public ModData ModData(ModContext context)
+    {
+        Instance slot = Slot;
+        return StoneForge.ModData.InMap(context, () => slot.Get("data").AsDsMap);
+    }
+
     /// <summary>Sets a value of its own - kept with it, and saved with it, wherever it goes (a chest, the ground, a save).
-    /// A mod's own keys are best named for it ("mymod:kills"), not to meet the game's or another mod's.</summary>
+    /// A mod's own values are best kept with <see cref="ModData"/>, whose keys no other mod can meet.</summary>
     public void SetData(string key, GmValue value)
     {
         if (Slot.Get("data") is { Kind: GmKind.Real } data)

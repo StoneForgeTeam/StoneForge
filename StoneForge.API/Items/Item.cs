@@ -47,6 +47,10 @@ public sealed class Item
         return data.Kind == GmKind.Real ? Game.CallBuiltinTrusted("ds_map_find_value", default, default, data, key) : GmValue.Undefined;
     }
 
+    /// <summary>A mod's own values on this item - kept and saved with it - under keys only that mod uses
+    /// (<see cref="StoneForge.ModData"/>).</summary>
+    public ModData ModData(ModContext context) => StoneForge.ModData.InMap(context, () => DataMap.AsDsMap);
+
     /// <summary>Sets a value of its own (kept with it, saved with it).</summary>
     public void SetData(string key, GmValue value)
     {

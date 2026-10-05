@@ -51,6 +51,10 @@ public readonly struct Instance : IEquatable<Instance>
     /// <see cref="Exists"/> is false for an instance that's only off screen.</summary>
     public bool IsGone => Id >= 0 ? !Game.CallBuiltin("instance_exists", Id).AsBool && !Culling.Contains(Id) : !CanUsePointer;
 
+    /// <summary>A mod's own variables on this instance, under names only that mod uses ("&lt;mod id&gt;__&lt;key&gt;":
+    /// <see cref="StoneForge.ModData"/>) - kept as long as the instance is (not saved: an instance's variables aren't).</summary>
+    public ModData ModData(ModContext context) => StoneForge.ModData.OnInstance(context, Id >= 0 ? Persist() : this);
+
     /// <summary>Destroys it - its Destroy event run, unless <paramref name="runDestroyEvent"/> is false - culled or not:
     /// a culled one is taken out of the culling controller's list first (destroying it there would leave the controller
     /// reading a destroyed instance). Nothing happens if it's already gone.</summary>

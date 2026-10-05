@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- **`ModData`: a mod's own values in what the game keeps, under keys only that mod uses**, so two mods' `"kills"` are two values and neither touches the game's. `item.ModData(context)["kills"]` on an `InventoryItem`, `Item` or `GroundItem` (in the item's data: kept and saved with it wherever it goes), `SaveData.ModData(context)` (saved with the game), and `instance.ModData(context)` (variables on any instance). It has `Has`, `Remove`, `Keys` (the mod's own) and `GameKey` ("mymod:kills" in a map, "mymod__kills" as a variable). `SetData` with a hand-made prefix still works.
 - **A loot table takes any number of items.** The game's roll reads nine item slots. With those taken,
   `LootTable.Add` now puts an item in one of StoneForge's own, kept in the table's row as `slot10` onward, where the
   game doesn't read. StoneForge rolls them just after the game's own roll (an after-hook on scr_loot_from_tables), by
