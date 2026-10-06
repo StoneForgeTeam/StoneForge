@@ -55,6 +55,27 @@ internal static class Dump
                 File.Copy(file, Path.Combine(to, Path.GetFileName(file)), overwrite: true);
     }
 
+    // What this process sees of a folder, for an error: who it runs as, and the folder's files or why they can't be read.
+    private static string Seen(string folder)
+    {
+        string seen = $"running as {Environment.UserDomainName}\\{Environment.UserName}, LOCALAPPDATA={Environment.GetEnvironmentVariable("LOCALAPPDATA")}: ";
+        for (string? at = folder; at != null; at = Path.GetDirectoryName(at))
+        {
+            try
+            {
+                if (!Directory.Exists(at))
+                    continue;
+                string[] files = Directory.GetFileSystemEntries(at);
+                return seen + $"{at} has {files.Length} entries ({string.Join(", ", files.Take(12).Select(Path.GetFileName))})";
+            }
+            catch (Exception e)
+            {
+                return seen + $"{at} can't be read: {e.GetType().Name}: {e.Message}";
+            }
+        }
+        return seen + "none of its folders exist";
+    }
+
     /// <summary>Whether <paramref name="output"/> already holds a dump of this very file.</summary>
     public static bool IsCurrent(string source, string output)
     {
@@ -80,7 +101,7 @@ internal static class Dump
                 if (!File.Exists(Path.Combine(Cache, "scripts.tsv")))
                     throw new InvalidDataException($"{source} is the game's native (YYC) build, which has no GML to read the typed API "
                         + $"from, and there's no dump of the VM build's kept ({Cache}) - build once with the VM branch's data.win "
-                        + "(--data, or the game on the VM branch), and it's kept for the native one.");
+                        + $"(--data, or the game on the VM branch), and it's kept for the native one. ({Seen(Cache)})");
                 CopyFiles(Cache, output);
                 Console.WriteLine($"warning SFDD003: {source} is the game's native (YYC) build: the VM build's dump kept in {Cache} is used");
             }
