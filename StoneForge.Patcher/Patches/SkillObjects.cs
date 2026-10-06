@@ -12,7 +12,7 @@ namespace StoneForge.Patcher;
 /// for a mod's skills (StoneForge's ModSkill: one per mod, in a Mods group), laid out on a grid - GML in
 /// GML\Skills. The game then learns, casts, saves and loads them as its own. On the native (YYC) build (native) the same
 /// objects are added with no code - their GML StoneForge does in C# (its SkillData) - and an icon is a plain child of
-/// o_skill_ico: the game skill's icon's events can't be copied there.</summary>
+/// o_skill_ico: the game skill's icon's events can't be copied there, so StoneForge runs them for it (Skills).</summary>
 internal static class SkillObjects
 {
     // The skills added (those whose base is one of the game's skills).

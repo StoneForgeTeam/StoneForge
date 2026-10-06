@@ -1,5 +1,10 @@
 # StoneForge changes
 
+## Unreleased
+
+- On the native build a mod skill's icon gets its base icon's other events again (what some game skills check before
+  they can be used, and what they show): the game skill's icon's events run in place of `o_skill_ico`'s for it.
+
 ## 0.7.0 — The game's native build
 
 - **StoneForge starts on the game's native (YYC) branch - the first part of moving off the VM branch.** On the native

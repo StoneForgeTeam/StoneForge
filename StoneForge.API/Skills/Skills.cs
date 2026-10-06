@@ -187,6 +187,7 @@ public static class Skills
                 int skillObject = entry.Object;
                 HookNative("o_skill_" + key, self => SkillData.SkillCreated(self, key));
                 HookNative("o_skill_" + key + "_ico", self => SkillData.IconCreated(self, skillObject));
+                ForwardIconEvents(entry, active.BasedOn);
             }
             else
             {
@@ -655,6 +656,66 @@ public static class Skills
     {
         if (Game.IsNative && _loader != null && NativeHooked.Add(obj))
             ObjectEvents.Hook(_loader, obj, "Create_0", after: created);
+    }
+
+    // The native build: the game skill's icon's own events for the mod's icon, as the patcher's copies of them are on the
+    // VM build. The mod's icon is a child of o_skill_ico (not of the game skill's icon - see SkillObjects), and a few game
+    // icons put their own in place of some of o_skill_ico's events (user events 1, 7 and 15 - what the skill checks, what
+    // it shows - an alarm): o_skill_ico's are hooked, and for a mod's icon the game skill's icon's run instead - its
+    // event_inherited() comes back to o_skill_ico's, run as it is then.
+    private static readonly Dictionary<int, (int BaseIcon, HashSet<string> Events)> BaseIcons = new();
+    private static readonly HashSet<string> ForwardedEvents = new();
+    private static readonly HashSet<(int Instance, string Event)> Forwarding = new();
+    private static readonly (string Prefix, int Type, int First, int Last)[] IconEventKinds =
+    {
+        ("Destroy", 1, 0, 0), ("Alarm", 2, 0, 11), ("Step", 3, 0, 2), ("Other", 7, 10, 25), ("Draw", 8, 0, 0), ("CleanUp", 12, 0, 0),
+    };
+
+    private static void ForwardIconEvents(Entry entry, string basedOn)
+    {
+        if (!Game.IsNative || _loader == null)
+            return;
+        int baseIcon = Gm.AssetGetIndex("o_skill_" + basedOn + "_ico");
+        if (baseIcon < 0)
+            return;
+        string baseName = Gm.ObjectGetName(baseIcon);
+        var events = new HashSet<string>();
+        foreach (var (prefix, type, first, last) in IconEventKinds)
+            for (int number = first; number <= last; number++)
+            {
+                string ev = $"{prefix}_{number}";
+                if (!Game.HasFunction($"gml_Object_{baseName}_{ev}"))
+                    continue;
+                if (!Game.HasFunction("gml_Object_o_skill_ico_" + ev))
+                {
+                    entry.Context.Log($"skill \"{entry.Skill.Id}\": {baseName}'s {ev} isn't o_skill_ico's too - it can't run for this skill's icon on the game's native build");
+                    continue;
+                }
+                events.Add(ev);
+                if (ForwardedEvents.Add(ev))
+                    _loader.OnCode("gml_Object_o_skill_ico_" + ev, before: (self, _) => RunBaseIconEvent(self, ev, type, number));
+            }
+        if (events.Count > 0)
+            BaseIcons[entry.Icon] = (baseIcon, events);
+    }
+
+    // True: the game skill's icon's event ran in place of o_skill_ico's.
+    private static bool RunBaseIconEvent(Instance self, string ev, int type, int number)
+    {
+        if (self.IsNone || !BaseIcons.TryGetValue(self.Get("object_index").AsInt, out var based) || !based.Events.Contains(ev))
+            return false;
+        // (Its event_inherited(): o_skill_ico's own.)
+        if (!Forwarding.Add((self.Id, ev)))
+            return false;
+        try
+        {
+            Game.CallBuiltinTrusted("event_perform_object", self, self, based.BaseIcon, type, number);
+        }
+        finally
+        {
+            Forwarding.Remove((self.Id, ev));
+        }
+        return true;
     }
 
     private static int Background(int count)
