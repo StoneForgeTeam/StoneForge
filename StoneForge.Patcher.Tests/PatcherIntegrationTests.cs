@@ -12,7 +12,7 @@ public class PatcherIntegrationTests : IClassFixture<PatchedGameData>
 
     private void RequireData()
     {
-        Skip.If(_game.Input == null, @"No unpatched game data: set STONEFORGE_TEST_DATA, or install StoneForge in Steam's Stoneshard (dotnet\data_base.win).");
+        Skip.If(_game.Input == null, @"No unpatched VM game data: set STONEFORGE_TEST_DATA, or install StoneForge in Steam's Stoneshard on the VM branch (dotnet\data_base.win).");
         Assert.True(_game.InputWasUnpatched, _game.Input + " already has StoneForge's patches; the tests need unpatched data.");
     }
 

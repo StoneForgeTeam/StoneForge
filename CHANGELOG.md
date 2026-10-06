@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+- **StoneForge starts on the game's native (YYC) branch - the first part of moving off the VM branch.** On the native
+  build the game's GML is compiled into the exe, so nothing can be added as GML; StoneForge works with it instead:
+  - The bridge finds every compiled `gml_*` function by name in the exe's own table of them, and tells the loader which
+    build it's on (`Game.IsNative`). Bridge API version 6.
+  - **Any script can be hooked**, by detouring its compiled function: no `[assembly: HookScript]`, no patching, no
+    restart. Before and after hooks, replacing a call, `CallOriginal` and conflicts work as they do on the VM build.
+  - The patcher adds the loader's objects to the native `data.win` with no code: each runs its events from a parent of
+    the game's (`o_stonemod_gui` under `o_cursorController`, `o_stonemod_hud` under `o_disclaimer`,
+    `o_stonemod_modal` under `o_presset_town_encounter`), and the loader hooks those events for its own instances. So
+    the Draw GUI and HUD passes, mod windows and Escape on them all work there.
+  - The UI's scaling and clipping are done in C# on both builds (they were GML).
+  - Still to port: mods' items, consumables, skills, buffs and effects, combat damage, the hotkey guard and mods' own
+    game objects, which are GML on the VM build. Mods' own GML can't run on the native build at all.
 - **Mods can need other mods, and use them.** In mod.json, `"requires": ["othermod"]` names mods that must be there, and `"after": ["othermod"]` names mods to load after if they're there. Mods still load in folder order, except that each one waits for the mods it names.
   - A mod whose required mod isn't running is switched off, and that's saved for the next start. The log and its page in the Mods window say which mod it needs and why it isn't running: not installed, didn't load, switched off, or not allowed yet. It comes back on when that mod is switched on. Switching it on yourself switches on what it requires, or it goes back off and says why. Requires that form a loop are refused. An "after" that forms a loop is ignored, with a warning.
   - A mod is compiled against the mods it requires, so it can use their public types as its own. It's loaded with the copy of each that is running.

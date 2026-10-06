@@ -218,6 +218,17 @@ internal static unsafe class Hooks
                 + "(any of its files), then restart the game - the game data is rebuilt with it hookable.", nameof(scriptName));
         if (!Scripts.TryGetValue(scriptName, out var list))
         {
+            // (The native build: its function detoured now - any script, nothing patched.)
+            if (Game.IsNative && Game.Api != null)
+            {
+                byte* name = Game.Utf8(scriptName);
+                try
+                {
+                    if (Game.Api->HookScript(name) == 0)
+                        throw new ArgumentException($"{scriptName} can't be hooked: {Game.FromUtf8(Game.Api->LastError())}", nameof(scriptName));
+                }
+                finally { NativeMemory.Free(name); }
+            }
             list = new();
             Scripts[scriptName] = list;
             // (While mods load the game isn't running: the first frame sets it - AssertScriptFlags.)
@@ -369,7 +380,7 @@ internal static unsafe class Hooks
         Draw.UpdateScale();
         bool scaled = Draw.Scale != 1;
         if (scaled)
-            Game.CallScript("scr_stonemod_gui_matrix", default, Draw.Scale);
+            WorldMatrix(Draw.Scale);
         try
         {
             for (int i = 0; i < DrawGuiHandlers.Count; i++)
@@ -390,11 +401,31 @@ internal static unsafe class Hooks
         finally
         {
             if (scaled)
-                Game.CallScript("scr_stonemod_gui_matrix", default, 1);
+                WorldMatrix(1);
         }
         // (Every screen has said what it covers: the game's input kept off it.)
         InputBlock.Flush();
         Clip.Sweep();
+    }
+
+    // The world matrix scaling all that's drawn by this much (1: none).
+    private static void WorldMatrix(double scale)
+    {
+        // (2: matrix_world.)
+        using GmArray? matrix = (scale == 1 ? Game.CallBuiltinTrusted("matrix_build_identity", default, default)
+            : Game.CallBuiltinTrusted("matrix_build", default, default, 0, 0, 0, 0, 0, 0, scale, scale, 1)).AsArray;
+        Game.CallBuiltinTrusted("matrix_set", default, default, 2, matrix);
+    }
+
+    /// <summary>The native build: the game's cursor drawn again, over the mods' Draw GUI pass (the game draws it in
+    /// o_cursorController's Draw GUI, which comes before ours - as the VM build's o_stonemod_gui does after its pass).</summary>
+    internal static void DrawCursorAgain()
+    {
+        // (8: ev_draw, 64: ev_gui. Only the game's own: o_stonemod_gui is a child of o_cursorController there, and its Draw
+        // GUI is this pass.)
+        foreach (Instance cursor in Instances.All(GameObjectId.o_cursorController))
+            if (cursor.Get("object_index").AsInt == (int)GameObjectId.o_cursorController)
+                Game.CallBuiltinAs("event_perform", cursor, cursor, 8, 64);
     }
 
     // The mods' HUD pass (o_stonemod_hud's Draw, at HudDepth: with the game's HUD, under its windows). The game draws its

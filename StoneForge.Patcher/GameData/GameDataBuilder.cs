@@ -7,7 +7,8 @@ namespace StoneForge.Patcher;
 
 /// <summary>data.win as the game reads it: the game's own (kept as dotnet\data_base.win) with the loader's
 /// additions (<see cref="LoaderPatches"/>), the scripts mods hook (<see cref="ScriptHooks"/>) and mods'
-/// consumables' objects (<see cref="ConsumableObjects"/>). Rebuilt only when the game's data (a game update, a
+/// consumables' objects (<see cref="ConsumableObjects"/>) - on the native (YYC) build, the loader's objects only
+/// (<see cref="NativeLoaderPatches"/>). Rebuilt only when the game's data (a game update, a
 /// re-patch with another tool), the hooked scripts, mods' consumables or the patcher (its code, its GML) change. The editing uses UndertaleModLib directly.</summary>
 internal static class GameDataBuilder
 {
@@ -64,13 +65,23 @@ internal static class GameDataBuilder
         }
 
         var editor = new GameDataEditor(gameData);
-        LoaderPatches.Apply(editor);
-        var added = ConsumableObjects.Add(editor, consumables);
-        var addedSkills = SkillObjects.Add(editor, skills);
-        var addedObjects = ModGameObjects.Add(editor, objects);
+        var added = new List<ModClassDeclaration>();
+        var addedSkills = new List<ModClassDeclaration>();
+        var addedObjects = new List<ModClassDeclaration>();
         var hooked = new List<string>();
-        int made = ScriptHooks.HookAll(editor, hooks, hooked);
-        ModGmlPatches.Apply(editor, gml);
+        int made = 0;
+        // (The native build - no GML in its data.win: the loader's objects only. Scripts are hooked by detours there.)
+        if (gameData.IsYYC())
+            NativeLoaderPatches.Apply(editor);
+        else
+        {
+            LoaderPatches.Apply(editor);
+            added = ConsumableObjects.Add(editor, consumables);
+            addedSkills = SkillObjects.Add(editor, skills);
+            addedObjects = ModGameObjects.Add(editor, objects);
+            made = ScriptHooks.HookAll(editor, hooks, hooked);
+            ModGmlPatches.Apply(editor, gml);
+        }
 
         string temp = game.Data + ".tmp";
         using (var output = File.Create(temp))

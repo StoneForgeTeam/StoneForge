@@ -234,9 +234,16 @@ public class UIWindow : UIElement
     internal static IReadOnlyList<UIWindow> InOrder => OpenWindows.ToList();
     internal UIScreen? ScreenOf => Screen;
 
-    // Escape: its stand-in tells it (scr_stonemod_gui_event "close").
+    // Escape: its stand-in tells it (scr_stonemod_gui_event "close" - on the native build, its user event 15 itself:
+    // o_stonemod_modal's events are o_presset_town_encounter's, NativeHost).
     internal static void Install(ModContext loader)
     {
+        if (Game.IsNative)
+        {
+            NativeHost.Install(loader, "o_stonemod_modal", "o_presset_town_encounter", new[] { "Create_0", "Other_10", "Other_25" },
+                new Dictionary<string, Action<Instance>> { ["Other_25"] = CloseFor });
+            return;
+        }
         loader.OnScript("scr_stonemod_gui_event", call =>
         {
             if (call.Args.Length >= 1 && call.Args[0].AsString == "close")
@@ -248,6 +255,15 @@ public class UIWindow : UIElement
             }
             return true;
         });
+    }
+
+    // Escape on a window's stand-in: the window closed.
+    private static void CloseFor(Instance modal)
+    {
+        GmValue id = modal.Get("id");
+        int key = id.Kind == GmKind.Instance ? id.AsInstance.Id : (int)id.AsReal;
+        if (ByModal.TryGetValue(key, out var window))
+            window.Close();
     }
 
     // Windows on a screen leaving its context, or of a mod switched off: closed at once.

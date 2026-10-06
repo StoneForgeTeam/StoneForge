@@ -5,7 +5,8 @@ using UndertaleModLib;
 
 /// <summary>Unpatched game data patched once for all the integration tests - the loader's patches, a mod
 /// consumable and skill, GmlFixture's GML as a mod "GmlFixture", the loader's script hooks - then saved to a temporary
-/// file and read back. The input is never changed. <see cref="Input"/> is null when there's no data to test with.</summary>
+/// file and read back. The input is never changed. <see cref="Input"/> is null when there's no data to test with - none
+/// found, or the game's native (YYC) build's, which has no GML to patch.</summary>
 public sealed class PatchedGameData : IDisposable
 {
     private const string Steam = @"C:\Program Files (x86)\Steam\steamapps\common\Stoneshard\dotnet\data_base.win";
@@ -43,6 +44,11 @@ public sealed class PatchedGameData : IDisposable
             return;
         using (var input = File.OpenRead(Input))
             Data = UndertaleIO.Read(input, (_, _) => { }, _ => { });
+        if (Data.IsYYC())
+        {
+            Input = null;
+            return;
+        }
         var editor = new GameDataEditor(Data);
         OriginalObjects = Data.GameObjects.Select(o => o.Name.Content).ToArray();
         OriginalCode = Data.Code.Select(c => c.Name.Content).ToArray();

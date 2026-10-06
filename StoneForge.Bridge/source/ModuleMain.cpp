@@ -7,6 +7,10 @@
 // callbacks: every frame, and before / after each subscribed code entry (before can skip the original).
 // Only subscribed entries cross into .NET - the game runs thousands of code entries a second.
 // Log: <game>\dotnet\bridge.log (a second game running at once: bridge-2.log, and so on).
+// Two builds of the game: the VM one (its GML bytecode in data.win, run by the runner's interpreter - StoneForge.Patcher
+// writes a hook block into each hooked script, which calls string_concat("__stonemod_script__", ...) into us) and the
+// native one (YYC: GML compiled into the exe). On the native one every gml_* function is found by name in the exe's
+// table of them, and a script is hooked by detouring its function (HookScript) - any script, no patching.
 // Crashes: the code entries the game runs are traced as they start and end (a ring of the last 512, and the ones
 // running now). When the game itself faults - an access violation in StoneShard.exe - the report goes to
 // <game>\dotnet\crash-report.txt (the GML running, innermost first; the native stack; the trace) and a window shows
@@ -14,6 +18,7 @@
 #include <YYToolkit/YYTK_Shared.hpp>
 #include <nethost/hostfxr.h>
 #include <nethost/coreclr_delegates.h>
+#include <array>
 #include <climits>
 #include <cstdarg>
 #include <cstdio>
@@ -22,6 +27,7 @@
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
+#include <utility>
 using namespace Aurie;
 using namespace YYTK;
 
@@ -57,6 +63,11 @@ struct BridgeApi
     int (*SetVarAt)(void* Instance, const char* Name, int Index, const NValue* Value);
     // Every deactivated instance of the current room (the game's culling): ids and object indexes, in one walk.
     int (*InactiveInstances)(int* Ids, int* Objects, int Capacity);
+    // 1 on the game's native (YYC) build, 0 on the VM one.
+    int (*IsNative)();
+    // The native build: a script hooked (its compiled function detoured), its calls to OnScript from now on. 0 if
+    // there's no such script, or this is the VM build (StoneForge.Patcher hooks scripts there).
+    int (*HookScript)(const char* Name);
 };
 
 struct ManagedCallbacks
@@ -72,6 +83,7 @@ struct ManagedCallbacks
 };
 
 static YYTKInterface* g_Yytk = nullptr;
+static AurieModule* g_Module = nullptr;
 static std::ofstream g_Log;
 static BridgeApi g_Api = {};
 static ManagedCallbacks g_Callbacks = {};
@@ -645,6 +657,157 @@ static void HookStringConcat(AurieModule* Module)
 	Log("Script hooks ready (string_concat)");
 }
 
+// ---- the native (YYC) build ----
+
+// Every compiled gml_* function by name: YYC's table of them in the exe's .data - rows of {name, function}, the name in
+// .rdata, the function in .text (another table pairs the same names with code indexes: not functions, skipped). Read
+// once, as the module loads (the exe is mapped and relocated by then).
+static std::unordered_map<std::string, void*> g_NativeFunctions;
+static bool g_NativeScanned = false;
+
+static bool Section(const char* Name, uint8_t*& Start, size_t& Size)
+{
+	auto base = reinterpret_cast<uint8_t*>(GetModuleHandleW(nullptr));
+	auto nt = reinterpret_cast<IMAGE_NT_HEADERS*>(base + reinterpret_cast<IMAGE_DOS_HEADER*>(base)->e_lfanew);
+	auto section = IMAGE_FIRST_SECTION(nt);
+	for (int i = 0; i < nt->FileHeader.NumberOfSections; i++, section++)
+		if (strncmp(reinterpret_cast<const char*>(section->Name), Name, 8) == 0)
+		{
+			Start = base + section->VirtualAddress;
+			Size = section->Misc.VirtualSize;
+			return true;
+		}
+	return false;
+}
+
+static void ScanNativeFunctions()
+{
+	if (g_NativeScanned)
+		return;
+	g_NativeScanned = true;
+	uint8_t *text, *rdata, *data;
+	size_t textSize, rdataSize, dataSize;
+	if (!Section(".text", text, textSize) || !Section(".rdata", rdata, rdataSize) || !Section(".data", data, dataSize))
+		return;
+	for (size_t i = 0; i + 16 <= dataSize; i += 8)
+	{
+		auto row = reinterpret_cast<uint8_t**>(data + i);
+		uint8_t* name = row[0];
+		uint8_t* function = row[1];
+		if (name < rdata || name >= rdata + rdataSize - 5 || function < text || function >= text + textSize)
+			continue;
+		if (memcmp(name, "gml_", 4) != 0)
+			continue;
+		size_t length = strnlen(reinterpret_cast<const char*>(name), rdata + rdataSize - name);
+		g_NativeFunctions.emplace(std::string(reinterpret_cast<const char*>(name), length), function);
+	}
+}
+
+// The native build: it has compiled scripts (the VM build's exe has none of these rows).
+static bool IsNativeBuild()
+{
+	ScanNativeFunctions();
+	return g_NativeFunctions.size() > 1000;
+}
+
+static void* NativeFunction(const std::string& Name)
+{
+	ScanNativeFunctions();
+	auto found = g_NativeFunctions.find(Name);
+	return found == g_NativeFunctions.end() ? nullptr : found->second;
+}
+
+// A hooked script: its name (as C# knows it) and its own code (the detour's trampoline). Each has its own entry function
+// (ScriptEntry<I>, one per slot): the detour needs a distinct target, and the slot says which script it is.
+using ScriptFunction = RValue& (*)(CInstance*, CInstance*, RValue&, int, RValue*[]);
+static constexpr int MaxScriptHooks = 1024;
+struct HookedScript
+{
+	std::string Name;
+	ScriptFunction Original = nullptr;
+};
+static HookedScript g_HookedScripts[MaxScriptHooks];
+static int g_HookedScriptCount = 0;
+static std::unordered_map<std::string, int> g_HookedScriptSlots;
+
+// A hooked script called (by the game's code, script_execute, anything): its arguments to C#; a mod replacing the call
+// is answered with its value, else the script's own code runs.
+static RValue& RunHookedScript(int Slot, CInstance* Self, CInstance* Other, RValue& Result, int ArgCount, RValue* Args[])
+{
+	HookedScript& script = g_HookedScripts[Slot];
+	if (!g_ManagedReady || !g_Callbacks.OnScript)
+		return script.Original(Self, Other, Result, ArgCount, Args);
+	g_GameThread = GetCurrentThreadId();
+	std::vector<NValue> values(ArgCount > 0 ? ArgCount : 0);
+	std::vector<std::string> strings;
+	strings.reserve(values.size());
+	for (int i = 0; i < ArgCount; i++)
+		FromRValueKept(Args && Args[i] ? *Args[i] : RValue(), values[i], strings);
+	// (The string values pointed at their kept copies, now that the store won't move.)
+	size_t kept = 0;
+	for (int i = 0; i < ArgCount; i++)
+		if (Args && Args[i] && Args[i]->m_Kind == VALUE_STRING)
+			values[i].Str = strings[kept++].c_str();
+	NValue result = {};
+	result.Kind = 5;
+	if (g_Callbacks.OnScript(script.Name.c_str(), Self, Other, values.data(), static_cast<int>(values.size()), &result))
+	{
+		Result = ToRValue(result);
+		return Result;
+	}
+	return script.Original(Self, Other, Result, ArgCount, Args);
+}
+
+template <int Slot>
+static RValue& ScriptEntry(CInstance* Self, CInstance* Other, RValue& Result, int ArgCount, RValue* Args[])
+{
+	return RunHookedScript(Slot, Self, Other, Result, ArgCount, Args);
+}
+
+template <int... Slots>
+static constexpr std::array<ScriptFunction, sizeof...(Slots)> ScriptEntries(std::integer_sequence<int, Slots...>)
+{
+	return { &ScriptEntry<Slots>... };
+}
+static constexpr auto g_ScriptEntries = ScriptEntries(std::make_integer_sequence<int, MaxScriptHooks>{});
+
+static int ApiIsNative()
+{
+	return IsNativeBuild() ? 1 : 0;
+}
+
+static int ApiHookScript(const char* Name)
+{
+	if (!Name || !IsNativeBuild())
+		return 0;
+	std::string name = Name;
+	if (g_HookedScriptSlots.contains(name))
+		return 1;
+	void* function = NativeFunction("gml_Script_" + name);
+	if (!function)
+	{
+		t_LastError = "no compiled script named " + name;
+		return 0;
+	}
+	if (g_HookedScriptCount >= MaxScriptHooks)
+	{
+		t_LastError = "too many hooked scripts (" + std::to_string(MaxScriptHooks) + ")";
+		return 0;
+	}
+	int slot = g_HookedScriptCount;
+	PVOID trampoline = nullptr;
+	AurieStatus status = MmCreateHook(g_Module, "StoneForgeScript_" + name, function, reinterpret_cast<PVOID>(g_ScriptEntries[slot]), &trampoline);
+	if (!AurieSuccess(status) || !trampoline)
+	{
+		t_LastError = "detouring " + name + " failed (status " + std::to_string(static_cast<int>(status)) + ")";
+		return 0;
+	}
+	g_HookedScripts[slot] = { name, reinterpret_cast<ScriptFunction>(trampoline) };
+	g_HookedScriptCount++;
+	g_HookedScriptSlots.emplace(name, slot);
+	return 1;
+}
+
 // ---- crashes ----
 
 struct TraceEntry
@@ -1021,9 +1184,11 @@ static bool StartDotNet(const fs::path& DotnetDir)
 	}
 
 	g_Api.Size = sizeof(BridgeApi);
-	g_Api.Version = 5;
+	g_Api.Version = 6;
 	g_Callbacks.Size = sizeof(ManagedCallbacks);
-	g_Callbacks.Version = 5;
+	g_Callbacks.Version = 6;
+	g_Api.IsNative = ApiIsNative;
+	g_Api.HookScript = ApiHookScript;
 	g_Api.Log = ApiLog;
 	g_Api.CallBuiltin = ApiCallBuiltin;
 	g_Api.CallScript = ApiCallScript;
@@ -1079,6 +1244,9 @@ EXPORTED AurieStatus ModulePreinitialize(
 	UNREFERENCED_PARAMETER(Module);
 	OpenLog(ModulePath);
 	fs::path gameDir = ModulePath.parent_path().parent_path();
+	// (The native build: its data.win gets the loader's objects only - no GML; scripts are hooked by detours.)
+	if (IsNativeBuild())
+		Log("The game's native (YYC) build: " + std::to_string(g_NativeFunctions.size()) + " compiled functions found");
 	fs::path patcher = gameDir / "dotnet" / "patcher" / "StoneForge.Patcher.exe";
 	if (!fs::exists(patcher))
 	{
@@ -1111,7 +1279,8 @@ EXPORTED AurieStatus ModuleInitialize(
 	// (We sit in <game>\aurie\; the managed side is in <game>\dotnet\.)
 	fs::path dotnetDir = ModulePath.parent_path().parent_path() / "dotnet";
 	OpenLog(ModulePath);
-	Log("StoneForge.Bridge starting, module at " + ModulePath.string());
+	g_Module = Module;
+	Log("StoneForge.Bridge starting, module at " + ModulePath.string() + (IsNativeBuild() ? " (native build)" : " (VM build)"));
 
 	g_Yytk = YYTK::GetInterface();
 	if (!g_Yytk)

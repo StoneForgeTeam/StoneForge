@@ -52,11 +52,24 @@ internal static class Dump
     public static void Write(string source, string output)
     {
         Directory.CreateDirectory(output);
-        // (The stamp goes last: an interrupted dump is made again next time.)
-        File.Delete(Path.Combine(output, Stamp));
         UndertaleData data;
         using (var stream = File.OpenRead(source))
             data = UndertaleIO.Read(stream, (_, _) => { }, _ => { });
+        // (The game's native - YYC - build has no GML in its data: the scripts, the objects' variables, the tables are
+        // only in the VM build's. Its dump is kept - the game's names are the same in both - and marked as this file's,
+        // so it isn't read again till it changes.)
+        if (data.IsYYC())
+        {
+            data.Dispose();
+            if (!File.Exists(Path.Combine(output, "scripts.tsv")))
+                throw new InvalidDataException($"{source} is the game's native (YYC) build, which has no GML to read the typed API "
+                    + "from - dump the VM build's data.win once (--data), and it's kept.");
+            Console.WriteLine($"warning SFDD003: {source} is the game's native (YYC) build: the dump made from the VM build is kept");
+            File.WriteAllText(Path.Combine(output, Stamp), StampOf(source));
+            return;
+        }
+        // (The stamp goes last: an interrupted dump is made again next time.)
+        File.Delete(Path.Combine(output, Stamp));
         using (data)
         {
             if (data.GameObjects.ByName("o_stonemod_gui") != null)

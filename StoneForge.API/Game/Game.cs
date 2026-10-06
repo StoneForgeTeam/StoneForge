@@ -8,6 +8,10 @@ namespace StoneForge;
 public static unsafe partial class Game
 {
     internal static BridgeApi* Api;
+
+    /// <summary>Whether this is the game's native (YYC) build - its GML compiled into the exe - rather than the VM one
+    /// (its GML in data.win, run by the runner). On the native build any script can be hooked, and nothing's patched.</summary>
+    public static bool IsNative { get; internal set; }
     private static int _gameThread;
     internal static void MarkGameThread() => _gameThread = Environment.CurrentManagedThreadId;
     internal static void EnsureGameThread()

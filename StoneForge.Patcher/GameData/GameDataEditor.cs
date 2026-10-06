@@ -15,8 +15,10 @@ internal sealed class GameDataEditor
 
     public GameDataEditor(UndertaleData data)
     {
-        if (data.Code == null || data.Code.Count == 0)
-            throw new InvalidOperationException("StoneForge needs Stoneshard's VM modbranch (no editable CODE entries were found).");
+        // (The native - YYC - build has no GML in its data at all: only its objects, sprites and rooms are edited there.
+        // A VM build without code entries is something else.)
+        if (!data.IsYYC() && (data.Code == null || data.Code.Count == 0))
+            throw new InvalidOperationException("Stoneshard's game data has no code entries and isn't the native build - restore it (Steam: Verify integrity of game files).");
         Data = data;
     }
 

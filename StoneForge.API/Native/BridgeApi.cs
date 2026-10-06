@@ -8,7 +8,7 @@ namespace StoneForge;
 [StructLayout(LayoutKind.Sequential)]
 internal unsafe struct BridgeApi
 {
-    internal const int ExpectedVersion = 5;
+    internal const int ExpectedVersion = 6;
     public int Size;
     public int Version;
     public delegate* unmanaged<byte*, void> Log;
@@ -29,4 +29,9 @@ internal unsafe struct BridgeApi
     // Every deactivated instance of the current room (the game's culling): ids and object indexes into the two
     // buffers, up to the capacity; returns how many there are.
     public delegate* unmanaged<int*, int*, int, int> InactiveInstances;
+    // 1 on the game's native (YYC) build - its GML compiled into the exe -, 0 on the VM one.
+    public delegate* unmanaged<int> IsNative;
+    // The native build: a script hooked (its compiled function detoured) - its calls come to OnScript from now on.
+    // 0 if there's no such script (LastError says), or this is the VM build (the patcher hooks scripts there).
+    public delegate* unmanaged<byte*, int> HookScript;
 }

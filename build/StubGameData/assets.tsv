@@ -22,6 +22,7 @@ object	20	o_globalmapInteractiveNormal
 object	21	o_enemy
 object	22	o_inventory
 object	23	o_container_parent
+object	24	o_cursorController
 sprite	0	s_checkbox
 sprite	1	s_gui_arrow_down
 sprite	2	s_gui_arrow_up

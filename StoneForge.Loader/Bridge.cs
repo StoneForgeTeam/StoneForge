@@ -20,9 +20,10 @@ public static unsafe class Bridge
         if (api->Log == null || api->CallBuiltin == null || api->CallScript == null
             || api->GetVar == null || api->SetVar == null || api->HookCode == null
             || api->InstanceFromId == null || api->LastError == null || api->InstanceId == null || api->ReleaseRefs == null
-            || api->GetVarAt == null || api->SetVarAt == null)
+            || api->GetVarAt == null || api->SetVarAt == null || api->IsNative == null || api->HookScript == null)
             return 2;
         Game.Api = api;
+        Game.IsNative = api->IsNative() != 0;
         Game.MarkGameThread();
         callbacks->OnFrame = &Hooks.OnFrame;
         callbacks->OnCodeBefore = &Hooks.OnCodeBefore;
@@ -34,7 +35,7 @@ public static unsafe class Bridge
         Hooks.Conflicted = ModRegistry.AddConflict;
         try
         {
-            Game.Log($"StoneForge {LoaderVersion.Text} on .NET {Environment.Version}");
+            Game.Log($"StoneForge {LoaderVersion.Text} on .NET {Environment.Version}, the game's {(Game.IsNative ? "native (YYC)" : "VM")} build");
             ErrorWindows.Enabled = true;
             LoaderOptions.Load();
             // (An exception nothing caught - on a thread of a mod's own, say - closes the game: shown first.)
@@ -44,8 +45,9 @@ public static unsafe class Bridge
                 if (args.ExceptionObject is Exception e)
                     ErrorWindows.Fatal(e, report);
             };
-            // (Which scripts mods may hook: those the patcher made hookable.)
-            Hooks.LoadHookable(Path.Combine(Path.GetDirectoryName(typeof(Bridge).Assembly.Location)!, "stoneforge-hooks.txt"));
+            // (Which scripts mods may hook: those the patcher made hookable - on the native build, any.)
+            if (!Game.IsNative)
+                Hooks.LoadHookable(Path.Combine(Path.GetDirectoryName(typeof(Bridge).Assembly.Location)!, "stoneforge-hooks.txt"));
             // Main menu buttons (ours and mods'), the Mods window, mods' items, the Draw GUI pass.
             var loader = new ModContext(Hooks.LoaderId);
             MainMenu.Install(loader);
@@ -68,9 +70,22 @@ public static unsafe class Bridge
             ModNameTooltip.Install(loader);
             Items.ModsLoaded = () => ModManager.Startup.Finished;
             Buffs.Install(loader);
-            loader.OnScript("scr_stonemod_draw_gui", _ => { Hooks.DrawGui(); return true; });
-            // (And the HUD pass, under the game's windows: ModContext.DrawHud, ModUI.Hud.)
-            loader.OnCode("gml_Object_o_stonemod_hud_Draw_0", after: (_, _) => Hooks.DrawHud());
+            // (And the HUD pass, under the game's windows: ModContext.DrawHud, ModUI.Hud. On the native build both
+            // objects are added with no code, their events their parents' - NativeHost: o_stonemod_gui's Draw GUI is
+            // o_cursorController's, and the cursor is drawn again over the pass; o_stonemod_hud's Draw is
+            // o_disclaimer's.)
+            if (Game.IsNative)
+            {
+                NativeHost.Install(loader, "o_stonemod_gui", "o_cursorController", new[] { "Create_0", "Draw_64" },
+                    new Dictionary<string, Action<Instance>> { ["Draw_64"] = _ => { Hooks.DrawGui(); Hooks.DrawCursorAgain(); } });
+                NativeHost.Install(loader, "o_stonemod_hud", "o_disclaimer", new[] { "Draw_0" },
+                    new Dictionary<string, Action<Instance>> { ["Draw_0"] = _ => Hooks.DrawHud() });
+            }
+            else
+            {
+                loader.OnScript("scr_stonemod_draw_gui", _ => { Hooks.DrawGui(); return true; });
+                loader.OnCode("gml_Object_o_stonemod_hud_Draw_0", after: (_, _) => Hooks.DrawHud());
+            }
             // The loading screen while the mods load (the game's own loading held till then), and StoneForge's
             // version on the main menu.
             LoadingScreen.Install(loader);

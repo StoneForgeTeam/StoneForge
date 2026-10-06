@@ -39,13 +39,25 @@ public sealed class ReliabilityProbe : IStoneMod, ITickable
             if (_captured.IsNone) _captured = self;
             return false;
         });
-        // (A script the game data doesn't hook: the hook would never be called, so it's refused at once.)
-        try
+        // (A script the game data doesn't hook: the hook would never be called, so it's refused at once - on the VM build.
+        // On the native build every script is hookable, and a name with no script behind it is refused instead.)
+        if (Game.IsNative)
         {
-            context.OnScript("scr_is_cutscene", call => false);
-            Fail("hook check: an unhooked script", "the hook was accepted");
+            Check("hook check: any script, on the native build", () => { context.OnScript("scr_is_cutscene", call => false); return true; });
+            try
+            {
+                context.OnScript("scr_no_such_script_here", call => false);
+                Fail("hook check: no such script", "the hook was accepted");
+            }
+            catch (ArgumentException e) { Pass("hook check: no such script", e.Message.Split('\n')[0]); }
         }
-        catch (ArgumentException e) { Pass("hook check: an unhooked script", e.Message.Split('\n')[0]); }
+        else
+            try
+            {
+                context.OnScript("scr_is_cutscene", call => false);
+                Fail("hook check: an unhooked script", "the hook was accepted");
+            }
+            catch (ArgumentException e) { Pass("hook check: an unhooked script", e.Message.Split('\n')[0]); }
         Check("hook check: a hookable script", () => { context.OnScript("scr_atr", call => false); return true; });
         Check("hook check: functions inside another script's file", () =>
         {
