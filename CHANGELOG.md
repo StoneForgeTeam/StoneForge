@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- StoneForge's branding: the loading screen shows its splash art (logo and title) behind the progress bar, and
+  the README its banner. The art is in `branding/`.
 - On the native build a mod skill's icon gets its base icon's other events again (what some game skills check before
   they can be used, and what they show): the game skill's icon's events run in place of `o_skill_ico`'s for it.
 

@@ -12,7 +12,8 @@ internal sealed class LoadingScreen : UIElement
 
     private static readonly int Background = Draw.Rgb(10, 8, 16);
     private static readonly int TitleColour = Draw.Rgb(236, 220, 186);
-    private static readonly int BarBack = Draw.Rgb(36, 32, 48), BarFill = Draw.Rgb(201, 164, 98);
+    private static readonly int BarBack = Draw.Rgb(36, 32, 48), BarFill = Draw.Rgb(201, 164, 98), BarOutline = Draw.Rgb(9, 10, 18),
+        BarFrame = Draw.Rgb(118, 86, 52);
     private static readonly int ErrorColour = Draw.Rgb(214, 96, 77);
 
     private double _shown = -1;
@@ -92,6 +93,10 @@ internal sealed class LoadingScreen : UIElement
         if (!HoldsGame)
         {
             Visible = false;
+            // (The splash art's texture freed: it's not shown again.)
+            if (_splash >= 0)
+                Game.CallBuiltinTrusted("sprite_delete", default, default, _splash);
+            _splash = -1;
             return;
         }
         Width = Draw.Width;
@@ -126,11 +131,30 @@ internal sealed class LoadingScreen : UIElement
         double cx = Width / 2, cy = Height / 2;
 
         Draw.Rectangle(0, 0, Width, Height, Background, alpha);
-        TextScaled(cx, cy - 48, "StoneForge", TitleColour, 1.5, alpha);
-        Draw.Text(cx, cy - 12, $"v{LoaderVersion.Text}", Draw.Muted, Draw.AlignCenter, alpha: alpha);
+        double barY, barWidth = 320;
+        int splash = Splash();
+        if (splash >= 0)
+        {
+            // The splash art (its logo and title in it) covering the screen, centred; the bar under the title - a point of the art at (artX, artY) is on screen at (cx + (artX - 960) * scale, ...).
+            double scale = Math.Max(Width / SplashWidth, Height / SplashHeight);
+            Draw.Sprite(splash, cx - SplashWidth / 2 * scale, cy - SplashHeight / 2 * scale, scale, alpha: alpha);
+            barY = cy + (BarArtY - SplashHeight / 2) * scale;
+            // (As wide as the logo and title together.)
+            barWidth = Math.Max(barWidth, (BarArtRight - BarArtLeft) * scale);
+            Draw.Text(cx, barY - 20, $"v{LoaderVersion.Text}", Draw.Muted, Draw.AlignCenter, alpha: alpha);
+        }
+        else
+        {
+            TextScaled(cx, cy - 48, "StoneForge", TitleColour, 1.5, alpha);
+            Draw.Text(cx, cy - 12, $"v{LoaderVersion.Text}", Draw.Muted, Draw.AlignCenter, alpha: alpha);
+            barY = cy + 10;
+        }
 
-        const double barWidth = 320, barHeight = 4;
-        double barX = cx - barWidth / 2, barY = cy + 10;
+        const double barHeight = 4;
+        double barX = cx - barWidth / 2;
+        // (Framed as the art is: a pixel of bronze round it, and its dark outline round that.)
+        Draw.Rectangle(barX - 2, barY - 2, barX + barWidth + 2, barY + barHeight + 2, BarOutline, alpha);
+        Draw.Rectangle(barX - 1, barY - 1, barX + barWidth + 1, barY + barHeight + 1, BarFrame, alpha);
         Draw.Rectangle(barX, barY, barX + barWidth, barY + barHeight, BarBack, alpha);
         if (_shown > 0)
             Draw.Rectangle(barX, barY, barX + barWidth * Math.Clamp(_shown, 0, 1), barY + barHeight, BarFill, alpha);
@@ -145,6 +169,27 @@ internal sealed class LoadingScreen : UIElement
         Draw.Text(cx, barY + 12, status, Draw.Muted, Draw.AlignCenter, alpha: alpha);
         if (startup.Failed > 0)
             Draw.Text(cx, barY + 28, $"{startup.Failed} couldn't be loaded - see the Mods window", ErrorColour, Draw.AlignCenter, alpha: alpha);
+    }
+
+    // The splash art: dotnet\StoneForge.Splash.png (branding\splash.png, 1920x1080) as a sprite, loaded the first
+    // time it's drawn (-1: missing - the title drawn as text instead). BarArtY: where the bar goes in it, under the
+    // title; BarArtLeft/Right: the ends of the logo and title, the bar as wide.
+    private const double SplashWidth = 1920, SplashHeight = 1080, BarArtY = 640, BarArtLeft = 385, BarArtRight = 1555;
+    private static int _splash = -2;
+
+    private static int Splash()
+    {
+        if (_splash != -2)
+            return _splash;
+        _splash = -1;
+        string path = Path.Combine(Path.GetDirectoryName(typeof(LoadingScreen).Assembly.Location)!, "StoneForge.Splash.png");
+        if (File.Exists(path))
+        {
+            _splash = Game.CallBuiltinTrusted("sprite_add", default, default, path, 1, false, false, 0, 0).AsInt;
+            if (_splash < 0)
+                Game.Log($"Loading screen: couldn't load {path}");
+        }
+        return _splash;
     }
 
     // The game's text font at a size of our own (Draw.Text is its half size), with its shadow (a pixel of the

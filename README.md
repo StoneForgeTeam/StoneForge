@@ -1,3 +1,5 @@
+<p align="center"><img src="branding/banner.png" alt="StoneForge - A Modloader For Stoneshard"></p>
+
 # StoneForge
 
 A C# mod loader for Stoneshard on Windows. Mods are source folders with a `mod.json` manifest, C# code and optional assets and GML bindings. StoneForge provides context APIs for items, consumables, buffs, skills, UI and game hooks.

@@ -6,7 +6,7 @@
 #       AurieCore.dll                 Aurie (third-party, lib\Aurie - see its README)
 #       aurie\YYToolkit.dll           YYToolkit (third-party, lib\YYToolkit)
 #       aurie\StoneForge.Bridge.dll   the native bridge
-#       dotnet\                       StoneForge.Loader, StoneForge.API (+ docs), Roslyn
+#       dotnet\                       StoneForge.Loader, StoneForge.API (+ docs), Roslyn, the splash art
 #       dotnet\patcher\               StoneForge.Patcher (+ GML, UndertaleModLib), AuriePatcher.exe
 #
 # usage: powershell -ExecutionPolicy Bypass -File build\Package.ps1 [-Configuration Release] [-NoBuild]
@@ -54,6 +54,8 @@ foreach ($f in "StoneForge.Loader.dll", "StoneForge.Loader.deps.json", "StoneFor
                "StoneForge.API.dll", "StoneForge.API.xml", "StoneForge.GmlGenerator.dll", "Microsoft.CodeAnalysis.dll", "Microsoft.CodeAnalysis.CSharp.dll") {
     Put "$loader\$f" "$files\dotnet\$f"
 }
+# (The loading screen's splash art.)
+Put "$root\branding\splash.png" "$files\dotnet\StoneForge.Splash.png"
 $patcher = "$root\StoneForge.Patcher\bin\$Configuration\net10.0-windows"
 # A stale build directory must not silently reintroduce dependencies the patcher no longer has.
 foreach ($obsolete in 'UndertaleModTool.dll', 'Serilog.dll') {
