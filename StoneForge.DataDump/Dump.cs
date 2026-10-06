@@ -42,6 +42,19 @@ internal static class Dump
         "argument_count", "self", "other", "global",
     };
 
+    // The last VM build's dump, kept for this user (%LOCALAPPDATA%\StoneForge\GameData): the native build's data has no
+    // GML, so its builds - a fresh checkout's included - use it. The game's own data stays on the player's PC, as ever.
+    private static string Cache => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "StoneForge", "GameData");
+
+    // A dump's files (not its stamp) copied from one folder to another.
+    private static void CopyFiles(string from, string to)
+    {
+        Directory.CreateDirectory(to);
+        foreach (string file in Directory.GetFiles(from))
+            if (Path.GetFileName(file) != Stamp)
+                File.Copy(file, Path.Combine(to, Path.GetFileName(file)), overwrite: true);
+    }
+
     /// <summary>Whether <paramref name="output"/> already holds a dump of this very file.</summary>
     public static bool IsCurrent(string source, string output)
     {
@@ -61,10 +74,21 @@ internal static class Dump
         if (data.IsYYC())
         {
             data.Dispose();
+            // (A fresh checkout - a release runner's - has none here: the one kept for this user, from their last VM build.)
             if (!File.Exists(Path.Combine(output, "scripts.tsv")))
-                throw new InvalidDataException($"{source} is the game's native (YYC) build, which has no GML to read the typed API "
-                    + "from - dump the VM build's data.win once (--data), and it's kept.");
-            Console.WriteLine($"warning SFDD003: {source} is the game's native (YYC) build: the dump made from the VM build is kept");
+            {
+                if (!File.Exists(Path.Combine(Cache, "scripts.tsv")))
+                    throw new InvalidDataException($"{source} is the game's native (YYC) build, which has no GML to read the typed API "
+                        + $"from, and there's no dump of the VM build's kept ({Cache}) - build once with the VM branch's data.win "
+                        + "(--data, or the game on the VM branch), and it's kept for the native one.");
+                CopyFiles(Cache, output);
+                Console.WriteLine($"warning SFDD003: {source} is the game's native (YYC) build: the VM build's dump kept in {Cache} is used");
+            }
+            else
+            {
+                Console.WriteLine($"warning SFDD003: {source} is the game's native (YYC) build: the dump made from the VM build is kept");
+                CopyFiles(output, Cache);
+            }
             File.WriteAllText(Path.Combine(output, Stamp), StampOf(source));
             return;
         }
@@ -92,6 +116,8 @@ internal static class Dump
                 + $"{data.Sounds.Count} sounds, {data.Rooms.Count} rooms from {source}");
         }
         File.WriteAllText(Path.Combine(output, Stamp), StampOf(source));
+        // (Kept for this user too: the native build has no GML to dump from - its builds use this.)
+        CopyFiles(output, Cache);
     }
 
     private static string StampOf(string source)

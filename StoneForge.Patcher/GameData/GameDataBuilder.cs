@@ -31,7 +31,9 @@ internal static class GameDataBuilder
         string key = Key(newBase ? game.Data : game.BaseData, hooks, consumables, skills, objects) + gml.Fingerprint;
         if (!newBase && key == builtFrom && File.Exists(Path.Combine(game.Dotnet, "stoneforge-gml.txt")) && File.Exists(game.HookedScripts))
         {
-            PatcherConsole.Log($"Game data up to date ({hooks.Count} hooked script(s)).");
+            // (The native build hooks no scripts here - its list is empty: they're detoured as mods load.)
+            PatcherConsole.Log(File.ReadAllLines(game.HookedScripts).Length == 0 && hooks.Count > 0
+                ? "Game data up to date." : $"Game data up to date ({hooks.Count} hooked script(s)).");
             return;
         }
 
@@ -100,7 +102,9 @@ internal static class GameDataBuilder
         ModClassDeclaration.Remember(game.KnownSkills, addedSkills);
         ModClassDeclaration.Remember(game.KnownObjects, addedObjects);
         File.WriteAllLines(game.HookedScripts, hooked);
-        PatcherConsole.Log($"Done ({made} of {hooks.Count} script(s) hooked, {added.Count} mod consumable(s), {addedSkills.Count} mod skill(s), {addedObjects.Count} mod object(s)).");
+        PatcherConsole.Log(gameData.IsYYC()
+            ? $"Done - the native build: {added.Count} mod consumable(s), {addedSkills.Count} mod skill(s), {addedObjects.Count} mod object(s); scripts are hooked as mods load."
+            : $"Done ({made} of {hooks.Count} script(s) hooked, {added.Count} mod consumable(s), {addedSkills.Count} mod skill(s), {addedObjects.Count} mod object(s)).");
     }
 
     /// <summary>Uninstall: the game's own data.win back (if ours is in place), our files gone.</summary>
