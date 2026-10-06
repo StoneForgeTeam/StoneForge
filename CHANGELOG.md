@@ -1,6 +1,6 @@
 # StoneForge changes
 
-## Unreleased
+## 0.7.1 — Branding
 
 - StoneForge's branding: the loading screen shows its splash art (logo and title) behind the progress bar, and
   the README its banner. The art is in `branding/`.
