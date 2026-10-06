@@ -10,14 +10,16 @@ namespace StoneForge.Patcher;
 /// child of o_skill_ico, not of the game skill's icon - the skills menu places a skill's icon with
 /// <c>with (o_skill_x_ico)</c>, which would take ours for the game's - with the game skill's icon's other events. And o_skill_category_stonemod, a category of the skills menu
 /// for a mod's skills (StoneForge's ModSkill: one per mod, in a Mods group), laid out on a grid - GML in
-/// GML\Skills. The game then learns, casts, saves and loads them as its own.</summary>
+/// GML\Skills. The game then learns, casts, saves and loads them as its own. On the native (YYC) build (native) the same
+/// objects are added with no code - their GML StoneForge does in C# (its SkillData) - and an icon is a plain child of
+/// o_skill_ico: the game skill's icon's events can't be copied there.</summary>
 internal static class SkillObjects
 {
     // The skills added (those whose base is one of the game's skills).
-    public static List<ModClassDeclaration> Add(GameDataEditor editor, List<ModClassDeclaration> declarations)
+    public static List<ModClassDeclaration> Add(GameDataEditor editor, List<ModClassDeclaration> declarations, bool native = false)
     {
         var data = editor.Data;
-        AddCategory(editor);
+        AddCategory(editor, native);
         // The game's skills by the class StoneForge.GameSkills gives each (its id in PascalCase).
         var byClass = new Dictionary<string, string>(StringComparer.Ordinal);
         foreach (var obj in data.GameObjects)
@@ -78,11 +80,20 @@ internal static class SkillObjects
             Child(editor, "o_skill_" + declaration.Key, parent);
             var icon = Child(editor, "o_skill_" + declaration.Key + "_ico", parentIcon);
             icon.ParentId = parentIcon.ParentId;
-            CopyEvents(parentIcon, icon);
+            if (!native)
+                CopyEvents(parentIcon, icon);
             events.Add((declaration.Key, basedOn));
             made.Add(declaration);
         }
-        // (Their events once all the objects are there: an icon's names its skill.)
+        // (Their events once all the objects are there: an icon's names its skill. None on the native build.)
+        if (native)
+        {
+            foreach (var (key, basedOn) in events)
+                PatcherConsole.Log($"  skill {key} (based on {basedOn}, no code - the native build): added");
+            foreach (string key in passives)
+                PatcherConsole.Log($"  passive {key} (no code - the native build): added");
+            return made;
+        }
         foreach (var (key, basedOn) in events)
         {
             editor.AddNewEvent("o_skill_" + key, Gml("skill_create").Replace("{key}", key), EventType.Create, 0);
@@ -98,11 +109,13 @@ internal static class SkillObjects
     }
 
     // The skills menu's category for a mod's skills, and how StoneForge fills one.
-    private static void AddCategory(GameDataEditor editor)
+    private static void AddCategory(GameDataEditor editor, bool native)
     {
         var category = editor.AddObject("o_skill_category_stonemod");
         category.ParentId = editor.GetObject("o_skill_category");
         category.Visible = true;
+        if (native)
+            return;
         editor.AddFunction(Gml("scr_stonemod_skill_category_setup"), "scr_stonemod_skill_category_setup");
         editor.AddFunction(Gml("scr_stonemod_skill_define"), "scr_stonemod_skill_define");
         editor.AddNewEvent("o_skill_category_stonemod", Gml("category_create"), EventType.Create, 0);

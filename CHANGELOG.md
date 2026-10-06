@@ -13,8 +13,20 @@
     `o_stonemod_modal` under `o_presset_town_encounter`), and the loader hooks those events for its own instances. So
     the Draw GUI and HUD passes, mod windows and Escape on them all work there.
   - The UI's scaling and clipping are done in C# on both builds (they were GML).
-  - Still to port: mods' items, consumables, skills, buffs and effects, combat damage, the hotkey guard and mods' own
-    game objects, which are GML on the VM build. Mods' own GML can't run on the native build at all.
+  - Everything else the loader did in GML now works there too:
+    - **Mods' game objects** are added with no code under their parent, or under the game's unused `o_GMLiveDebug` if
+      they have none, and each C# event is hooked on the nearest ancestor that has it. An event that no ancestor has
+      can't run there, and the log says which.
+    - **Items, consumables and skills** are defined into the game's tables by C# (`scr_stonemod_item_define`,
+      `_consum_define`, `_item_give`, `_item_sprite`, `_skill_define` and `_skill_category_setup` are gone, on both
+      builds). On the native build, mod skills' Create events and their page's layout run in C# too, using the game's
+      own `new` for its skill points. A mod skill's icon there doesn't get its base icon's other events.
+    - **Buffs and visual effects** run their parents' events, hooked for them. An effect played once is removed as its
+      animation ends.
+    - **Combat damage** (`Combat.Damage`) is C# on both builds, through the game's `o_damage_dealer`.
+    - **Game hotkeys** are held off while a mod's text box is typed in. The bridge detours the game's key checks, so
+      nothing crosses into C# for them.
+  - **A mod with GML of its own isn't loaded** on the native build, and its page says why.
 - **Mods can need other mods, and use them.** In mod.json, `"requires": ["othermod"]` names mods that must be there, and `"after": ["othermod"]` names mods to load after if they're there. Mods still load in folder order, except that each one waits for the mods it names.
   - A mod whose required mod isn't running is switched off, and that's saved for the next start. The log and its page in the Mods window say which mod it needs and why it isn't running: not installed, didn't load, switched off, or not allowed yet. It comes back on when that mod is switched on. Switching it on yourself switches on what it requires, or it goes back off and says why. Requires that form a loop are refused. An "after" that forms a loop is ignored, with a warning.
   - A mod is compiled against the mods it requires, so it can use their public types as its own. It's loaded with the copy of each that is running.

@@ -230,6 +230,16 @@ public abstract unsafe class FakeGame : IDisposable
                 case "event_user":
                     UserEvents.Add(((int)((long)self - PointerBase), arg));
                     return true;
+                // (Made: the next id, active, with no variables yet.)
+                case "instance_create_depth":
+                {
+                    int made = Objects.Keys.DefaultIfEmpty(100_000).Max() + 1;
+                    Add(made, (int)A(3));
+                    Vars[made] = new();
+                    result->Kind = 15;
+                    result->Real = made;
+                    return true;
+                }
                 // (The game's: an instance that's deactivated isn't found, and nothing happens.)
                 case "instance_destroy":
                     if (Active.Remove(arg))

@@ -17,6 +17,17 @@ public static class Gm
     /// <summary>An asset's index by name (-1 if there's none).</summary>
     public static int AssetGetIndex(string name) => Game.CallBuiltin("asset_get_index", name).AsInt;
 
+    // A struct made with a GML constructor (by its script's name), as `new constructor(args)` makes one: the runner's own
+    // @@NewGMLObject@@ - what the game's `new` expressions call - so its statics, its parent constructor, everything is
+    // set up as for the game's own.
+    internal static GmValue New(string constructor, params GmValue[] args)
+    {
+        var all = new GmValue[args.Length + 1];
+        all[0] = AssetGetIndex(constructor);
+        args.CopyTo(all, 1);
+        return Game.CallBuiltinTrusted("@@NewGMLObject@@", default, default, all);
+    }
+
     public static void ShowDebugMessage(string text) => Game.CallBuiltin("show_debug_message", text);
     public static int AudioPlaySound(Sound sound, int priority = 1, bool loop = false) => Game.CallBuiltin("audio_play_sound", GmValue.From(sound), priority, loop).AsInt;
 

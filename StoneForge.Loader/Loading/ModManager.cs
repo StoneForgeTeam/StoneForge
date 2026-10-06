@@ -477,6 +477,10 @@ internal static class ModManager
                     $"needs StoneForge {manifest.StoneForge} or newer (this is {LoaderVersion.Text})" }), 0);
         }
         catch (Exception e) { return new Compiled(null, new ModCompiler.Result(null, new List<string> { e.Message }), 0); }
+        // (The game's native build has no GML runner: a mod with GML of its own can't run there.)
+        if (Game.IsNative && GmlRuntime.ContainsGml(folder))
+            return new Compiled(manifest, new ModCompiler.Result(null, new List<string> {
+                "it has GML (its GML folder), which the game's native build can't run - only the VM branch can" }), 0);
         var images = new List<byte[]>();
         foreach (string id in LoadOrder.AllRequired(manifest, id => required(id).Manifest))
         {

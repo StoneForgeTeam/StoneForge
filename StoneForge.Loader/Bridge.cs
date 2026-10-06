@@ -20,7 +20,7 @@ public static unsafe class Bridge
         if (api->Log == null || api->CallBuiltin == null || api->CallScript == null
             || api->GetVar == null || api->SetVar == null || api->HookCode == null
             || api->InstanceFromId == null || api->LastError == null || api->InstanceId == null || api->ReleaseRefs == null
-            || api->GetVarAt == null || api->SetVarAt == null || api->IsNative == null || api->HookScript == null)
+            || api->GetVarAt == null || api->SetVarAt == null || api->IsNative == null || api->HookScript == null || api->HasFunction == null || api->SetTyping == null)
             return 2;
         Game.Api = api;
         Game.IsNative = api->IsNative() != 0;
@@ -70,6 +70,10 @@ public static unsafe class Bridge
             ModNameTooltip.Install(loader);
             Items.ModsLoaded = () => ModManager.Startup.Finished;
             Buffs.Install(loader);
+            // (The native build: the loader's code-less objects' events, hooked on their parents' once the game runs; and
+            // its effect object's GML, done in C#.)
+            ObjectEvents.Install(loader);
+            Fx.Install(loader);
             // (And the HUD pass, under the game's windows: ModContext.DrawHud, ModUI.Hud. On the native build both
             // objects are added with no code, their events their parents' - NativeHost: o_stonemod_gui's Draw GUI is
             // o_cursorController's, and the cursor is drawn again over the pass; o_stonemod_hud's Draw is

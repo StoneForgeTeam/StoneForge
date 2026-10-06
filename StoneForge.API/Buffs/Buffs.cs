@@ -127,13 +127,13 @@ public static class Buffs
         {
             // Made: by Buffs.Apply (global.stonemod_buff_pending says which) - or by a save loading, set up in
             // user event 5, after the game has put its save_counter back.
-            loader.OnCode($"gml_Object_{obj}_Create_0", after: (self, _) =>
+            ObjectEvents.Hook(loader, obj, "Create_0", after: self =>
             {
                 GmValue pending = Game.Global["stonemod_buff_pending"];
                 if (pending.Kind == GmKind.Real && pending.AsInt > 0)
                     SetUp(self, pending.AsInt);
             });
-            loader.OnCode($"gml_Object_{obj}_Other_15", after: (self, _) =>
+            ObjectEvents.Hook(loader, obj, "Other_15", after: self =>
             {
                 if (self.Get("stonemod_buff").Kind == GmKind.Real)
                     return;
@@ -142,12 +142,12 @@ public static class Buffs
                     StartAura(self, entry);
             });
             // Each of its unit's turns (user event 0), and gone.
-            loader.OnCode($"gml_Object_{obj}_Other_10", after: (self, _) =>
+            ObjectEvents.Hook(loader, obj, "Other_10", after: self =>
             {
                 if (EntryOf(self) is Entry entry)
                     Run(entry, "OnTurn", b => b.OnTurn(new Effect(self, entry.Buff)));
             });
-            loader.OnCode($"gml_Object_{obj}_Destroy_0", before: (self, _) =>
+            ObjectEvents.Hook(loader, obj, "Destroy_0", before: self =>
             {
                 ToRemove.Remove(self);
                 GmValue aura = self.Get("stonemod_aura");

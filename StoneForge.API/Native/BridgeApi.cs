@@ -34,4 +34,9 @@ internal unsafe struct BridgeApi
     // The native build: a script hooked (its compiled function detoured) - its calls come to OnScript from now on.
     // 0 if there's no such script (LastError says), or this is the VM build (the patcher hooks scripts there).
     public delegate* unmanaged<byte*, int> HookScript;
+    // The native build: whether a compiled function by this name exists ("gml_Object_o_enemy_Step_0"). 0 on the VM one.
+    public delegate* unmanaged<byte*, int> HasFunction;
+    // The native build: whether a mod's text box is being typed in (or a mod window is open) - the game's hotkey checks
+    // see no keys meanwhile (detoured in the bridge).
+    public delegate* unmanaged<int, void> SetTyping;
 }

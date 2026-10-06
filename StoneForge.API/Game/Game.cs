@@ -12,6 +12,23 @@ public static unsafe partial class Game
     /// <summary>Whether this is the game's native (YYC) build - its GML compiled into the exe - rather than the VM one
     /// (its GML in data.win, run by the runner). On the native build any script can be hooked, and nothing's patched.</summary>
     public static bool IsNative { get; internal set; }
+
+    // The native build: the game's hotkey checks held off (true) while a mod's text box is typed in - the bridge's guard.
+    internal static void SetTyping(bool typing)
+    {
+        if (IsNative && Api != null)
+            Api->SetTyping(typing ? 1 : 0);
+    }
+
+    // The native build: whether the exe has a compiled function by this name ("gml_Object_o_enemy_Step_0").
+    internal static bool HasFunction(string name)
+    {
+        if (!IsNative || Api == null)
+            return false;
+        byte* p = Utf8(name);
+        try { return Api->HasFunction(p) != 0; }
+        finally { NativeMemory.Free(p); }
+    }
     private static int _gameThread;
     internal static void MarkGameThread() => _gameThread = Environment.CurrentManagedThreadId;
     internal static void EnsureGameThread()

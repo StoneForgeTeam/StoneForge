@@ -31,7 +31,11 @@ internal static class InputBlock
             if (typing != _typing)
             {
                 _typing = typing;
-                Game.Global["stonemod_typing"] = typing;
+                // (The native build's guard is the bridge's; the VM build's reads the global.)
+                if (Game.IsNative)
+                    Game.SetTyping(typing);
+                else
+                    Game.Global["stonemod_typing"] = typing;
             }
             if (Covered.Count == 0)
             {

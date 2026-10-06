@@ -142,7 +142,7 @@ internal static class Consumables
                 entry.Context.Log($"consumable \"{item.Id}\": the game has no object for it yet - it's added when the game starts (restart it)");
                 return;
             }
-            if (!Game.CallScript("scr_stonemod_consum_define", default, item.GameKey, item.BasedOn, item.ColumnsText).AsBool)
+            if (!ItemData.DefineConsumable(item.GameKey, item.BasedOn, item.ColumnsText))
             {
                 entry.Context.Log($"consumable \"{item.Id}\": the game has no consumable \"{item.BasedOn}\" to base it on");
                 return;

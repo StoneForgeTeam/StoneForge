@@ -72,7 +72,13 @@ internal static class GameDataBuilder
         int made = 0;
         // (The native build - no GML in its data.win: the loader's objects only. Scripts are hooked by detours there.)
         if (gameData.IsYYC())
+        {
             NativeLoaderPatches.Apply(editor);
+            // (Mods' consumables are code-less children of the game's on both builds.)
+            added = ConsumableObjects.Add(editor, consumables);
+            addedSkills = SkillObjects.Add(editor, skills, native: true);
+            addedObjects = ModGameObjects.AddNative(editor, objects);
+        }
         else
         {
             LoaderPatches.Apply(editor);

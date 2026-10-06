@@ -40,7 +40,7 @@ public static class Items
     /// game's other items by its o_inv_ object's name less "o_inv_" ("wine"). False if there's no player, no such
     /// item, or it didn't fit (a weapon that doesn't fit is dropped at the player's feet, as the game does).</summary>
     public static bool Give(string name, ItemQuality quality = ItemQuality.Rolled, double? durabilityPercent = null)
-        => Game.CallScript("scr_stonemod_item_give", default, ModIdentity.ToGameKey(name), (int)quality, durabilityPercent ?? -4).AsBool;
+        => ItemData.Give(ModIdentity.ToGameKey(name), (int)quality, durabilityPercent);
 
     /// <summary>Adds a mod's consumable (food, a drink, a potion, a scroll - see <see cref="Consumable"/>). Call it from
     /// <see cref="IStoneMod.Load"/>.</summary>
@@ -203,7 +203,7 @@ public static class Items
             {
                 if (Game.CallBuiltinTrusted("ds_map_exists", default, default, Game.Global["weapons_stat"], name).AsBool)
                     continue;
-                GmValue assets = Game.CallScript("scr_stonemod_item_define", default, known.Armor, name, known.BasedOn, "", false);
+                GmValue assets = ItemData.DefineItem(known.Armor, name, known.BasedOn, "", false) is { } defined ? defined.Id : -4;
                 if (assets.Kind != GmKind.Real || assets.AsReal < 0)
                     Game.Log($"\"{name}\" ({known.Mod}, not loaded): no {known.BasedOn} to stand in for it");
             }
@@ -477,7 +477,7 @@ public static class Items
                 return;
             }
             bool toLoot = item.InRandomLoot && InLoot.Add(item.GameKey);
-            GmValue assets = Game.CallScript("scr_stonemod_item_define", default, item.IsArmor, item.GameKey, item.BasedOn, item.ColumnsText, toLoot);
+            GmValue assets = ItemData.DefineItem(item.IsArmor, item.GameKey, item.BasedOn, item.ColumnsText, toLoot) is { } defined ? defined.Id : -4;
             if (assets.Kind != GmKind.Real || assets.AsReal < 0)
             {
                 entry.Context.Log($"item \"{item.Id}\": the game has no {(item.IsArmor ? "armour" : "weapon")} called \"{item.BasedOn}\" to base it on");
@@ -584,7 +584,7 @@ public static class Items
     {
         int sprite = LoadLike(entry, file, AssetSprite(assets, key));
         if (sprite >= 0)
-            Game.CallScript("scr_stonemod_item_sprite", default, assets, key, sprite);
+            ItemData.SetSprite(assets, key, sprite);
         return sprite;
     }
 
@@ -605,7 +605,7 @@ public static class Items
             double likeWidth = Draw.SpriteWidth(like), likeHeight = Draw.SpriteHeight(like);
             if (width != likeWidth || height != likeHeight)
                 entry.Context.Log($"item \"{entry.Item.Id}\": {file} has {frames} frame(s) of {width}x{height}; the game item's picture has {frames} of {likeWidth}x{likeHeight} - it should be {likeWidth * frames}x{likeHeight}");
-            Game.CallScript("scr_stonemod_item_sprite_like", default, sprite, like);
+            ItemData.SpriteLike(sprite, like);
         }
         return sprite;
     }

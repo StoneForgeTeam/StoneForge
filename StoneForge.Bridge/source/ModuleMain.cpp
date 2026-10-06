@@ -68,6 +68,11 @@ struct BridgeApi
     // The native build: a script hooked (its compiled function detoured), its calls to OnScript from now on. 0 if
     // there's no such script, or this is the VM build (StoneForge.Patcher hooks scripts there).
     int (*HookScript)(const char* Name);
+    // The native build: whether a compiled function by this name exists ("gml_Object_o_enemy_Step_0"...). 0 on the VM one.
+    int (*HasFunction)(const char* Name);
+    // The native build: whether a mod's text box is being typed in (or a mod window is open) - the game's hotkey checks
+    // see no keys meanwhile (GuardHotkeys).
+    void (*SetTyping)(int Typing);
 };
 
 struct ManagedCallbacks
@@ -776,6 +781,50 @@ static int ApiIsNative()
 	return IsNativeBuild() ? 1 : 0;
 }
 
+// The game's hotkey checks (every bound control goes through one of these, many times a frame): on the native build
+// detoured here, answering "not pressed" while a mod's text box has the keyboard - the flag C# sets (SetTyping). Done
+// here, not in C#, for how often they run. (The VM build's are patched in GML: global.stonemod_typing.)
+static volatile bool g_Typing = false;
+static const char* const g_KeyChecks[] = { "scr_check_keyboard_array", "scr_check_keyboard_pressed_array", "scr_check_keyboard_released_array" };
+static ScriptFunction g_KeyCheckOriginals[3] = {};
+
+template <int Index>
+static RValue& KeyCheckGuard(CInstance* Self, CInstance* Other, RValue& Result, int ArgCount, RValue* Args[])
+{
+	if (g_Typing)
+	{
+		Result = RValue(false);
+		return Result;
+	}
+	return g_KeyCheckOriginals[Index](Self, Other, Result, ArgCount, Args);
+}
+
+static void GuardHotkeys()
+{
+	ScriptFunction guards[3] = { &KeyCheckGuard<0>, &KeyCheckGuard<1>, &KeyCheckGuard<2> };
+	for (int i = 0; i < 3; i++)
+	{
+		void* function = NativeFunction(std::string("gml_Script_") + g_KeyChecks[i]);
+		PVOID trampoline = nullptr;
+		if (!function || !AurieSuccess(MmCreateHook(g_Module, std::string("StoneForgeHotkeys_") + g_KeyChecks[i], function, reinterpret_cast<PVOID>(guards[i]), &trampoline)) || !trampoline)
+		{
+			Log(std::string("Couldn't guard the hotkey check ") + g_KeyChecks[i] + " - the game's hotkeys work while typing in mods' text boxes");
+			continue;
+		}
+		g_KeyCheckOriginals[i] = reinterpret_cast<ScriptFunction>(trampoline);
+	}
+}
+
+static void ApiSetTyping(int Typing)
+{
+	g_Typing = Typing != 0;
+}
+
+static int ApiHasFunction(const char* Name)
+{
+	return Name && NativeFunction(Name) ? 1 : 0;
+}
+
 static int ApiHookScript(const char* Name)
 {
 	if (!Name || !IsNativeBuild())
@@ -1189,6 +1238,8 @@ static bool StartDotNet(const fs::path& DotnetDir)
 	g_Callbacks.Version = 6;
 	g_Api.IsNative = ApiIsNative;
 	g_Api.HookScript = ApiHookScript;
+	g_Api.HasFunction = ApiHasFunction;
+	g_Api.SetTyping = ApiSetTyping;
 	g_Api.Log = ApiLog;
 	g_Api.CallBuiltin = ApiCallBuiltin;
 	g_Api.CallScript = ApiCallScript;
@@ -1292,6 +1343,8 @@ EXPORTED AurieStatus ModuleInitialize(
 		Log("Registering the game callbacks failed");
 
 	HookStringConcat(Module);
+	if (IsNativeBuild())
+		GuardHotkeys();
 	StartCrashReports(dotnetDir);
 	g_ManagedReady = StartDotNet(dotnetDir);
 	return AURIE_SUCCESS;
