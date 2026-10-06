@@ -4,7 +4,7 @@ A C# mod loader for Stoneshard on Windows. Mods are source folders with a `mod.j
 
 ## Requirements
 
-- Stoneshard (Steam), on the **VM modbranch**.
+- Stoneshard (Steam), works on both main and mod branches!.
 - The **.NET 10 Runtime, x64** to play with mods.
 - To build: .NET 10 SDK and Visual Studio with MSBuild and C++ tools (the current native build uses toolset `v145`).
 
