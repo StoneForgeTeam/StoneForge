@@ -1,6 +1,6 @@
 # StoneForge changes
 
-## Unreleased
+## 0.7.0 — The game's native build
 
 - **StoneForge starts on the game's native (YYC) branch - the first part of moving off the VM branch.** On the native
   build the game's GML is compiled into the exe, so nothing can be added as GML; StoneForge works with it instead:
@@ -27,6 +27,10 @@
     - **Game hotkeys** are held off while a mod's text box is typed in. The bridge detours the game's key checks, so
       nothing crosses into C# for them.
   - **A mod with GML of its own isn't loaded** on the native build, and its page says why.
+  - **Installing works there as it does on the VM branch**: `install`, `run` and `uninstall` back up, patch and put back
+    the native exe and data.win, and the game data step adds only the code-less objects.
+  - Building StoneForge against the native build's data works too: its API is still generated from the VM build's data
+    (the native data has no GML to read it from), using the last VM dump kept in `%LOCALAPPDATA%\StoneForge\GameData`.
 - **Mods can need other mods, and use them.** In mod.json, `"requires": ["othermod"]` names mods that must be there, and `"after": ["othermod"]` names mods to load after if they're there. Mods still load in folder order, except that each one waits for the mods it names.
   - A mod whose required mod isn't running is switched off, and that's saved for the next start. The log and its page in the Mods window say which mod it needs and why it isn't running: not installed, didn't load, switched off, or not allowed yet. It comes back on when that mod is switched on. Switching it on yourself switches on what it requires, or it goes back off and says why. Requires that form a loop are refused. An "after" that forms a loop is ignored, with a warning.
   - A mod is compiled against the mods it requires, so it can use their public types as its own. It's loaded with the copy of each that is running.

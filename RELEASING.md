@@ -29,7 +29,7 @@ git push origin v0.2.0
 
 ## Release runner
 
-On a Windows PC with Stoneshard (VM modbranch, StoneForge installed), Visual Studio's C++ tools (`v145`) and the .NET 10 SDK:
+On a Windows PC with Stoneshard (StoneForge installed; either branch - on the native one the API is generated from the last VM build's data dump, kept in `%LOCALAPPDATA%\StoneForge\GameData`, so build once on the VM branch first), Visual Studio's C++ tools (`v145`) and the .NET 10 SDK:
 
 1. In this repository's **Settings → Actions → Runners**, choose **New self-hosted runner**, **Windows**, **x64**, and run the commands shown in PowerShell.
 2. When `config.cmd` asks, press Enter for the **Default** runner group and the default name. At **additional labels**, type `stoneshard`. `self-hosted`, `Windows` and `X64` are added automatically. Answer **N** to running as a service.
