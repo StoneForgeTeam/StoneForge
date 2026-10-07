@@ -4,6 +4,21 @@ using StoneForge;
 // not in the Draw GUI pass - and gone with their mod.
 public class HudLayerTests : FakeGame
 {
+    [Theory]
+    [InlineData(2, 0, 0, 0, 0)]
+    [InlineData(2, 8, 12, 40, 24)]
+    [InlineData(1.5, 16, 4, 60, 30)]
+    public void Hud_origin_aligns_drawn_elements_with_full_window_hitboxes(
+        double unit, double frameLeft, double frameTop, double windowX, double windowY)
+    {
+        Point origin = Draw.HudScreenOrigin(unit, frameLeft, frameTop, windowX, windowY);
+        // The game's mouse mapping at a point 100,64 UI units into the window.
+        double gameMouseX = -5000 - frameLeft - windowX / unit + 100;
+        double gameMouseY = -5000 - frameTop - windowY / unit + 64;
+        Assert.Equal(gameMouseX, origin.X + 100);
+        Assert.Equal(gameMouseY, origin.Y + 64);
+    }
+
     [Fact]
     public void Hud_screens_draw_in_the_HUD_pass_and_others_over_everything()
     {

@@ -446,7 +446,14 @@ internal static unsafe class Hooks
         if (origin.IsNone || !origin.Exists)
             return;
         // (2: matrix_world.)
-        using (GmArray? moved = Game.CallBuiltinTrusted("matrix_build", default, default, origin["x"], origin["y"], 0, 0, 0, 0, 1, 1, 1).AsArray)
+        // Mouse.X/Y and Draw.Width/Height cover the full window, not the visible
+        // game-frame container. Use the inverse of scr_guiControllerInteractiveUpdate's
+        // window-to-game-GUI mapping so HUD pixels and hitboxes share that origin.
+        double unit = Game.Global["window_ratio"].AsReal * Game.Global["cameraScale"].AsReal;
+        Point screenOrigin = Draw.HudScreenOrigin(unit,
+            Game.Global["gameframe_offset_left"].AsReal, Game.Global["gameframe_offset_top"].AsReal,
+            Game.Global["window_offset_x"].AsReal, Game.Global["window_offset_y"].AsReal);
+        using (GmArray? moved = Game.CallBuiltinTrusted("matrix_build", default, default, screenOrigin.X, screenOrigin.Y, 0, 0, 0, 0, 1, 1, 1).AsArray)
             Game.CallBuiltinTrusted("matrix_set", default, default, 2, moved);
         try
         {

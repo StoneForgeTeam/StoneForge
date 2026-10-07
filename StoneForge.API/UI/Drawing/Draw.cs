@@ -27,6 +27,14 @@ public static class Draw
     public static double Width => Game.CallBuiltin("display_get_gui_width").AsReal / Scale;
     public static double Height => Game.CallBuiltin("display_get_gui_height").AsReal / Scale;
 
+    // Full-window (0,0), expressed in the game's world-pass GUI coordinates.
+    internal static Point HudScreenOrigin(double unit, double frameLeft, double frameTop, double windowX, double windowY)
+    {
+        if (!double.IsFinite(unit) || unit <= 0)
+            unit = 1;
+        return new Point(-5000 - frameLeft - windowX / unit, -5000 - frameTop - windowY / unit);
+    }
+
     // Each Draw GUI pass: the game's UI unit (window_ratio * cameraScale window pixels, as its own GUI) in GUI
     // pixels. (1 until the game's camera is set up.)
     internal static void UpdateScale()

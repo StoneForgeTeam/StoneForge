@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Align HUD drawing with full-window mouse coordinates so party-frame toggles and other HUD controls have matching hitboxes with frame margins and window offsets.
+
 - Remove the redundant System.Drawing.Common package reference and its unused bundled notices, avoid copying the MSL helper twice during packaging, and document MSL's default metadata placeholder.
 
 ## 0.8.0 — MSL mod support
