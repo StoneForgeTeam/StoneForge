@@ -123,7 +123,9 @@ internal static class DevelopmentHost
             {
                 // (By its ID, or its name.)
                 string given = request.GetProperty("name").GetString()!;
-                string name = ModRegistry.All.FirstOrDefault(m => m.Id == given || m.Name == given)?.Id ?? throw new ArgumentException("Unknown mod.");
+                var mod = ModRegistry.All.FirstOrDefault(m => m.Id == given || m.Name == given) ?? throw new ArgumentException("Unknown mod.");
+                if (mod.IsSml) throw new InvalidOperationException("MSL packages cannot be hot-reloaded. Use the Mods window and restart.");
+                string name = mod.Id;
                 ModManager.Request(name, false);
                 if (request.GetProperty("cmd").GetString() == "mod.reload") ModManager.Request(name, true);
                 return "Queued for the next frame; inspect status for the outcome.";

@@ -5,6 +5,8 @@
 **/TestResults/
 *.user
 *.suo
+# Local executable/debugging profile for the API library.
+/StoneForge.API/Properties/launchSettings.json
 *.VC.db
 *.VC.opendb
 /artifacts/
@@ -20,3 +22,6 @@
 !/lib/YYToolkit/YYToolkit.dll
 !/lib/UndertaleModLib/UndertaleModLib.dll
 !/lib/UndertaleModLib/Underanalyzer.dll
+!/lib/MSL/UndertaleModLib.dll
+!/lib/MSL/ModShardLauncher.dll
+!/lib/MSL/UndertaleModTool.dll

@@ -3,6 +3,9 @@ StoneForge's licences
 
 StoneForge (StoneForge.API, StoneForge.Loader, StoneForge.Patcher and the rest) - MIT licence (StoneForge-MIT.txt),
 except:
+- StoneForge.MslHost (dotnet\patcher\msl\StoneForge.MslHost.*) and ModShardLauncher 0.13.2.0's own
+  ModShardLauncher.dll beside it - GNU GPL-3.0 (MSL-GPL-3.0.txt). Provenance and checksums: MSL-SOURCE.md.
+  Helper dependencies: Newtonsoft.Json and System.Drawing.Common (MIT); Serilog and its Console sink (Apache-2.0).
 - StoneForge.Bridge (aurie\StoneForge.Bridge.dll) - GNU AGPL-3.0 (YYToolkit-AGPL-3.0.txt): it includes YYToolkit's
   code.
 

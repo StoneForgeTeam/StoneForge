@@ -66,6 +66,11 @@ Get-ChildItem $patcher -Recurse -File | Where-Object Extension -ne ".pdb" | ForE
 }
 
 # The release's own files (Windows line endings for the .cmd files), the version in the README, the licences.
+$msl = "$root\StoneForge.MslHost\bin\$Configuration\net10.0-windows"
+if (-not (Test-Path "$msl\StoneForge.MslHost.exe")) { throw "Build StoneForge.MslHost before packaging." }
+Get-ChildItem $msl -Recurse -File | Where-Object Extension -ne '.pdb' | ForEach-Object {
+    Put $_.FullName (Join-Path "$files\dotnet\patcher\msl" $_.FullName.Substring($msl.Length + 1))
+}
 Get-ChildItem "$PSScriptRoot\release" -Recurse -File | ForEach-Object {
     $target = Join-Path $out $_.FullName.Substring("$PSScriptRoot\release".Length + 1)
     New-Item -ItemType Directory -Force (Split-Path $target -Parent) | Out-Null
@@ -83,6 +88,8 @@ Put "$lib\YYToolkit\README.md" "$out\LICENSES\YYToolkit-SOURCE.md"
 Put "$lib\UndertaleModLib\LICENSE.txt" "$out\LICENSES\UndertaleModLib-GPL-3.0.txt"
 Put "$lib\UndertaleModLib\Underanalyzer-LICENSE.txt" "$out\LICENSES\Underanalyzer-MPL-2.0.txt"
 Put "$lib\UndertaleModLib\README.md" "$out\LICENSES\UndertaleModLib-SOURCE.md"
+Put "$root\StoneForge.MslHost\LICENSE" "$out\LICENSES\MSL-GPL-3.0.txt"
+Put "$lib\MSL\README.md" "$out\LICENSES\MSL-SOURCE.md"
 
 $zip = Join-Path $root "artifacts\StoneForge-$version.zip"
 if (Test-Path $zip) { Remove-Item $zip -Force }

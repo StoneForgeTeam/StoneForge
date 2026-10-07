@@ -1,5 +1,19 @@
 # StoneForge changes
 
+## 0.8.0 — MSL mod support
+
+- **MSL mods are now supported alongside StoneForge mods on the VM modbranch.** Drop `.sml` packages directly into the game's `mods` folder; they are enabled by default and can be switched off in the Mods window. No separate ModShardLauncher installation is required. Only install packages you trust: they execute unrestricted C# while patching.
+
+- Include applied MSL packages in loading-screen and main-menu mod counts. Separate mod details, description, status, warnings and MSL settings into labeled sections.
+- Stream MSL helper output into the patching console, show preparation and saving stages, and report elapsed time during silent work; keep the full diagnostic log.
+- Keep MSL parent scripts and their nested functions together before serialization, preventing invalid bytecode pointers when mods insert children ahead of their parent.
+- Keep long tab names inside their buttons and scroll selected names with pauses at either end. Show MSL-provided names, authors, versions and descriptions; retain matching cached details for disabled packages.
+- Include all pinned MSL DLLs in source checkouts, correct the launcher binary's source revision/checksum, and check/document the .NET 10 Windows Desktop Runtime required by the DLL-based helper.
+
+- VM-only `.sml` packages appear in the Mods window with an unrestricted-code warning. Adding, changing, disabling or removing packages takes effect after restarting; MSL packages cannot be hot-reloaded and do not support the native branch.
+- Bundled headless MSL 0.13.2.0 helper applies packages in filename order before StoneForge, using separate legacy dependencies. Package content hashes invalidate preparation; removing packages rebuilds from the preserved base. Failed helper runs do not replace game data.
+- MSL launcher UI and scripting-server integrations are unsupported. Compatibility requires validation per mod and game version.
+
 ## 0.7.1 — Branding
 
 - StoneForge's branding: the loading screen shows its splash art (logo and title) behind the progress bar, and

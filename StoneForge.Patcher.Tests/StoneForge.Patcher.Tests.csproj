@@ -1,4 +1,5 @@
 <Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup><Compile Include="..\StoneForge.MslHost\CodeOrdering.cs" Link="CodeOrdering.cs" /></ItemGroup>
 
   <!-- The patcher against real, unpatched VM game data (xUnit): loader patches, mod items/skills, mod GML and script
        hooks, checked after saving and reading the data back. The data: STONEFORGE_TEST_DATA, or the Steam install's
@@ -25,4 +26,8 @@
     <None Include="GmlFixture/**/*.gml" CopyToOutputDirectory="PreserveNewest" />
     <Using Include="Xunit" />
   </ItemGroup>
+  <Target Name="CopyMslHost" AfterTargets="Build">
+    <ItemGroup><MslFiles Include="../StoneForge.MslHost/bin/$(Configuration)/net10.0-windows/**/*" Exclude="../StoneForge.MslHost/bin/$(Configuration)/net10.0-windows/**/*.pdb" /></ItemGroup>
+    <Copy SourceFiles="@(MslFiles)" DestinationFiles="@(MslFiles->'$(OutDir)msl/%(RecursiveDir)%(Filename)%(Extension)')" />
+  </Target>
 </Project>

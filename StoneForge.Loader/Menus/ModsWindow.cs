@@ -57,15 +57,17 @@ internal sealed class ModsWindow : UISettingsWindow
         var mod = ModRegistry.All.FirstOrDefault(m => m.Id == _mods[tab.Index].Id) ?? _mods[tab.Index];
         Page.Clear();
         Page.AddHeader(mod.Name);
-        if (mod.Trusted)
-            Page.AddText(TrustedWarning, ErrorColour);
-        if (mod.ContainsGml)
-        {
-            Page.AddText(GmlWarning, WarningColour);
-        }
-        int icon = mod.Error == null ? Icon(mod) : -1;
+        int icon = mod.Error == null && !mod.IsSml ? Icon(mod) : -1;
         if (icon >= 0)
             Page.AddImage(icon);
+        if (mod.Author.Length > 0) Page.AddText("Author: " + mod.Author);
+        if (mod.Version.Length > 0) Page.AddText("Version: " + mod.Version);
+        if (mod.Description.Length > 0)
+        {
+            Page.AddHeader("Description");
+            Page.AddText(mod.Description);
+        }
+        Page.AddHeader("Status");
         // (A mod that didn't compile, or uses what mods aren't allowed: why, in red.)
         if (!string.IsNullOrEmpty(mod.Error))
             Page.AddText(mod.Error, ErrorColour);
@@ -74,9 +76,6 @@ internal sealed class ModsWindow : UISettingsWindow
             Page.AddText("Paused: " + mod.RuntimeError, ErrorColour);
             Page.Add(new UIButton("Retry", 5, 0, onClick: () => ModManager.Request(mod.Id, true)));
         }
-        Page.AddText("Version " + mod.Version + (mod.Author.Length > 0 ? "  -  by " + mod.Author : ""), Draw.Muted);
-        if (mod.Description.Length > 0)
-            Page.AddText(mod.Description);
         // (The mods it needs: each by name, if it's there.)
         if (mod.Requires is { Count: > 0 } requires)
             Page.AddText("Requires " + string.Join(", ", requires.Select(id => ModRegistry.All.FirstOrDefault(m => m.Id == id) is { } other
@@ -87,8 +86,27 @@ internal sealed class ModsWindow : UISettingsWindow
         // (Mods running that need it: switched off with it.)
         if (ModManager.RequiredBy(mod.Id) is { Count: > 0 } requiredBy)
             Page.AddText($"Required by {string.Join(", ", requiredBy)} - switching this off switches {(requiredBy.Count == 1 ? "it" : "them")} off too.", WarningColour);
-        _enabled = Page.AddCheckbox("Enabled", IsEnabled(mod), EnabledTooltip);
+        if (mod.IsSml)
+        {
+            Page.AddText(mod.Enabled ? "Applied to this run."
+                : IsEnabled(mod) ? "Enabled for the next start. Not applied to this run."
+                : "Not applied to this run.");
+            Page.AddText("Changes to Enabled take effect after restarting.", Draw.Muted);
+        }
+        _enabled = Page.AddCheckbox("Enabled", IsEnabled(mod), mod.IsSml ? "Applied on the next start; cannot be hot-reloaded." : EnabledTooltip);
         _enabled.Changed += on => SetEnabled(mod, on);
+        if (mod.IsSml || mod.Trusted || mod.ContainsGml)
+        {
+            Page.AddHeader("Warnings");
+            if (mod.IsSml) Page.AddText(SmlCatalog.Warning, WarningColour);
+            else if (mod.Trusted) Page.AddText(TrustedWarning, ErrorColour);
+            if (mod.ContainsGml) Page.AddText(GmlWarning, WarningColour);
+        }
+        if (mod.IsSml)
+        {
+            Page.AddHeader("Settings");
+            Page.AddText("MSL settings, when provided, remain in the game's MSL settings menu.", Draw.Muted);
+        }
         // (Its settings, if it's loaded and has some.)
         SettingsPage.Add(Page, mod.Id, () => tab.Open());
         Conflicts(mod.Id, () => tab.Open());
@@ -167,7 +185,7 @@ internal sealed class ModsWindow : UISettingsWindow
         if (mod.Trusted)
             ModRegistry.SetAllowed(mod.Id, enabled);
         ModRegistry.SetEnabled(mod.Id, enabled);
-        ModManager.Request(mod.Id, enabled);
+        if (!mod.IsSml) ModManager.Request(mod.Id, enabled);
     }
 
     private static void OpenFolder()

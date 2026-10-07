@@ -62,13 +62,14 @@ internal static class ModManager
     internal static StartupProgress Startup { get; } = new();
 
     /// <summary>How many mods are loaded now.</summary>
-    internal static int LoadedCount => Mods.Count;
+    internal static int LoadedCount => Mods.Count + ModRegistry.All.Count(m => m.IsSml && m.Enabled);
 
     // At start: every mod folder, compiling in the background from now on (Frame loads each once it's ready).
     internal static void BeginLoadAll()
     {
         string modsDir = ModsDir;
         Directory.CreateDirectory(modsDir);
+        SmlRuntime.Discover();
         var folders = Directory.GetDirectories(modsDir).OrderBy(d => d, StringComparer.OrdinalIgnoreCase).ToList();
         // (In the order to load them: each after those it requires and loads after.)
         var manifests = folders.Select(TryManifest).ToList();
@@ -97,7 +98,7 @@ internal static class ModManager
             previous = _compiles[i];
         }
         if (_folders.Count == 0)
-            Startup.Finish(0, 0);
+            Startup.Finish(LoadedCount, 0);
     }
 
     /// <summary>Switches a mod (by its ID) on or off from the next frame (and for the next start - ModRegistry).</summary>
@@ -205,8 +206,8 @@ internal static class ModManager
             Startup.Done = ++done;
             return;
         }
-        Startup.Finish(Mods.Count, Startup.Failed);
-        Game.Log($"{Mods.Count} mod(s) loaded" + (Startup.Failed > 0 ? $", {Startup.Failed} folder(s) not" : ""));
+        Startup.Finish(LoadedCount, Startup.Failed);
+        Game.Log($"{LoadedCount} mod(s) loaded" + (Startup.Failed > 0 ? $", {Startup.Failed} folder(s) not" : ""));
         // (Where mods might conflict - the same calls hooked before they run at the same order: said once they're all in,
         // a line for each pair of mods.)
         var pairs = Hooks.Overlaps()

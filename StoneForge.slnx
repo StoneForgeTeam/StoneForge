@@ -11,6 +11,7 @@
   <Project Path="StoneForge.Generators/StoneForge.Generators.csproj" />
   <Project Path="StoneForge.GmlGenerator/StoneForge.GmlGenerator.csproj" />
   <Project Path="StoneForge.Loader/StoneForge.Loader.csproj" />
+  <Project Path="StoneForge.MslHost/StoneForge.MslHost.csproj" />
   <Project Path="StoneForge.Patcher/StoneForge.Patcher.csproj" />
   <Project Path="StoneForge.Patcher.Tests/StoneForge.Patcher.Tests.csproj" />
   <Project Path="StoneForge.Tests/StoneForge.Tests.csproj" />

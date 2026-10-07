@@ -162,8 +162,8 @@ internal sealed class LoadingScreen : UIElement
         string status;
         if (!startup.Finished)
             status = $"Loading mods: {startup.Current} ({startup.CurrentIndex + 1}/{startup.Total})";
-        else if (startup.Total == 0)
-            status = "No mods installed";
+        else if (startup.Loaded == 0)
+            status = "No mods loaded";
         else
             status = $"{startup.Loaded} mod{(startup.Loaded == 1 ? "" : "s")} loaded";
         Draw.Text(cx, barY + 12, status, Draw.Muted, Draw.AlignCenter, alpha: alpha);

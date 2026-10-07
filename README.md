@@ -7,7 +7,7 @@ A C# mod loader for Stoneshard on Windows. Mods are source folders with a `mod.j
 ## Requirements
 
 - Stoneshard (Steam), works on both main and mod branches!.
-- The **.NET 10 Runtime, x64** to play with mods.
+- The **.NET 10 Windows Desktop Runtime, x64** for all mod types, including MSL packages. The base .NET 10 Runtime is sufficient only for ordinary StoneForge mods.
 - To build: .NET 10 SDK and Visual Studio with MSBuild and C++ tools (the current native build uses toolset `v145`).
 
 StoneForge uses UndertaleModLib 0.9.2.0 and Underanalyzer directly to patch game data. Game data is read from your local install; it is not included in this repository.
@@ -44,7 +44,15 @@ Pinned native binaries and their rebuild instructions are under `lib/Aurie`, `li
 
 Publishing releases is for the StoneForgeTeam maintainers: see [RELEASING.md](RELEASING.md).
 
-## Write a mod
+## MSL packages (VM modbranch only)
+
+Drop `.sml` files directly into `<Stoneshard>/mods`, then start the game. Packages are enabled by default: only put mods you trust there. The Mods window shows their metadata and an unrestricted-code warning; untick Enabled to switch a package off on the next start. File names identify packages, so renaming a disabled package makes it a new, enabled package. Metadata is collected during patching and cached; disabled packages are not executed merely to display their details.
+
+Enabled packages run in filename order through the bundled MSL 0.13.2.0 compatibility helper, followed by StoneForge's patches. No separate MSL installation is needed. Adding, changing, disabling or removing packages rebuilds from the preserved base on the next start. Changes are not hot-reloaded. The preserved base must be clean modbranch data, not previously MSL-patched data.
+
+MSL mods execute unrestricted C# during preparation. The helper's separate process isolates its older dependencies, not its permissions. Packages depending on MSL's launcher UI or scripting server are unsupported; compatibility with individual mods still depends on the game and MSL API version. Logs are in `dotnet/msl-patch.log`. Failed patching leaves the last game data in place; do not assume a changed mod selection was applied after an error.
+
+## Write a StoneForge mod
 
 The documentation lives in the [StoneForgeDocs](https://github.com/StoneForgeTeam/StoneForgeDocs) repository and is published with GitBook.
 

@@ -21,6 +21,7 @@
     <ProjectReference Include="..\StoneForge.API\StoneForge.API.csproj" />
     <ProjectReference Include="..\StoneForge.GmlGenerator\StoneForge.GmlGenerator.csproj" />
     <Compile Include="..\Shared\GmlCatalog.cs" Link="Loading\GmlCatalog.cs" />
+    <Compile Include="..\Shared\SmlCatalog.cs" Link="Loading\SmlCatalog.cs" />
   </ItemGroup>
 
   <ItemGroup>

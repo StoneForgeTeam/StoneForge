@@ -1,6 +1,7 @@
 using System.IO;
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json;
 using UndertaleModLib;
 
 namespace StoneForge.Patcher;
@@ -28,8 +29,23 @@ internal static class GameDataBuilder
         var skills = ModClassDeclaration.WithKnown(declared, game.KnownSkills);
         var objects = ModClassDeclaration.WithKnown(declared, game.KnownObjects);
         var gml = GmlCatalog.Read(game.Mods);
-        string key = Key(newBase ? game.Data : game.BaseData, hooks, consumables, skills, objects) + gml.Fingerprint;
-        if (!newBase && key == builtFrom && File.Exists(Path.Combine(game.Dotnet, "stoneforge-gml.txt")) && File.Exists(game.HookedScripts))
+        var sml = SmlCatalog.Read(game.Mods, Path.Combine(game.Dotnet, "mods.json"));
+        var metadata = new Dictionary<string, SmlMetadata>();
+        string smlState = Path.Combine(game.Dotnet, SmlCatalog.StateFile);
+        if (File.Exists(smlState))
+        {
+            try
+            {
+                var previous = JsonSerializer.Deserialize<SmlPrepared>(File.ReadAllText(smlState));
+                foreach (var package in sml)
+                    if (previous?.Metadata?.TryGetValue(package.Id, out var detail) == true && detail.Hash == package.Hash)
+                        metadata[package.Id] = detail;
+            }
+            catch (Exception e) { PatcherConsole.Log("MSL metadata cache unreadable: " + e.Message); }
+        }
+        string smlKey = SmlCatalog.Fingerprint(sml) + (sml.Any(p => p.Enabled) ? SmlPatches.HostKey() : "");
+        string key = Key(newBase ? game.Data : game.BaseData, hooks, consumables, skills, objects) + gml.Fingerprint + smlKey;
+        if (!newBase && key == builtFrom && File.Exists(Path.Combine(game.Dotnet, "stoneforge-gml.txt")) && File.Exists(game.HookedScripts) && File.Exists(Path.Combine(game.Dotnet, SmlCatalog.StateFile)))
         {
             // (The native build hooks no scripts here - its list is empty: they're detoured as mods load.)
             PatcherConsole.Log(File.ReadAllLines(game.HookedScripts).Length == 0 && hooks.Count > 0
@@ -57,7 +73,7 @@ internal static class GameDataBuilder
                 PatcherConsole.Log(File.Exists(game.BaseData) ? "  data.win has changed (game update or re-patch): using it as the new base" : "  keeping the game's own data.win (dotnet\\data_base.win)");
                 File.Copy(game.Data, game.BaseData, overwrite: true);
             }
-            key = Key(game.BaseData, hooks, consumables, skills, objects) + gml.Fingerprint;
+            key = Key(game.BaseData, hooks, consumables, skills, objects) + gml.Fingerprint + smlKey;
         }
         if (gameData == null)
         {
@@ -66,6 +82,17 @@ internal static class GameDataBuilder
                 throw new InvalidOperationException("dotnet\\data_base.win has StoneForge's changes, so it can't be the base. Restore the game's own data.win (Steam: Verify integrity of game files), delete dotnet\\data_base.win and start again.");
         }
 
+        if (sml.Any(p => p.Enabled))
+        {
+            if (gameData.IsYYC()) throw new InvalidOperationException("MSL mods require the VM modbranch. Disable them or switch to modbranch.");
+            // Never layer MSL over its previous output: always start at the preserved input.
+            if (gameData.GameObjects.ByName("o_msl_log") != null || gameData.GameObjects.ByName("o_msl_mod_disclaimer") != null)
+                throw new InvalidOperationException("The preserved game data already contains MSL patches. Restore clean modbranch data before enabling .sml packages.");
+            gameData.Dispose();
+            gameData = SmlPatches.Apply(game, sml, out var loadedMetadata);
+            foreach (var pair in loadedMetadata) metadata[pair.Key] = pair.Value;
+        }
+        PatcherConsole.Log("Applying StoneForge's game-data changes...");
         var editor = new GameDataEditor(gameData);
         var added = new List<ModClassDeclaration>();
         var addedSkills = new List<ModClassDeclaration>();
@@ -92,12 +119,15 @@ internal static class GameDataBuilder
         }
 
         string temp = game.Data + ".tmp";
+        PatcherConsole.Log("Saving game data...");
         using (var output = File.Create(temp))
             UndertaleIO.Write(output, gameData, _ => { });
         File.Move(temp, game.Data, true);
         File.WriteAllLines(Path.Combine(game.Dotnet, "stoneforge-gml.txt"),
             new[] { Stamp(game.Data) }.Concat(gml.Projects.Values.Select(p => p.Name + "|" + p.Fingerprint)));
         File.WriteAllLines(game.DataKey, new[] { Stamp(game.Data), key });
+        File.WriteAllText(Path.Combine(game.Dotnet, SmlCatalog.StateFile), JsonSerializer.Serialize(
+            new SmlPrepared(Stamp(game.Data), sml.Where(p => p.Enabled).ToDictionary(p => p.Id, p => p.Hash), metadata)));
         ModClassDeclaration.Remember(game.KnownConsumables, added);
         ModClassDeclaration.Remember(game.KnownSkills, addedSkills);
         ModClassDeclaration.Remember(game.KnownObjects, addedObjects);
@@ -124,6 +154,8 @@ internal static class GameDataBuilder
             File.Delete(game.DataKey);
         string gmlState = Path.Combine(game.Dotnet, "stoneforge-gml.txt");
         if (File.Exists(gmlState)) File.Delete(gmlState);
+        string smlState = Path.Combine(game.Dotnet, SmlCatalog.StateFile);
+        if (File.Exists(smlState)) File.Delete(smlState);
         foreach (string known in new[] { game.KnownConsumables, game.KnownSkills, game.KnownObjects, game.HookedScripts })
             if (File.Exists(known))
                 File.Delete(known);

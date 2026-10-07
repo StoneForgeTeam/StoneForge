@@ -9,7 +9,8 @@ and off from the Mods button on the main menu.
 Requirements
 ------------
 - Windows, and Stoneshard (Steam) on the VM modbranch.
-- The .NET 10 Runtime (x64): https://dotnet.microsoft.com/download/dotnet/10.0
+- The .NET 10 Windows Desktop Runtime (x64): https://dotnet.microsoft.com/download/dotnet/10.0
+  Choose Windows Desktop Runtime for MSL packages. The base .NET Runtime supports ordinary StoneForge mods only.
   (The installer tells you if it's missing.)
 
 
@@ -28,6 +29,12 @@ Mods
 Each mod is a folder in Stoneshard's mods folder (<Stoneshard>\mods\<Mod>\) holding its .cs files, and its pictures
 (and, if it has one, an icon.png) in an Assets folder inside it. Mods load when the game starts; the Mods
 window switches them on and off at once.
+
+MSL packages (VM modbranch only): put .sml files directly in mods, then start the game. Packages are enabled by
+default and execute unrestricted C#: only install ones you trust. The Mods window shows their details and warning;
+untick Enabled to disable a package on the next start. The bundled MSL 0.13.2.0
+helper patches them before StoneForge; no separate launcher is needed. These packages cannot be hot-reloaded.
+MSL launcher UI and scripting-server integrations are unsupported. Patch failures are logged in dotnet\msl-patch.log.
 
 Writing mods: https://github.com/StoneForgeTeam/StoneForgeDocs
 
