@@ -29,6 +29,9 @@ internal static class ModSecurity
         "System.Text",
         "System.Text.RegularExpressions",
         "System.Globalization",
+        // (JSON as nodes - JsonNode, JsonArray, JsonObject, JsonValue: data only. Not JsonSerializer, which makes objects of
+        // any type by reflection.)
+        "System.Text.Json.Nodes",
         "StoneForge",
         "StoneForge.Objects",
         "StoneForge.GameItems",
@@ -70,6 +73,10 @@ internal static class ModSecurity
         "System.Runtime.CompilerServices.DefaultInterpolatedStringHandler",
         "System.Runtime.CompilerServices.IsExternalInit",
         "System.Runtime.CompilerServices.ITuple",
+        // (What JSON nodes take and give: a value's kind, a parse error, and the options their methods default to -
+        // inert without JsonSerializer.)
+        "System.Text.Json.JsonValueKind", "System.Text.Json.JsonException", "System.Text.Json.JsonDocumentOptions",
+        "System.Text.Json.JsonSerializerOptions", "System.Text.Json.Nodes.JsonNodeOptions",
     };
 
     // Allowed type families: every System.Func / Action / ValueTuple / Tuple arity.
@@ -93,14 +100,16 @@ internal static class ModSecurity
     // The only attributes a mod may put on its assembly or module.
     private static readonly HashSet<string> AllowedAssemblyAttributes = new(StringComparer.Ordinal) { "StoneForge.HookScriptAttribute" };
 
-    /// <summary>Every violation in the compilation's source (empty: allowed).</summary>
-    internal static List<string> Check(CSharpCompilation compilation)
+    /// <summary>Every violation in the compilation's source (empty: allowed). <paramref name="mods"/>: the assemblies of
+    /// the mods it requires, by name - their public types are allowed like its own (each was checked as it was compiled,
+    /// or is trusted).</summary>
+    internal static List<string> Check(CSharpCompilation compilation, IReadOnlySet<string>? mods = null)
     {
         var problems = new List<string>();
         foreach (var tree in compilation.SyntaxTrees)
         {
             var model = compilation.GetSemanticModel(tree, ignoreAccessibility: false);
-            new Walker(compilation, model, problems).Visit(tree.GetRoot());
+            new Walker(compilation, model, problems, mods).Visit(tree.GetRoot());
         }
         return problems;
     }
@@ -111,9 +120,11 @@ internal static class ModSecurity
         private readonly SemanticModel _model;
         private readonly List<string> _problems;
         private readonly HashSet<(string, int)> _seen = new();
+        private readonly IReadOnlySet<string>? _mods;
 
-        internal Walker(CSharpCompilation compilation, SemanticModel model, List<string> problems)
+        internal Walker(CSharpCompilation compilation, SemanticModel model, List<string> problems, IReadOnlySet<string>? mods)
         {
+            _mods = mods;
             _compilation = compilation;
             _model = model;
             _problems = problems;
@@ -363,6 +374,12 @@ internal static class ModSecurity
                         CheckType(node, typeArgument);
                     if (method.IsExtern)
                         Deny(node, $"{method.Name} is extern");
+                    // (JsonValue.Create<T> wraps any object, which is written by reflection - every public property it
+                    // has, a delegate's method among them. A value's own overload - Create(double), Create(string)... -
+                    // is what a plain value picks.)
+                    if (method.IsGenericMethod && method.Name == "Create" && containing != null
+                        && FullName(containing.OriginalDefinition) == "System.Text.Json.Nodes.JsonValue")
+                        Deny(node, "JsonValue.Create<T> isn't allowed (it writes any object by reflection): use the overload for a plain value");
                     break;
                 case IPropertySymbol property:
                     CheckType(node, property.Type);
@@ -419,7 +436,9 @@ internal static class ModSecurity
             }
         }
 
-        private bool FromSource(ISymbol symbol) => SymbolEqualityComparer.Default.Equals(symbol.ContainingAssembly, _compilation.Assembly);
+        // Its own source's - or a required mod's.
+        private bool FromSource(ISymbol symbol) => SymbolEqualityComparer.Default.Equals(symbol.ContainingAssembly, _compilation.Assembly)
+            || (_mods != null && symbol.ContainingAssembly is { } assembly && _mods.Contains(assembly.Name));
     }
 
     private static bool TypeAllowed(INamedTypeSymbol type)

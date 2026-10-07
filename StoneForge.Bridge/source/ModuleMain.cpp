@@ -6,20 +6,34 @@
 // entries by name (object events: "gml_Object_o_player_Step_0"...). In return the loader gives us its
 // callbacks: every frame, and before / after each subscribed code entry (before can skip the original).
 // Only subscribed entries cross into .NET - the game runs thousands of code entries a second.
-// Log: <game>\dotnet\bridge.log.
+// Log: <game>\dotnet\bridge.log (a second game running at once: bridge-2.log, and so on).
+// Two builds of the game: the VM one (its GML bytecode in data.win, run by the runner's interpreter - StoneForge.Patcher
+// writes a hook block into each hooked script, which calls string_concat("__stonemod_script__", ...) into us) and the
+// native one (YYC: GML compiled into the exe). On the native one every gml_* function is found by name in the exe's
+// table of them, and a script is hooked by detouring its function (HookScript) - any script, no patching.
+// Crashes: the code entries the game runs are traced as they start and end (a ring of the last 512, and the ones
+// running now). When the game itself faults - an access violation in StoneShard.exe - the report goes to
+// <game>\dotnet\crash-report.txt (the GML running, innermost first; the native stack; the trace) and a window shows
+// it before the game closes.
 #include <YYToolkit/YYTK_Shared.hpp>
 #include <nethost/hostfxr.h>
 #include <nethost/coreclr_delegates.h>
+#include <array>
 #include <climits>
+#include <cstdarg>
+#include <cstdio>
 #include <fstream>
+#include <share.h>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
+#include <utility>
 using namespace Aurie;
 using namespace YYTK;
 
-// A value crossing to and from C#. kind: 0 real, 1 string (UTF-8), 5 undefined, 6 instance / struct
-// (ptr), 13 bool (real 0/1), 15 reference (its id in real, raw value in ptr), 2 other (its text in str).
+// A value crossing to and from C#. kind: 0 real, 1 string (UTF-8), 5 undefined, 6 instance / the global scope
+// (ptr), 7 array / 8 struct (a reference C# holds: its id in real, the game's pointer in ptr - see References),
+// 13 bool (real 0/1), 15 reference (its id in real, raw value in ptr), 2 other (its text in str).
 struct NValue
 {
 	int32_t Kind;
@@ -42,6 +56,23 @@ struct BridgeApi
 	void* (*InstanceFromId)(int Id);
     const char* (*LastError)();
     int (*InstanceId)(void* Instance);
+    // Lets go of references (arrays and structs) C# no longer holds.
+    void (*ReleaseRefs)(const int64_t* Ids, int Count);
+    // An element of an instance's indexed engine variable (alarm[n]...).
+    int (*GetVarAt)(void* Instance, const char* Name, int Index, NValue* Result);
+    int (*SetVarAt)(void* Instance, const char* Name, int Index, const NValue* Value);
+    // Every deactivated instance of the current room (the game's culling): ids and object indexes, in one walk.
+    int (*InactiveInstances)(int* Ids, int* Objects, int Capacity);
+    // 1 on the game's native (YYC) build, 0 on the VM one.
+    int (*IsNative)();
+    // The native build: a script hooked (its compiled function detoured), its calls to OnScript from now on. 0 if
+    // there's no such script, or this is the VM build (StoneForge.Patcher hooks scripts there).
+    int (*HookScript)(const char* Name);
+    // The native build: whether a compiled function by this name exists ("gml_Object_o_enemy_Step_0"...). 0 on the VM one.
+    int (*HasFunction)(const char* Name);
+    // The native build: whether a mod's text box is being typed in (or a mod window is open) - the game's hotkey checks
+    // see no keys meanwhile (GuardHotkeys).
+    void (*SetTyping)(int Typing);
 };
 
 struct ManagedCallbacks
@@ -57,6 +88,7 @@ struct ManagedCallbacks
 };
 
 static YYTKInterface* g_Yytk = nullptr;
+static AurieModule* g_Module = nullptr;
 static std::ofstream g_Log;
 static BridgeApi g_Api = {};
 static ManagedCallbacks g_Callbacks = {};
@@ -91,6 +123,69 @@ static void Log(const std::string& Line)
 	}
 }
 
+static CInstance* GlobalInstance()
+{
+	CInstance* global = nullptr;
+	g_Yytk->GetGlobalInstance(&global);
+	return global;
+}
+
+// ---- references ----
+
+// An array or struct handed to C# becomes a reference C# holds by id: a copy kept here, to hand back when C#
+// passes it in again, and rooted in the global struct __stoneforge_refs - GameMaker's garbage collector only keeps
+// what the game can reach, and a copy in native memory isn't that. C# lets go of it (ReleaseRefs) when it's done.
+// (Through the game's own built-ins: YYToolkit's array and struct access needs layouts this GameMaker version lacks.)
+static std::unordered_map<int64_t, RValue> g_Refs;
+static int64_t g_NextRef = 1;
+static RValue g_RefRoot;
+
+static RValue CallGame(const char* Name, std::vector<RValue> Args)
+{
+	RValue result;
+	g_Yytk->CallBuiltinEx(result, Name, GlobalInstance(), GlobalInstance(), std::move(Args));
+	return result;
+}
+
+// The root struct, made (again, should the game have lost its globals) as needed.
+static bool RefRoot()
+{
+	RValue current = CallGame("variable_global_get", { RValue(std::string_view("__stoneforge_refs")) });
+	if (current.m_Kind == VALUE_OBJECT && g_RefRoot.m_Kind == VALUE_OBJECT && current.m_Pointer == g_RefRoot.m_Pointer)
+		return true;
+	RValue root = CallGame("json_parse", { RValue(std::string_view("{}")) });
+	if (root.m_Kind != VALUE_OBJECT)
+		return false;
+	CallGame("variable_global_set", { RValue(std::string_view("__stoneforge_refs")), root });
+	g_RefRoot = root;
+	// (Whatever the old root held went with it.)
+	g_Refs.clear();
+	return true;
+}
+
+static std::string RefKey(int64_t Id) { return "r" + std::to_string(Id); }
+
+static int64_t KeepRef(const RValue& Value)
+{
+	if (!RefRoot())
+		return 0;
+	int64_t id = g_NextRef++;
+	CallGame("variable_struct_set", { g_RefRoot, RValue(std::string_view(RefKey(id))), Value });
+	g_Refs.emplace(id, Value);
+	return id;
+}
+
+static void ApiReleaseRefs(const int64_t* Ids, int Count)
+{
+	if (!RequireGameThread() || !Ids)
+		return;
+	for (int i = 0; i < Count; i++)
+	{
+		if (g_Refs.erase(Ids[i]) > 0 && g_RefRoot.m_Kind == VALUE_OBJECT)
+			CallGame("variable_struct_remove", { g_RefRoot, RValue(std::string_view(RefKey(Ids[i]))) });
+	}
+}
+
 // ---- values ----
 
 static RValue ToRValue(const NValue& V)
@@ -100,6 +195,12 @@ static RValue ToRValue(const NValue& V)
 	case 0: return RValue(V.Real);
 	case 1: return RValue(std::string_view(V.Str ? V.Str : ""));
 	case 6: return V.Ptr ? RValue(static_cast<CInstance*>(V.Ptr)) : RValue();
+	case 7:
+	case 8:
+	{
+		auto found = g_Refs.find(static_cast<int64_t>(V.Real));
+		return found != g_Refs.end() ? found->second : RValue();
+	}
 	case 13: return RValue(V.Real != 0.0);
 	default: return RValue();
 	}
@@ -133,7 +234,24 @@ static void FromRValue(const RValue& R, NValue& Out)
 		break;
 	}
 	case VALUE_OBJECT:
-		Out.Kind = 6;
+	{
+		// An instance (or the global scope) by pointer, as always; any other object - a struct, a method - is a
+		// reference C# holds.
+		auto* object = static_cast<YYObjectBase*>(R.m_Pointer);
+		if (!object || object->m_ObjectKind == OBJECT_KIND_CINSTANCE || R.m_Pointer == GlobalInstance())
+		{
+			Out.Kind = 6;
+			Out.Ptr = R.m_Pointer;
+			break;
+		}
+		Out.Kind = 8;
+		Out.Real = static_cast<double>(KeepRef(R));
+		Out.Ptr = R.m_Pointer;
+		break;
+	}
+	case VALUE_ARRAY:
+		Out.Kind = 7;
+		Out.Real = static_cast<double>(KeepRef(R));
 		Out.Ptr = R.m_Pointer;
 		break;
 	case VALUE_UNDEFINED:
@@ -178,13 +296,6 @@ static std::vector<RValue> ToArgs(const NValue* Args, int Count)
 	return args;
 }
 
-static CInstance* GlobalInstance()
-{
-	CInstance* global = nullptr;
-	g_Yytk->GetGlobalInstance(&global);
-	return global;
-}
-
 // ---- the API C# calls ----
 
 static void ApiLog(const char* Text)
@@ -192,10 +303,33 @@ static void ApiLog(const char* Text)
 	Log(std::string("[C#] ") + (Text ? Text : ""));
 }
 
+// Whether a name is one of the game's built-in functions, as the game looks it up (Code_Function_Find: safe for any
+// name) - asked once a name. A script's name (index 100000 up) isn't: calling one as a built-in has YYToolkit fetch the
+// script (GetScriptData), which faults on this GameMaker version - a crash for a misspelt call. Scripts go through
+// script_execute (Game.CallScript).
+static std::unordered_map<std::string, int> g_BuiltinIndexes;
+static bool IsBuiltinFunction(const char* Name)
+{
+	auto found = g_BuiltinIndexes.find(Name);
+	if (found == g_BuiltinIndexes.end())
+	{
+		int index = -1;
+		if (!AurieSuccess(g_Yytk->GetNamedRoutineIndex(Name, &index)))
+			index = -1;
+		found = g_BuiltinIndexes.emplace(Name, index).first;
+	}
+	return found->second >= 0 && found->second < 100000;
+}
+
 static int ApiCallBuiltin(const char* Name, void* Self, void* Other, const NValue* Args, int ArgCount, NValue* Result)
 {
 	*Result = {}; Result->Kind = 5;
 	if (!RequireGameThread()) return 0;
+	if (!IsBuiltinFunction(Name))
+	{
+		t_LastError = std::string("no built-in function named ") + Name + " (a script's name? Game.CallScript)";
+		return 0;
+	}
 	RValue result;
 	// (Called with no instance: as the global scope, as GML's own code at global scope is. With none at all,
 	// a script run through script_execute reads and writes its variables through a null instance and
@@ -219,19 +353,58 @@ static int ApiCallScript(const char* Name, void* Self, void* Other, const NValue
 	return CallStatus(st, Name);
 }
 
-// Whether a variable name is one of the engine's built-ins (x, y, image_index, id...). Those must never go
-// through the member lookup: on this runtime it doesn't fail cleanly for them and hands back a bad pointer
-// (writing through it corrupted memory). Cached per name.
-static bool IsBuiltin(const char* Name)
+// An engine built-in's accessors, as the engine keeps them (YYToolkit's RVariableRoutine, which its shared headers only
+// declare - 64-bit layout: name, getter, setter, whether it's settable).
+struct BuiltinAccess
 {
-	static std::unordered_map<std::string, bool> cache;
+	const char* Name;
+	bool (*Get)(CInstance* Instance, int Index, RValue* Value);
+	bool (*Set)(CInstance* Instance, int Index, RValue* Value);
+	bool CanBeSet;
+};
+static_assert(sizeof(BuiltinAccess) == 32, "RVariableRoutine's layout");
+
+// A variable name's built-in accessors (x, y, image_index, alarm, id...), or null if it isn't one. Found once per name
+// and kept: YYToolkit's GetBuiltin / SetBuiltin look the name up on every call, the bulk of an alarm's read.
+static const BuiltinAccess* Builtin(const char* Name)
+{
+	static std::unordered_map<std::string, const BuiltinAccess*> cache;
 	auto found = cache.find(Name);
 	if (found != cache.end())
 		return found->second;
+	const BuiltinAccess* access = nullptr;
 	size_t index = 0;
-	bool builtin = AurieSuccess(g_Yytk->GetBuiltinVariableIndex(Name, index));
-	cache[Name] = builtin;
-	return builtin;
+	RVariableRoutine* routine = nullptr;
+	if (AurieSuccess(g_Yytk->GetBuiltinVariableIndex(Name, index))
+		&& AurieSuccess(g_Yytk->GetBuiltinVariableInformation(index, routine)) && routine)
+		access = reinterpret_cast<const BuiltinAccess*>(routine);
+	cache.emplace(Name, access);
+	return access;
+}
+
+// Whether a variable name is one of the engine's built-ins (x, y, image_index, id...). Those must never go
+// through the member lookup: on this runtime it doesn't fail cleanly for them and hands back a bad pointer
+// (writing through it corrupted memory).
+static bool IsBuiltin(const char* Name) { return Builtin(Name) != nullptr; }
+
+// A built-in read and written through its accessors (as YYToolkit's GetBuiltin / SetBuiltin: a missing getter or
+// setter refuses; whether it's "settable" isn't asked).
+static bool GetBuiltinValue(const char* Name, CInstance* Instance, int Index, RValue& Value)
+{
+	const BuiltinAccess* access = Builtin(Name);
+	if (!access || !access->Get)
+		return false;
+	access->Get(Instance, Index, &Value);
+	return true;
+}
+
+static bool SetBuiltinValue(const char* Name, CInstance* Instance, int Index, RValue& Value)
+{
+	const BuiltinAccess* access = Builtin(Name);
+	if (!access || !access->Set)
+		return false;
+	access->Set(Instance, Index, &Value);
+	return true;
 }
 
 // GameMaker's per-instance built-ins: asked for with no instance (as a global), the engine reads them
@@ -281,7 +454,7 @@ static int ApiGetVar(void* Instance, const char* Name, NValue* Result)
 		if (!Instance && IsInstanceBuiltin(Name))
 			return 0;
 		RValue value;
-		if (!AurieSuccess(g_Yytk->GetBuiltin(Name, Instance ? inst : nullptr, INT_MIN, value)))
+		if (!GetBuiltinValue(Name, Instance ? inst : nullptr, INT_MIN, value))
 			return 0;
 		FromRValue(value, *Result);
 		return 1;
@@ -307,7 +480,7 @@ static int ApiSetVar(void* Instance, const char* Name, const NValue* Value)
 	{
 		if (!Instance && IsInstanceBuiltin(Name))
 			return 0;
-		return AurieSuccess(g_Yytk->SetBuiltin(Name, Instance ? inst : nullptr, INT_MIN, value)) ? 1 : 0;
+		return SetBuiltinValue(Name, Instance ? inst : nullptr, INT_MIN, value) ? 1 : 0;
 	}
 	RValue* member = HasMember(Instance ? inst : nullptr, Name) ? inst->GetRefMember(Name) : nullptr;
 	if (member)
@@ -322,6 +495,29 @@ static int ApiSetVar(void* Instance, const char* Name, const NValue* Value)
 	return AurieSuccess(g_Yytk->CallBuiltinEx(ignored, "variable_global_set", nullptr, nullptr, { RValue(std::string_view(Name)), value })) ? 1 : 0;
 }
 
+// An element of an instance's indexed engine variable - alarm[n] and the like - through the engine's own accessor with
+// that index (the whole-variable access above passes none). Only the engine's built-ins: an array a script keeps in a
+// variable of its own is a reference C# reads directly.
+static int ApiGetVarAt(void* Instance, const char* Name, int Index, NValue* Result)
+{
+	*Result = {}; Result->Kind = 5;
+	if (!RequireGameThread() || !Instance || Index < 0 || !IsBuiltin(Name))
+		return 0;
+	RValue value;
+	if (!GetBuiltinValue(Name, static_cast<CInstance*>(Instance), Index, value))
+		return 0;
+	FromRValue(value, *Result);
+	return 1;
+}
+
+static int ApiSetVarAt(void* Instance, const char* Name, int Index, const NValue* Value)
+{
+	if (!RequireGameThread() || !Instance || Index < 0 || !IsBuiltin(Name))
+		return 0;
+	RValue value = ToRValue(*Value);
+	return SetBuiltinValue(Name, static_cast<CInstance*>(Instance), Index, value) ? 1 : 0;
+}
+
 static int ApiHookCode(const char* CodeName)
 {
 	g_HookedNames.insert(CodeName);
@@ -329,10 +525,51 @@ static int ApiHookCode(const char* CodeName)
 	return 1;
 }
 
+// A deactivated instance of the current room (instance_deactivate_object: the game's culling of what's off screen): the
+// engine's id lookup (GetInstanceObject) only has the active ones, so the room's inactive list is walked for it.
+static CInstance* InactiveInstance(int Id)
+{
+	CRoom* room = nullptr;
+	if (!AurieSuccess(g_Yytk->GetCurrentRoomData(room)) || !room)
+		return nullptr;
+	auto& inactive = room->GetMembers().m_InactiveInstances;
+	// (Bounded by the list's own count, should a link ever be stale.)
+	int32_t left = inactive.m_Count;
+	for (CInstance* inst = inactive.m_First; inst && left-- > 0; inst = inst->GetMembers().m_Flink)
+		if (inst->GetMembers().m_ID == Id)
+			return inst;
+	return nullptr;
+}
+
+// Every deactivated instance of the current room - its id and object index - into Ids / Objects, up to Capacity; how
+// many there are (more than Capacity: call again with room for them). One walk of the list however many C# needs.
+static int ApiInactiveInstances(int* Ids, int* Objects, int Capacity)
+{
+	if (!RequireGameThread()) return 0;
+	CRoom* room = nullptr;
+	if (!AurieSuccess(g_Yytk->GetCurrentRoomData(room)) || !room)
+		return 0;
+	auto& inactive = room->GetMembers().m_InactiveInstances;
+	int total = 0;
+	int32_t left = inactive.m_Count;
+	for (CInstance* inst = inactive.m_First; inst && left-- > 0; inst = inst->GetMembers().m_Flink)
+	{
+		if (total < Capacity && Ids && Objects)
+		{
+			Ids[total] = inst->GetMembers().m_ID;
+			Objects[total] = inst->GetMembers().m_ObjectIndex;
+		}
+		total++;
+	}
+	return total;
+}
+
 static void* ApiInstanceFromId(int Id)
 {
 	if (!RequireGameThread()) return nullptr;
-	return CInstance::FromInstanceID(Id);
+	if (CInstance* active = CInstance::FromInstanceID(Id))
+		return active;
+	return InactiveInstance(Id);
 }
 
 // Only inspect a pointer while the engine is lending it to a callback/call result.
@@ -342,7 +579,7 @@ static int ApiInstanceId(void* Instance)
     auto* object = static_cast<YYObjectBase*>(Instance);
     if (object->m_ObjectKind != OBJECT_KIND_CINSTANCE) return -1;
     RValue id;
-    if (!AurieSuccess(g_Yytk->GetBuiltin("id", static_cast<CInstance*>(Instance), INT_MIN, id))) return -1;
+    if (!GetBuiltinValue("id", static_cast<CInstance*>(Instance), INT_MIN, id)) return -1;
     return id.m_Kind == VALUE_REF ? static_cast<int32_t>(id.m_i64 & 0xFFFFFFFF) : static_cast<int>(id.ToDouble());
 }
 
@@ -425,6 +662,413 @@ static void HookStringConcat(AurieModule* Module)
 	Log("Script hooks ready (string_concat)");
 }
 
+// ---- the native (YYC) build ----
+
+// Every compiled gml_* function by name: YYC's table of them in the exe's .data - rows of {name, function}, the name in
+// .rdata, the function in .text (another table pairs the same names with code indexes: not functions, skipped). Read
+// once, as the module loads (the exe is mapped and relocated by then).
+static std::unordered_map<std::string, void*> g_NativeFunctions;
+static bool g_NativeScanned = false;
+
+static bool Section(const char* Name, uint8_t*& Start, size_t& Size)
+{
+	auto base = reinterpret_cast<uint8_t*>(GetModuleHandleW(nullptr));
+	auto nt = reinterpret_cast<IMAGE_NT_HEADERS*>(base + reinterpret_cast<IMAGE_DOS_HEADER*>(base)->e_lfanew);
+	auto section = IMAGE_FIRST_SECTION(nt);
+	for (int i = 0; i < nt->FileHeader.NumberOfSections; i++, section++)
+		if (strncmp(reinterpret_cast<const char*>(section->Name), Name, 8) == 0)
+		{
+			Start = base + section->VirtualAddress;
+			Size = section->Misc.VirtualSize;
+			return true;
+		}
+	return false;
+}
+
+static void ScanNativeFunctions()
+{
+	if (g_NativeScanned)
+		return;
+	g_NativeScanned = true;
+	uint8_t *text, *rdata, *data;
+	size_t textSize, rdataSize, dataSize;
+	if (!Section(".text", text, textSize) || !Section(".rdata", rdata, rdataSize) || !Section(".data", data, dataSize))
+		return;
+	for (size_t i = 0; i + 16 <= dataSize; i += 8)
+	{
+		auto row = reinterpret_cast<uint8_t**>(data + i);
+		uint8_t* name = row[0];
+		uint8_t* function = row[1];
+		if (name < rdata || name >= rdata + rdataSize - 5 || function < text || function >= text + textSize)
+			continue;
+		if (memcmp(name, "gml_", 4) != 0)
+			continue;
+		size_t length = strnlen(reinterpret_cast<const char*>(name), rdata + rdataSize - name);
+		g_NativeFunctions.emplace(std::string(reinterpret_cast<const char*>(name), length), function);
+	}
+}
+
+// The native build: it has compiled scripts (the VM build's exe has none of these rows).
+static bool IsNativeBuild()
+{
+	ScanNativeFunctions();
+	return g_NativeFunctions.size() > 1000;
+}
+
+static void* NativeFunction(const std::string& Name)
+{
+	ScanNativeFunctions();
+	auto found = g_NativeFunctions.find(Name);
+	return found == g_NativeFunctions.end() ? nullptr : found->second;
+}
+
+// A hooked script: its name (as C# knows it) and its own code (the detour's trampoline). Each has its own entry function
+// (ScriptEntry<I>, one per slot): the detour needs a distinct target, and the slot says which script it is.
+using ScriptFunction = RValue& (*)(CInstance*, CInstance*, RValue&, int, RValue*[]);
+static constexpr int MaxScriptHooks = 1024;
+struct HookedScript
+{
+	std::string Name;
+	ScriptFunction Original = nullptr;
+};
+static HookedScript g_HookedScripts[MaxScriptHooks];
+static int g_HookedScriptCount = 0;
+static std::unordered_map<std::string, int> g_HookedScriptSlots;
+
+// A hooked script called (by the game's code, script_execute, anything): its arguments to C#; a mod replacing the call
+// is answered with its value, else the script's own code runs.
+static RValue& RunHookedScript(int Slot, CInstance* Self, CInstance* Other, RValue& Result, int ArgCount, RValue* Args[])
+{
+	HookedScript& script = g_HookedScripts[Slot];
+	if (!g_ManagedReady || !g_Callbacks.OnScript)
+		return script.Original(Self, Other, Result, ArgCount, Args);
+	g_GameThread = GetCurrentThreadId();
+	std::vector<NValue> values(ArgCount > 0 ? ArgCount : 0);
+	std::vector<std::string> strings;
+	strings.reserve(values.size());
+	for (int i = 0; i < ArgCount; i++)
+		FromRValueKept(Args && Args[i] ? *Args[i] : RValue(), values[i], strings);
+	// (The string values pointed at their kept copies, now that the store won't move.)
+	size_t kept = 0;
+	for (int i = 0; i < ArgCount; i++)
+		if (Args && Args[i] && Args[i]->m_Kind == VALUE_STRING)
+			values[i].Str = strings[kept++].c_str();
+	NValue result = {};
+	result.Kind = 5;
+	if (g_Callbacks.OnScript(script.Name.c_str(), Self, Other, values.data(), static_cast<int>(values.size()), &result))
+	{
+		Result = ToRValue(result);
+		return Result;
+	}
+	return script.Original(Self, Other, Result, ArgCount, Args);
+}
+
+template <int Slot>
+static RValue& ScriptEntry(CInstance* Self, CInstance* Other, RValue& Result, int ArgCount, RValue* Args[])
+{
+	return RunHookedScript(Slot, Self, Other, Result, ArgCount, Args);
+}
+
+template <int... Slots>
+static constexpr std::array<ScriptFunction, sizeof...(Slots)> ScriptEntries(std::integer_sequence<int, Slots...>)
+{
+	return { &ScriptEntry<Slots>... };
+}
+static constexpr auto g_ScriptEntries = ScriptEntries(std::make_integer_sequence<int, MaxScriptHooks>{});
+
+static int ApiIsNative()
+{
+	return IsNativeBuild() ? 1 : 0;
+}
+
+// The game's hotkey checks (every bound control goes through one of these, many times a frame): on the native build
+// detoured here, answering "not pressed" while a mod's text box has the keyboard - the flag C# sets (SetTyping). Done
+// here, not in C#, for how often they run. (The VM build's are patched in GML: global.stonemod_typing.)
+static volatile bool g_Typing = false;
+static const char* const g_KeyChecks[] = { "scr_check_keyboard_array", "scr_check_keyboard_pressed_array", "scr_check_keyboard_released_array" };
+static ScriptFunction g_KeyCheckOriginals[3] = {};
+
+template <int Index>
+static RValue& KeyCheckGuard(CInstance* Self, CInstance* Other, RValue& Result, int ArgCount, RValue* Args[])
+{
+	if (g_Typing)
+	{
+		Result = RValue(false);
+		return Result;
+	}
+	return g_KeyCheckOriginals[Index](Self, Other, Result, ArgCount, Args);
+}
+
+static void GuardHotkeys()
+{
+	ScriptFunction guards[3] = { &KeyCheckGuard<0>, &KeyCheckGuard<1>, &KeyCheckGuard<2> };
+	for (int i = 0; i < 3; i++)
+	{
+		void* function = NativeFunction(std::string("gml_Script_") + g_KeyChecks[i]);
+		PVOID trampoline = nullptr;
+		if (!function || !AurieSuccess(MmCreateHook(g_Module, std::string("StoneForgeHotkeys_") + g_KeyChecks[i], function, reinterpret_cast<PVOID>(guards[i]), &trampoline)) || !trampoline)
+		{
+			Log(std::string("Couldn't guard the hotkey check ") + g_KeyChecks[i] + " - the game's hotkeys work while typing in mods' text boxes");
+			continue;
+		}
+		g_KeyCheckOriginals[i] = reinterpret_cast<ScriptFunction>(trampoline);
+	}
+}
+
+static void ApiSetTyping(int Typing)
+{
+	g_Typing = Typing != 0;
+}
+
+static int ApiHasFunction(const char* Name)
+{
+	return Name && NativeFunction(Name) ? 1 : 0;
+}
+
+static int ApiHookScript(const char* Name)
+{
+	if (!Name || !IsNativeBuild())
+		return 0;
+	std::string name = Name;
+	if (g_HookedScriptSlots.contains(name))
+		return 1;
+	void* function = NativeFunction("gml_Script_" + name);
+	if (!function)
+	{
+		t_LastError = "no compiled script named " + name;
+		return 0;
+	}
+	if (g_HookedScriptCount >= MaxScriptHooks)
+	{
+		t_LastError = "too many hooked scripts (" + std::to_string(MaxScriptHooks) + ")";
+		return 0;
+	}
+	int slot = g_HookedScriptCount;
+	PVOID trampoline = nullptr;
+	AurieStatus status = MmCreateHook(g_Module, "StoneForgeScript_" + name, function, reinterpret_cast<PVOID>(g_ScriptEntries[slot]), &trampoline);
+	if (!AurieSuccess(status) || !trampoline)
+	{
+		t_LastError = "detouring " + name + " failed (status " + std::to_string(static_cast<int>(status)) + ")";
+		return 0;
+	}
+	g_HookedScripts[slot] = { name, reinterpret_cast<ScriptFunction>(trampoline) };
+	g_HookedScriptCount++;
+	g_HookedScriptSlots.emplace(name, slot);
+	return 1;
+}
+
+// ---- crashes ----
+
+struct TraceEntry
+{
+	CCode* Code;
+	int SelfId;
+	int Depth;
+	bool Start;
+};
+
+static constexpr int TraceSize = 512, StackSize = 64, ReportSize = 96 * 1024;
+static bool g_TraceOn = false;
+static TraceEntry g_Trace[TraceSize];
+static long long g_TraceNext = 0;
+// The code entries running now, outermost first (deeper than StackSize: counted, not kept).
+static TraceEntry g_Running[StackSize];
+static int g_TraceDepth = 0;
+static std::wstring g_ReportPath;
+static const BuiltinAccess* g_IdAccess = nullptr;
+// (The report and the window's text: kept off the stack and the heap - either may be what broke.)
+static char g_Report[ReportSize];
+static wchar_t g_ReportWide[16 * 1024];
+static volatile LONG g_Reported = 0;
+
+// An instance's id, through its accessor (looked up once): the trace keeps ids, never pointers - what crashes is
+// often an instance that's gone.
+static int TraceId(CInstance* Instance)
+{
+	if (!Instance || !g_IdAccess || !g_IdAccess->Get)
+		return -1;
+	if (static_cast<YYObjectBase*>(Instance)->m_ObjectKind != OBJECT_KIND_CINSTANCE)
+		return -1;
+	RValue id;
+	g_IdAccess->Get(Instance, INT_MIN, &id);
+	return id.m_Kind == VALUE_REF ? static_cast<int32_t>(id.m_i64 & 0xFFFFFFFF) : static_cast<int>(id.ToDouble());
+}
+
+static void TraceStart(CCode* Code, int SelfId)
+{
+	TraceEntry entry = { Code, SelfId, g_TraceDepth, true };
+	g_Trace[g_TraceNext++ % TraceSize] = entry;
+	if (g_TraceDepth < StackSize)
+		g_Running[g_TraceDepth] = entry;
+	g_TraceDepth++;
+}
+
+static void TraceEnd(CCode* Code, int SelfId)
+{
+	g_TraceDepth--;
+	g_Trace[g_TraceNext++ % TraceSize] = { Code, SelfId, g_TraceDepth, false };
+}
+
+// The report so far, appended to (cut short at its size).
+static int g_ReportLength = 0;
+static void Report(const char* Format, ...)
+{
+	if (g_ReportLength >= ReportSize - 1)
+		return;
+	va_list args;
+	va_start(args, Format);
+	int n = vsnprintf(g_Report + g_ReportLength, ReportSize - g_ReportLength, Format, args);
+	va_end(args);
+	if (n > 0)
+		g_ReportLength = g_ReportLength + n < ReportSize - 1 ? g_ReportLength + n : ReportSize - 1;
+}
+
+// Where an address is: its module's file name and the offset in it.
+static void ReportAddress(const char* Indent, DWORD64 Address)
+{
+	HMODULE module = nullptr;
+	char path[MAX_PATH] = "?";
+	if (GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+		reinterpret_cast<LPCSTR>(Address), &module) && module)
+	{
+		GetModuleFileNameA(module, path, MAX_PATH);
+		const char* name = strrchr(path, '\\');
+		Report("%s%s+0x%llx\r\n", Indent, name ? name + 1 : path, static_cast<unsigned long long>(Address - reinterpret_cast<DWORD64>(module)));
+	}
+	else
+		Report("%s0x%llx\r\n", Indent, static_cast<unsigned long long>(Address));
+}
+
+// The native stack at the fault, from its context (x64 unwind data: no symbols needed).
+static void ReportNativeStack(const CONTEXT* Fault)
+{
+	CONTEXT context = *Fault;
+	for (int frame = 0; frame < 24 && context.Rip; frame++)
+	{
+		ReportAddress("  ", context.Rip);
+		DWORD64 imageBase = 0;
+		PRUNTIME_FUNCTION function = RtlLookupFunctionEntry(context.Rip, &imageBase, nullptr);
+		if (!function)
+		{
+			// (A leaf function: its return address is on top of the stack.)
+			if (!context.Rsp)
+				break;
+			context.Rip = *reinterpret_cast<DWORD64*>(context.Rsp);
+			context.Rsp += 8;
+			continue;
+		}
+		PVOID handlerData = nullptr;
+		DWORD64 establisher = 0;
+		RtlVirtualUnwind(UNW_FLAG_NHANDLER, imageBase, context.Rip, function, &context, &handlerData, &establisher, nullptr);
+	}
+}
+
+static void ReportEntry(const TraceEntry& Entry, const char* Indent)
+{
+	const char* name = Entry.Code ? Entry.Code->GetName() : nullptr;
+	Report("%s%s (self %d)\r\n", Indent, name ? name : "?", Entry.SelfId);
+}
+
+// The GML call stack at the fault, from the game itself (debug_get_callstack: each script and line, innermost first) -
+// what the trace can't see: scripts called as functions run inside their caller's code entry.
+static void ReportGmlCallStack()
+{
+	RValue stack;
+	if (!AurieSuccess(g_Yytk->CallBuiltinEx(stack, "debug_get_callstack", GlobalInstance(), GlobalInstance(), {})) || stack.m_Kind != VALUE_ARRAY)
+		return;
+	RValue length;
+	g_Yytk->CallBuiltinEx(length, "array_length", GlobalInstance(), GlobalInstance(), { stack });
+	int count = static_cast<int>(length.ToDouble());
+	for (int i = 0; i < count && i < 40; i++)
+	{
+		RValue entry;
+		g_Yytk->CallBuiltinEx(entry, "array_get", GlobalInstance(), GlobalInstance(), { stack, RValue(static_cast<double>(i)) });
+		if (entry.m_Kind == VALUE_STRING)
+			Report("  %s\r\n", entry.ToString().c_str());
+	}
+}
+
+// (The game is in a bad way: if asking it for its call stack faults too, the report goes on without it.)
+static void TryReportGmlCallStack()
+{
+	__try
+	{
+		ReportGmlCallStack();
+	}
+	__except (EXCEPTION_EXECUTE_HANDLER)
+	{
+		Report("  (couldn't be read)\r\n");
+	}
+}
+
+// The game faulted: the report written and shown - once - then the game's own crash handling goes on (it closes).
+static LONG CALLBACK OnFault(EXCEPTION_POINTERS* Info)
+{
+	if (!g_TraceOn || Info->ExceptionRecord->ExceptionCode != EXCEPTION_ACCESS_VIOLATION)
+		return EXCEPTION_CONTINUE_SEARCH;
+	// (Only the game's own faults: .NET raises and handles access violations of its own.)
+	HMODULE game = GetModuleHandleW(nullptr);
+	HMODULE at = nullptr;
+	if (!GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+		static_cast<LPCWSTR>(Info->ExceptionRecord->ExceptionAddress), &at) || at != game)
+		return EXCEPTION_CONTINUE_SEARCH;
+	if (InterlockedExchange(&g_Reported, 1) != 0)
+		return EXCEPTION_CONTINUE_SEARCH;
+
+	g_ReportLength = 0;
+	const ULONG_PTR* info = Info->ExceptionRecord->ExceptionInformation;
+	bool hasAddress = Info->ExceptionRecord->NumberParameters > 1;
+	Report("Stoneshard crashed: an access violation %s 0x%llx at StoneShard.exe+0x%llx.\r\n\r\n",
+		hasAddress && info[0] == 1 ? "writing" : hasAddress && info[0] == 8 ? "executing" : "reading",
+		static_cast<unsigned long long>(hasAddress ? info[1] : 0),
+		static_cast<unsigned long long>(reinterpret_cast<uintptr_t>(Info->ExceptionRecord->ExceptionAddress) - reinterpret_cast<uintptr_t>(game)));
+	Report("GML running, innermost first:\r\n");
+	if (g_TraceDepth == 0)
+		Report("  (none - between code entries)\r\n");
+	if (g_TraceDepth > StackSize)
+		Report("  (%d more, deeper)\r\n", g_TraceDepth - StackSize);
+	for (int i = (g_TraceDepth < StackSize ? g_TraceDepth : StackSize) - 1; i >= 0; i--)
+		ReportEntry(g_Running[i], "  ");
+	Report("\r\nGML call stack (scripts and lines, innermost first):\r\n");
+	TryReportGmlCallStack();
+	Report("\r\nNative stack:\r\n");
+	ReportNativeStack(Info->ContextRecord);
+	int shown = g_ReportLength;
+	Report("\r\nThe last code entries, oldest first (> started, < ended; indented by depth):\r\n");
+	for (long long i = g_TraceNext > TraceSize ? g_TraceNext - TraceSize : 0; i < g_TraceNext; i++)
+	{
+		const TraceEntry& e = g_Trace[i % TraceSize];
+		char indent[96];
+		int width = (e.Depth < 40 ? e.Depth : 40) * 2;
+		snprintf(indent, sizeof(indent), "%*s%c ", width, "", e.Start ? '>' : '<');
+		ReportEntry(e, indent);
+	}
+
+	HANDLE file = CreateFileW(g_ReportPath.c_str(), GENERIC_WRITE, FILE_SHARE_READ, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
+	if (file != INVALID_HANDLE_VALUE)
+	{
+		DWORD written = 0;
+		WriteFile(file, g_Report, g_ReportLength, &written, nullptr);
+		CloseHandle(file);
+	}
+	// The window: what's shown above the trace, and where the rest is.
+	g_ReportLength = shown;
+	Report("\r\nThe full report, with the last 512 code entries, is in dotnet\\crash-report.txt. Ctrl+C copies this message.");
+	int wide = MultiByteToWideChar(CP_UTF8, 0, g_Report, g_ReportLength, g_ReportWide, static_cast<int>(sizeof(g_ReportWide) / sizeof(wchar_t)) - 1);
+	g_ReportWide[wide > 0 ? wide : 0] = L'\0';
+	MessageBoxW(nullptr, g_ReportWide, L"Stoneshard crashed - StoneForge", MB_OK | MB_ICONERROR | MB_TOPMOST | MB_SETFOREGROUND);
+	return EXCEPTION_CONTINUE_SEARCH;
+}
+
+static void StartCrashReports(const fs::path& DotnetDir)
+{
+	g_IdAccess = Builtin("id");
+	g_ReportPath = (DotnetDir / "crash-report.txt").wstring();
+	g_TraceOn = AddVectoredExceptionHandler(1, OnFault) != nullptr;
+	if (!g_TraceOn)
+		Log("Crash reports: couldn't add the fault handler");
+}
+
 // ---- game events ----
 
 static void FrameCallback(FWFrame& Context)
@@ -435,28 +1079,30 @@ static void FrameCallback(FWFrame& Context)
 		g_Callbacks.OnFrame();
 }
 
-static void CodeCallback(FWCodeEvent& Context)
+// Whether a mod hooked this code entry (by name, looked up once per entry).
+static bool IsHooked(CCode* Code)
 {
-	g_GameThread = GetCurrentThreadId();
 	if (!g_ManagedReady || g_HookedNames.empty())
-		return;
-	CInstance* self = std::get<0>(Context.Arguments());
-	CInstance* other = std::get<1>(Context.Arguments());
-	CCode* code = std::get<2>(Context.Arguments());
-	if (!code)
-		return;
-	auto cached = g_HookedCache.find(code);
-	bool hooked;
+		return false;
+	auto cached = g_HookedCache.find(Code);
 	if (cached != g_HookedCache.end())
-		hooked = cached->second;
-	else
+		return cached->second;
+	const char* name = Code->GetName();
+	bool hooked = name && g_HookedNames.count(name) > 0;
+	g_HookedCache[Code] = hooked;
+	return hooked;
+}
+
+// A code entry: handed to C# if a mod hooked it (before can skip the original; after runs either way). One nobody
+// hooked is left to the game, which runs it after us - unless RunAnyway (the trace, to see where it ends).
+static void RunCode(FWCodeEvent& Context, CInstance* self, CInstance* other, CCode* code, bool RunAnyway)
+{
+	if (!IsHooked(code))
 	{
-		const char* name = code->GetName();
-		hooked = name && g_HookedNames.count(name) > 0;
-		g_HookedCache[code] = hooked;
-	}
-	if (!hooked)
+		if (RunAnyway)
+			Context.Call();
 		return;
+	}
 	const char* name = code->GetName();
 	const int selfId = ApiInstanceId(self), otherId = ApiInstanceId(other);
 	if (g_Callbacks.OnCodeBefore && g_Callbacks.OnCodeBefore(name, self, other))
@@ -468,6 +1114,25 @@ static void CodeCallback(FWCodeEvent& Context)
 		Context.Call();
 	if (g_Callbacks.OnCodeAfter)
 		g_Callbacks.OnCodeAfter(name, InstanceStillExists(selfId) ? self : nullptr, InstanceStillExists(otherId) ? other : nullptr);
+}
+
+static void CodeCallback(FWCodeEvent& Context)
+{
+	g_GameThread = GetCurrentThreadId();
+	CInstance* self = std::get<0>(Context.Arguments());
+	CInstance* other = std::get<1>(Context.Arguments());
+	CCode* code = std::get<2>(Context.Arguments());
+	if (!code)
+		return;
+	if (!g_TraceOn)
+	{
+		RunCode(Context, self, other, code, false);
+		return;
+	}
+	int selfId = TraceId(self);
+	TraceStart(code, selfId);
+	RunCode(Context, self, other, code, true);
+	TraceEnd(code, selfId);
 }
 
 // ---- starting .NET ----
@@ -568,9 +1233,13 @@ static bool StartDotNet(const fs::path& DotnetDir)
 	}
 
 	g_Api.Size = sizeof(BridgeApi);
-	g_Api.Version = 2;
+	g_Api.Version = 6;
 	g_Callbacks.Size = sizeof(ManagedCallbacks);
-	g_Callbacks.Version = 2;
+	g_Callbacks.Version = 6;
+	g_Api.IsNative = ApiIsNative;
+	g_Api.HookScript = ApiHookScript;
+	g_Api.HasFunction = ApiHasFunction;
+	g_Api.SetTyping = ApiSetTyping;
 	g_Api.Log = ApiLog;
 	g_Api.CallBuiltin = ApiCallBuiltin;
 	g_Api.CallScript = ApiCallScript;
@@ -580,19 +1249,39 @@ static bool StartDotNet(const fs::path& DotnetDir)
 	g_Api.InstanceFromId = ApiInstanceFromId;
 	g_Api.LastError = ApiLastError;
 	g_Api.InstanceId = ApiInstanceId;
+	g_Api.ReleaseRefs = ApiReleaseRefs;
+	g_Api.GetVarAt = ApiGetVarAt;
+	g_Api.SetVarAt = ApiSetVarAt;
+	g_Api.InactiveInstances = ApiInactiveInstances;
 	rc = initialize(&g_Api, &g_Callbacks);
 	Log("StoneForge initialized: " + std::to_string(rc));
 	return rc == 0;
 }
 
-// The log, <game>\dotnet\bridge.log - started afresh each run, by whichever stage comes first.
+// Most games running at once that get a log of their own.
+static constexpr int MaxLogs = 8;
+
+// The log, <game>\dotnet\bridge.log - started afresh each run, by whichever stage comes first. Each game keeps
+// its log closed to other writers while it runs, so a second game running at once (two players on one PC) can't
+// open it and takes the next free one instead - bridge-2.log, bridge-3.log... - as Unreal numbers its logs.
 static void OpenLog(const fs::path& ModulePath)
 {
 	if (g_Log.is_open())
 		return;
 	fs::path dotnetDir = ModulePath.parent_path().parent_path() / "dotnet";
 	fs::create_directories(dotnetDir);
-	g_Log.open(dotnetDir / "bridge.log", std::ios::out | std::ios::trunc);
+	for (int n = 1; n <= MaxLogs; n++)
+	{
+		fs::path file = dotnetDir / (n == 1 ? std::string("bridge.log") : "bridge-" + std::to_string(n) + ".log");
+		// (Others may read it, not write it: one held by a running game fails here, untouched.)
+		if (FILE* f = _wfsopen(file.c_str(), L"w", _SH_DENYWR))
+		{
+			g_Log = std::ofstream(f);
+			if (n > 1)
+				Log("Another game has bridge.log: this one logs to " + file.filename().string());
+			return;
+		}
+	}
 }
 
 // Before the game's own code runs (the process is still suspended): the game data made current for the
@@ -606,6 +1295,9 @@ EXPORTED AurieStatus ModulePreinitialize(
 	UNREFERENCED_PARAMETER(Module);
 	OpenLog(ModulePath);
 	fs::path gameDir = ModulePath.parent_path().parent_path();
+	// (The native build: its data.win gets the loader's objects only - no GML; scripts are hooked by detours.)
+	if (IsNativeBuild())
+		Log("The game's native (YYC) build: " + std::to_string(g_NativeFunctions.size()) + " compiled functions found");
 	fs::path patcher = gameDir / "dotnet" / "patcher" / "StoneForge.Patcher.exe";
 	if (!fs::exists(patcher))
 	{
@@ -638,7 +1330,8 @@ EXPORTED AurieStatus ModuleInitialize(
 	// (We sit in <game>\aurie\; the managed side is in <game>\dotnet\.)
 	fs::path dotnetDir = ModulePath.parent_path().parent_path() / "dotnet";
 	OpenLog(ModulePath);
-	Log("StoneForge.Bridge starting, module at " + ModulePath.string());
+	g_Module = Module;
+	Log("StoneForge.Bridge starting, module at " + ModulePath.string() + (IsNativeBuild() ? " (native build)" : " (VM build)"));
 
 	g_Yytk = YYTK::GetInterface();
 	if (!g_Yytk)
@@ -650,6 +1343,9 @@ EXPORTED AurieStatus ModuleInitialize(
 		Log("Registering the game callbacks failed");
 
 	HookStringConcat(Module);
+	if (IsNativeBuild())
+		GuardHotkeys();
+	StartCrashReports(dotnetDir);
 	g_ManagedReady = StartDotNet(dotnetDir);
 	return AURIE_SUCCESS;
 }

@@ -4,7 +4,8 @@ namespace StoneForge;
 /// game's own - its objects the patcher added (an active's o_skill_&lt;key&gt; and its icon, children of the game skill's;
 /// a passive's o_pass_skill_&lt;key&gt;, one of the game's passives), an active's row of the skills table, its name, icon
 /// and effect (<see cref="ModSkill.OnCast"/>, a passive's stats and reactions) from StoneForge - on its tab of the skills
-/// menu (its Tab, in its Group), learnt with ability points.</summary>
+/// menu (its Tab, in its Group), learnt with ability points. And any skill used, the game's or a mod's
+/// (<see cref="OnUsed"/>).</summary>
 public static class Skills
 {
     // A page holds 9 (three rows of three, as the game's); a mod with more has more pages.
@@ -23,6 +24,19 @@ public static class Skills
     private static readonly Dictionary<int, Entry> ByObject = new();
     // The pages' backgrounds, by how many skills a page has (drawn once).
     private static readonly Dictionary<int, int> Backgrounds = new();
+
+    /// <summary>Runs as a skill has been used - anyone's, the player's or a unit's, the game's or a mod's: its energy
+    /// spent, its cooldown started, a spell's miracle or fumble rolled (the skill's user event 3). Not the plain actions
+    /// that are skills in name only - moving, throwing an item, crafting, setting a trap, dousing, disarming, a bed or a
+    /// dummy set up, a shot's attack mode. Its skill, caster and target are kept by id.</summary>
+    public static void OnUsed(ModContext context, Action<SkillCast> handler)
+        => context.OnCode("gml_Object_o_skill_Other_13", after: (skill, _) =>
+        {
+            if (skill.IsNone || !skill.Exists)
+                return;
+            Instance caster = Instance.Of(skill.Get("owner")), target = Instance.Of(skill.Get("target"));
+            handler(new SkillCast(skill.Persist(), caster, target, skill.Get("is_crit").AsBool));
+        });
 
     /// <summary>Adds a mod's skill, active or passive. Call it from <see cref="IStoneMod.Load"/>.</summary>
     public static void Add(ModContext context, ModSkillBase skill)
@@ -55,6 +69,12 @@ public static class Skills
     internal static void Install(ModContext loader)
     {
         _loader = loader;
+        // (The native build: the mod page's GML - its Create, its layout (user event 14) - done in C#.)
+        if (Game.IsNative)
+        {
+            ObjectEvents.Hook(loader, "o_skill_category_stonemod", "Create_0", after: SkillData.CategoryCreated);
+            ObjectEvents.Hook(loader, "o_skill_category_stonemod", "Other_24", after: SkillData.CategoryLaidOut);
+        }
         Events.o_textLoader.Other_25.After(loader, textLoader =>
         {
             int step = textLoader.Instance.Get("number").AsInt;
@@ -149,7 +169,7 @@ public static class Skills
                     entry.Context.Log($"skill \"{skill.Id}\": the game has no objects for it yet - they're added when the game starts (restart it)");
                     return;
                 }
-                if (!Game.CallScript("scr_stonemod_skill_define", default, skill.GameKey, active.BasedOn, active.ColumnsText).AsBool)
+                if (!SkillData.DefineSkill(skill.GameKey, active.BasedOn, active.ColumnsText))
                 {
                     entry.Context.Log($"skill \"{skill.Id}\": the game has no skill \"{active.BasedOn}\" to base it on");
                     return;
@@ -162,6 +182,12 @@ public static class Skills
                         Game.CallBuiltinTrusted("ds_map_delete", default, default, validators, skill.GameKey);
                 }
                 HookConditions(active.BasedOn);
+                // (The native build: its objects' GML - their Create events - done in C#.)
+                string key = skill.GameKey;
+                int skillObject = entry.Object;
+                HookNative("o_skill_" + key, self => SkillData.SkillCreated(self, key));
+                HookNative("o_skill_" + key + "_ico", self => SkillData.IconCreated(self, skillObject));
+                ForwardIconEvents(entry, active.BasedOn);
             }
             else
             {
@@ -172,6 +198,8 @@ public static class Skills
                     entry.Context.Log($"passive \"{skill.Id}\": the game has no object for it yet - it's added when the game starts (restart it)");
                     return;
                 }
+                string key = skill.GameKey;
+                HookNative("o_pass_skill_" + key, self => SkillData.PassiveCreated(self, key));
             }
             ByObject[entry.Icon] = entry;
             if (skill.Icon != null)
@@ -425,10 +453,7 @@ public static class Skills
         // The game's own cast, its birth found after: the newest of its object.
         GmValue spell = Arg(call, 0);
         int birthObject = spell.Kind == GmKind.String ? Gm.AssetGetIndex(spell.AsString) : spell.AsInt;
-        string flag = "__smh_" + call.Name;
-        Game.Global[flag] = false;
-        try { call.Result = Game.CallScript(call.Name, call.Self, call.Args); }
-        finally { Game.Global[flag] = true; }
+        call.Result = Hooks.CallOriginal(call.Name, call.Self, call.Other, call.Args);
         int count = birthObject >= 0 ? Game.CallBuiltinTrusted("instance_number", default, default, birthObject).AsInt : 0;
         Instance birth = count > 0 ? Game.CallBuiltinTrusted("instance_find", default, default, birthObject, count - 1).AsInstance : default;
         if (birth.IsNone || !birth.Exists)
@@ -597,11 +622,7 @@ public static class Skills
         category.Set("image_xscale", width);
         category.Set("image_yscale", Game.CallScript("scr_stringGetHeightExt", category, name, nameWidth).AsReal + category.Get("nameOffsetY").AsReal * 2);
         Game.CallScript("scr_guiSizeUpdate", category, category, width, category.Get("image_yscale").AsReal);
-        GmValue list = Game.CallBuiltinTrusted("ds_list_create", default, default);
-        foreach (var entry in skills)
-            Game.CallBuiltinTrusted("ds_list_add", default, default, list, entry.Icon);
-        Game.CallScript("scr_stonemod_skill_category_setup", default, category, text, list, Background(skills.Count));
-        Game.CallBuiltinTrusted("ds_list_destroy", default, default, list);
+        SkillData.SetUpCategory(category, text, skills.Select(entry => entry.Icon).ToList(), Background(skills.Count));
         return category;
     }
 
@@ -629,6 +650,74 @@ public static class Skills
 
     // A page's background for so many skills, as the game's are drawn: its panel colour, the header line, and a
     // slot (locked, until learnt) where each skill goes - drawn once from the game's sword page.
+    // The native build: a mod skill object's Create done in C# (its GML on the VM build) - hooked once each.
+    private static readonly HashSet<string> NativeHooked = new();
+    private static void HookNative(string obj, Action<Instance> created)
+    {
+        if (Game.IsNative && _loader != null && NativeHooked.Add(obj))
+            ObjectEvents.Hook(_loader, obj, "Create_0", after: created);
+    }
+
+    // The native build: the game skill's icon's own events for the mod's icon, as the patcher's copies of them are on the
+    // VM build. The mod's icon is a child of o_skill_ico (not of the game skill's icon - see SkillObjects), and a few game
+    // icons put their own in place of some of o_skill_ico's events (user events 1, 7 and 15 - what the skill checks, what
+    // it shows - an alarm): o_skill_ico's are hooked, and for a mod's icon the game skill's icon's run instead - its
+    // event_inherited() comes back to o_skill_ico's, run as it is then.
+    private static readonly Dictionary<int, (int BaseIcon, HashSet<string> Events)> BaseIcons = new();
+    private static readonly HashSet<string> ForwardedEvents = new();
+    private static readonly HashSet<(int Instance, string Event)> Forwarding = new();
+    private static readonly (string Prefix, int Type, int First, int Last)[] IconEventKinds =
+    {
+        ("Destroy", 1, 0, 0), ("Alarm", 2, 0, 11), ("Step", 3, 0, 2), ("Other", 7, 10, 25), ("Draw", 8, 0, 0), ("CleanUp", 12, 0, 0),
+    };
+
+    private static void ForwardIconEvents(Entry entry, string basedOn)
+    {
+        if (!Game.IsNative || _loader == null)
+            return;
+        int baseIcon = Gm.AssetGetIndex("o_skill_" + basedOn + "_ico");
+        if (baseIcon < 0)
+            return;
+        string baseName = Gm.ObjectGetName(baseIcon);
+        var events = new HashSet<string>();
+        foreach (var (prefix, type, first, last) in IconEventKinds)
+            for (int number = first; number <= last; number++)
+            {
+                string ev = $"{prefix}_{number}";
+                if (!Game.HasFunction($"gml_Object_{baseName}_{ev}"))
+                    continue;
+                if (!Game.HasFunction("gml_Object_o_skill_ico_" + ev))
+                {
+                    entry.Context.Log($"skill \"{entry.Skill.Id}\": {baseName}'s {ev} isn't o_skill_ico's too - it can't run for this skill's icon on the game's native build");
+                    continue;
+                }
+                events.Add(ev);
+                if (ForwardedEvents.Add(ev))
+                    _loader.OnCode("gml_Object_o_skill_ico_" + ev, before: (self, _) => RunBaseIconEvent(self, ev, type, number));
+            }
+        if (events.Count > 0)
+            BaseIcons[entry.Icon] = (baseIcon, events);
+    }
+
+    // True: the game skill's icon's event ran in place of o_skill_ico's.
+    private static bool RunBaseIconEvent(Instance self, string ev, int type, int number)
+    {
+        if (self.IsNone || !BaseIcons.TryGetValue(self.Get("object_index").AsInt, out var based) || !based.Events.Contains(ev))
+            return false;
+        // (Its event_inherited(): o_skill_ico's own.)
+        if (!Forwarding.Add((self.Id, ev)))
+            return false;
+        try
+        {
+            Game.CallBuiltinTrusted("event_perform_object", self, self, based.BaseIcon, type, number);
+        }
+        finally
+        {
+            Forwarding.Remove((self.Id, ev));
+        }
+        return true;
+    }
+
     private static int Background(int count)
     {
         if (Backgrounds.TryGetValue(count, out int sprite) && Game.CallBuiltinTrusted("sprite_exists", default, default, sprite).AsBool)

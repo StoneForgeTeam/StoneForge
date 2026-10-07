@@ -8,4 +8,8 @@ public enum GmKind
     String,
     Bool,
     Instance,
+    /// <summary>A GameMaker array (<see cref="GmArray"/>).</summary>
+    Array,
+    /// <summary>A GameMaker struct (<see cref="GmStruct"/>).</summary>
+    Struct,
 }

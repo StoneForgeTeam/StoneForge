@@ -11,7 +11,9 @@ internal static class PatcherConsole
         if (_shown)
             return;
         _shown = true;
-        if (Win32.GetConsoleWindow() == IntPtr.Zero)
+        // (Started from a terminal - Install StoneForge.cmd -: in it. Otherwise - from Steam, or Explorer - a window of
+        // its own.)
+        if (Win32.GetConsoleWindow() == IntPtr.Zero && !Win32.AttachConsole(Win32.AttachParentProcess))
             Win32.AllocConsole();
         Console.Title = "StoneForge";
     }

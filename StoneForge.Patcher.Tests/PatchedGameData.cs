@@ -5,7 +5,8 @@ using UndertaleModLib;
 
 /// <summary>Unpatched game data patched once for all the integration tests - the loader's patches, a mod
 /// consumable and skill, GmlFixture's GML as a mod "GmlFixture", the loader's script hooks - then saved to a temporary
-/// file and read back. The input is never changed. <see cref="Input"/> is null when there's no data to test with.</summary>
+/// file and read back. The input is never changed. <see cref="Input"/> is null when there's no data to test with - none
+/// found, or the game's native (YYC) build's, which has no GML to patch.</summary>
 public sealed class PatchedGameData : IDisposable
 {
     private const string Steam = @"C:\Program Files (x86)\Steam\steamapps\common\Stoneshard\dotnet\data_base.win";
@@ -24,6 +25,15 @@ public sealed class PatchedGameData : IDisposable
     public int Skills { get; }
     public int Objects { get; }
     public int Hooks { get; }
+    /// <summary>Functions defined inside another script's file, hooked as a mod would (Gwynel's house cutscene steps, the
+    /// vineyard thief's wine check).</summary>
+    public static readonly string[] InnerHooks =
+    {
+        "scr_rewards_find_guinnel_1", "scr_rewards_find_guinnel_door_2", "scr_npc_lines_vineyard_thief_check_wine",
+    };
+    public List<string> InnerHooked { get; } = new();
+    /// <summary>The functions each of their files declared before (its child entries).</summary>
+    public Dictionary<string, string[]> InnerFiles { get; } = new();
     public GmlProject Gml { get; } = null!;
     private readonly string _output = Path.Combine(Path.GetTempPath(), "StoneForgePatcherTest-" + Guid.NewGuid().ToString("N") + ".win");
 
@@ -34,6 +44,11 @@ public sealed class PatchedGameData : IDisposable
             return;
         using (var input = File.OpenRead(Input))
             Data = UndertaleIO.Read(input, (_, _) => { }, _ => { });
+        if (Data.IsYYC())
+        {
+            Input = null;
+            return;
+        }
         var editor = new GameDataEditor(Data);
         OriginalObjects = Data.GameObjects.Select(o => o.Name.Content).ToArray();
         OriginalCode = Data.Code.Select(c => c.Name.Content).ToArray();
@@ -57,6 +72,9 @@ public sealed class PatchedGameData : IDisposable
         }
         finally { Directory.Delete(mods, true); }
         Hooks = ScriptHooks.HookAll(editor, ScriptHooks.LoaderHooks);
+        foreach (string file in InnerHooks.Select(editor.ScriptFile).Distinct())
+            InnerFiles[file] = Data.Code.ByName(file).ChildEntries.Select(c => c.Name.Content).OrderBy(n => n, StringComparer.Ordinal).ToArray();
+        ScriptHooks.HookAll(editor, InnerHooks, InnerHooked);
         using (var output = File.Create(_output))
             UndertaleIO.Write(output, Data, _ => { });
         using (var roundtrip = File.OpenRead(_output))

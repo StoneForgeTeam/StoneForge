@@ -38,6 +38,15 @@ public class ContextTests : IDisposable
     }
 
     [Fact]
+    public void A_mod_item_is_found_by_its_type_once_added()
+    {
+        Assert.Throws<InvalidOperationException>(() => Items.Get<Blade>());
+        var blade = new Blade();
+        _first.Items.Add(blade);
+        Assert.Same(blade, Items.Get<Blade>());
+    }
+
+    [Fact]
     public void Two_mods_can_use_the_same_keys()
     {
         _first.Items.Add(new Blade());

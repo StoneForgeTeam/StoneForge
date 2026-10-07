@@ -5,9 +5,30 @@ namespace StoneForge;
 
 /// <summary>Calls into the game by name: built-in functions, GML scripts, global variables. The typed API
 /// (<see cref="Gm"/>, the generated <c>Scripts</c>) is built on this.</summary>
-public static unsafe class Game
+public static unsafe partial class Game
 {
     internal static BridgeApi* Api;
+
+    /// <summary>Whether this is the game's native (YYC) build - its GML compiled into the exe - rather than the VM one
+    /// (its GML in data.win, run by the runner). On the native build any script can be hooked, and nothing's patched.</summary>
+    public static bool IsNative { get; internal set; }
+
+    // The native build: the game's hotkey checks held off (true) while a mod's text box is typed in - the bridge's guard.
+    internal static void SetTyping(bool typing)
+    {
+        if (IsNative && Api != null)
+            Api->SetTyping(typing ? 1 : 0);
+    }
+
+    // The native build: whether the exe has a compiled function by this name ("gml_Object_o_enemy_Step_0").
+    internal static bool HasFunction(string name)
+    {
+        if (!IsNative || Api == null)
+            return false;
+        byte* p = Utf8(name);
+        try { return Api->HasFunction(p) != 0; }
+        finally { NativeMemory.Free(p); }
+    }
     private static int _gameThread;
     internal static void MarkGameThread() => _gameThread = Environment.CurrentManagedThreadId;
     internal static void EnsureGameThread()
@@ -47,6 +68,42 @@ public static unsafe class Game
 
     // An instance as the game holds it - one known by its id (a script's result, instance_find's) found by it:
     // as self or other it must be the instance itself, or the call runs as no instance.
+    // Every deactivated instance of the room - id -> object index - in one native walk of the room's inactive list.
+    internal static Dictionary<int, int> InactiveInstances()
+    {
+        EnsureGameThread();
+        var found = new Dictionary<int, int>();
+        if (Api->InactiveInstances == null)
+            return found;
+        int count = Api->InactiveInstances(null, null, 0);
+        while (count > 0)
+        {
+            var ids = new int[count];
+            var objects = new int[count];
+            int total;
+            fixed (int* idsPtr = ids, objectsPtr = objects)
+                total = Api->InactiveInstances(idsPtr, objectsPtr, count);
+            // (More turned up since it was counted: again, with room for them.)
+            if (total > count)
+            {
+                count = total;
+                continue;
+            }
+            for (int i = 0; i < total; i++)
+                found.TryAdd(ids[i], objects[i]);
+            break;
+        }
+        return found;
+    }
+
+    // A culled (deactivated) instance's pointer, by its id - the bridge looks among the room's deactivated instances too.
+    // Zero if it can't be found.
+    internal static IntPtr CulledPointer(int id)
+    {
+        EnsureGameThread();
+        return id < 0 ? IntPtr.Zero : Api->InstanceFromId(id);
+    }
+
     internal static IntPtr PointerOf(Instance instance)
     {
         EnsureGameThread();
@@ -54,7 +111,8 @@ public static unsafe class Game
         if (instance.CanUsePointer) return instance.Pointer;
         if (instance.Id < 0)
             throw new InvalidOperationException("This temporary struct/global handle has expired; read it inside its callback.");
-        if (!instance.Exists) throw new InvalidOperationException($"Instance {instance.Id} no longer exists.");
+        // (A culled one - deactivated, off screen - is still the engine's: its built-ins are read through it.)
+        if (!instance.Exists && !Culling.Contains(instance.Id)) throw new InvalidOperationException($"Instance {instance.Id} no longer exists.");
         IntPtr pointer = Api->InstanceFromId(instance.Id);
         return pointer != IntPtr.Zero ? pointer
             : throw new GameCallException("instance lookup", $"could not resolve instance {instance.Id}; refusing to run in global scope");
@@ -77,10 +135,17 @@ public static unsafe class Game
 
     private static readonly Dictionary<string, int> ScriptIndexes = new();
 
+    // (Tests: each fake game numbers its scripts its own way.)
+    internal static void ResetScriptIndexesForTests() => ScriptIndexes.Clear();
+
     /// <summary>Calls a GML script of the game ("scr_atr"), as <paramref name="self"/> (the global scope if
     /// none) - through the game's own script_execute, which works on the bytecode runner. A hooked script's
     /// hooks run too (<see cref="Script.CallOriginal(ScriptCall)"/> skips them).</summary>
-    public static GmValue CallScript(string name, Instance self, params GmValue[] args)
+    public static GmValue CallScript(string name, Instance self, params GmValue[] args) => CallScript(name, self, self, args);
+
+    // A script with its own self and other. With lent, a self or other the game lent for the call under way goes back as
+    // that pointer as it is - the original of a hooked call, whose self may be on its way out (its own Destroy event).
+    internal static GmValue CallScript(string name, Instance self, Instance other, GmValue[] args, bool lent = false)
     {
         CheckRunning(name);
         if (!ScriptIndexes.TryGetValue(name, out int index))
@@ -93,10 +158,14 @@ public static unsafe class Game
         var all = new GmValue[args.Length + 1];
         all[0] = index;
         args.CopyTo(all, 1);
-        return CallBuiltinTrusted("script_execute", self, self, all);
+        return lent
+            ? Call(Api->CallBuiltin, "script_execute", LentPointerOf(self), LentPointerOf(other), all)
+            : CallBuiltinTrusted("script_execute", self, other, all);
     }
 
-    /// <summary>Writes a line to the loader's log (mods\dotnet\bridge.log).</summary>
+    private static IntPtr LentPointerOf(Instance instance) => instance.IsLentNow ? instance.Pointer : PointerOf(instance);
+
+    /// <summary>Writes a line to the loader's log (dotnet\bridge.log - a second game running at once: bridge-2.log...).</summary>
     public static void Log(string text)
     {
         if (Api == null) return;
@@ -160,6 +229,37 @@ public static unsafe class Game
         }
     }
 
+    // An element of an instance's indexed engine variable (alarm[n]...); undefined if it can't be read.
+    internal static GmValue GetVarAt(Instance instance, string name, int index)
+    {
+        IntPtr pointer = PointerOf(instance);
+        byte* namePtr = Utf8(name);
+        try
+        {
+            NValue result;
+            return Api->GetVarAt(pointer, namePtr, index, &result) != 0 ? FromNative(result) : GmValue.Undefined;
+        }
+        finally { NativeMemory.Free(namePtr); }
+    }
+
+    internal static bool SetVarAt(Instance instance, string name, int index, GmValue value)
+    {
+        IntPtr pointer = PointerOf(instance);
+        byte* namePtr = Utf8(name);
+        var strings = new List<IntPtr>();
+        try
+        {
+            NValue v = ToNative(value, strings);
+            return Api->SetVarAt(pointer, namePtr, index, &v) != 0;
+        }
+        finally
+        {
+            NativeMemory.Free(namePtr);
+            foreach (var s in strings)
+                NativeMemory.Free((void*)s);
+        }
+    }
+
     internal static byte* Utf8(string text)
     {
         int length = Encoding.UTF8.GetByteCount(text);
@@ -187,11 +287,20 @@ public static unsafe class Game
                 break;
             case GmKind.Instance:
                 var inst = value.AsInstance;
-                if (inst.CanUsePointer) { v.Kind = 6; v.Ptr = inst.Pointer; }
-                // (An instance known by its id goes over as that id - what GameMaker's functions take.)
-                else if (inst.Id >= 0) { v.Kind = 0; v.Real = inst.Id; }
+                // (A room instance goes over as its id - as the game's own code keeps one - even while its pointer is
+                // lent: a pointer kept in the game - in a list, a variable - outlives the instance, and reading through
+                // it once it's destroyed crashes the game. Only a struct or the global scope goes as its pointer.)
+                if (inst.Id >= 0) { v.Kind = 0; v.Real = inst.Id; }
+                else if (inst.CanUsePointer) { v.Kind = 6; v.Ptr = inst.Pointer; }
                 else if (inst.IsNone) v.Kind = 5;
                 else throw new InvalidOperationException("A temporary game handle was used after its callback returned.");
+                break;
+            case GmKind.Array:
+            case GmKind.Struct:
+                GmRef reference = value.Kind == GmKind.Array ? value.AsArray! : value.AsStruct!;
+                v.Kind = value.Kind == GmKind.Array ? 7 : 8;
+                v.Real = reference.Id;
+                v.Ptr = reference.Pointer;
                 break;
         }
         return v;
@@ -203,6 +312,9 @@ public static unsafe class Game
         13 => v.Real != 0,
         1 or 2 => Marshal.PtrToStringUTF8(v.Str),
         6 => new Instance(v.Ptr),
+        // (An id of 0: the bridge couldn't keep it.)
+        7 => v.Real > 0 ? new GmArray((long)v.Real, v.Ptr) : GmValue.Undefined,
+        8 => v.Real > 0 ? new GmStruct((long)v.Real, v.Ptr) : GmValue.Undefined,
         15 => Instance.FromId((int)v.Real),
         _ => GmValue.Undefined,
     };

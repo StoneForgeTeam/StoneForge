@@ -70,6 +70,43 @@ internal static class ModGameObjects
         return made;
     }
 
+    /// <summary>The game's native (YYC) build: each mod object added with no events (no GML can be added there), under
+    /// the game object it names - or, with none, under o_GMLiveDebug, the host StoneForge runs its events on
+    /// (StoneForge's GameObjects). The objects added.</summary>
+    public static List<ModClassDeclaration> AddNative(GameDataEditor editor, List<ModClassDeclaration> declarations)
+    {
+        var data = editor.Data;
+        var made = new List<ModClassDeclaration>();
+        foreach (var declaration in declarations.Where(d => d.BaseType == "GameObject"))
+        {
+            string name = "o_" + declaration.Key;
+            if (!Regex.IsMatch(declaration.Key, "^[A-Za-z0-9_]+$") || data.GameObjects.ByName(name) != null)
+            {
+                PatcherConsole.Log($"  object \"{declaration.Key}\": not a key, or the game already has an object called that - not added");
+                continue;
+            }
+            string parentName = string.IsNullOrEmpty(declaration.BasedOn) ? NativeHost : declaration.BasedOn;
+            var parent = data.GameObjects.ByName(parentName);
+            if (parent == null)
+            {
+                PatcherConsole.Log($"  object \"{declaration.Key}\": the game has no object \"{parentName}\" to be a child of - not added");
+                continue;
+            }
+            var obj = editor.AddObject(name);
+            obj.ParentId = parent;
+            obj.Sprite = string.IsNullOrEmpty(declaration.BasedOn) ? null : parent.Sprite;
+            obj.Visible = true;
+            obj.Persistent = false;
+            PatcherConsole.Log($"  object {name} (child of {parentName}, no code - the native build): added");
+            made.Add(declaration);
+        }
+        return made;
+    }
+
+    // (The native build's host for a mod object with no parent: its events are run on it - StoneForge's
+    // GameObjects.NativeHostObject.)
+    private const string NativeHost = "o_GMLiveDebug";
+
     // Whether an object or one of its ancestors has an event (what event_inherited() would run).
     private static bool Inherits(UndertaleGameObject? obj, EventType type, uint subtype)
     {

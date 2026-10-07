@@ -79,9 +79,16 @@ public static class Draw
         return width;
     }
 
-    /// <summary>The frame of the game's hover windows (tooltips): its background, edges and corners.</summary>
-    public static void Frame(double x, double y, double width, double height)
-        => Scripts.scr_hoversDrawBoard.Call(null, x, y, width, height, 1, true, GmValue.From(global::StoneForge.Sprite.s_hcorner));
+    /// <summary>The frame of the game's hover windows (tooltips): its background, edges and corners - faded to
+    /// <paramref name="alpha"/>.</summary>
+    public static void Frame(double x, double y, double width, double height, double alpha = 1)
+    {
+        if (alpha != 1)
+            Game.CallBuiltin("draw_set_alpha", alpha);
+        Scripts.scr_hoversDrawBoard.Call(null, x, y, width, height, 1, true, GmValue.From(global::StoneForge.Sprite.s_hcorner));
+        if (alpha != 1)
+            Game.CallBuiltin("draw_set_alpha", 1);
+    }
 
     private static readonly Dictionary<int, (double Width, double Height)> SpriteSizes = new();
 
@@ -147,9 +154,115 @@ public static class Draw
         Game.CallBuiltin("draw_sprite_part_ext", sprite, frame, spriteWidth - cap, 0, cap, spriteHeight, x + width - cap, y, 1, yScale, White, alpha);
     }
 
+    /// <summary>A sprite 9-sliced to <paramref name="width"/> x <paramref name="height"/>: its corners
+    /// (<paramref name="borders"/> in from each edge) stay their size, its edges stretch along, its middle both ways - a
+    /// window frame made any size.</summary>
+    public static void SpriteNineSlice(int sprite, int frame, double x, double y, double width, double height, UIInsets borders, double alpha = 1)
+    {
+        if (sprite < 0)
+            return;
+        double sw = SpriteWidth(sprite), sh = SpriteHeight(sprite);
+        double l = Math.Min(borders.Left, sw / 2), r = Math.Min(borders.Right, sw / 2);
+        double t = Math.Min(borders.Top, sh / 2), b = Math.Min(borders.Bottom, sh / 2);
+        // (Source columns / rows, and where and how big they're drawn.)
+        double[] srcX = { 0, l, sw - r }, srcW = { l, sw - l - r, r };
+        double[] dstX = { x, x + l, x + width - r }, dstW = { l, width - l - r, r };
+        double[] srcY = { 0, t, sh - b }, srcH = { t, sh - t - b, b };
+        double[] dstY = { y, y + t, y + height - b }, dstH = { t, height - t - b, b };
+        for (int row = 0; row < 3; row++)
+            for (int col = 0; col < 3; col++)
+            {
+                if (srcW[col] <= 0 || srcH[row] <= 0 || dstW[col] <= 0 || dstH[row] <= 0)
+                    continue;
+                Game.CallBuiltin("draw_sprite_part_ext", sprite, frame, srcX[col], srcY[row], srcW[col], srcH[row],
+                    dstX[col], dstY[row], dstW[col] / srcW[col], dstH[row] / srcH[row], White, alpha);
+            }
+    }
+
     // The game's text in one of its fonts (a global's name: "f_digits" for its buttons and titles) at a size.
     internal static void GameText(double x, double y, string text, int colour, int halign, int valign, string font, double scale, double alpha = 1)
         => Scripts.scr_drawText.Call(null, x, y, text, colour, halign, valign, Game.Global[font], scale, alpha);
+
+    /// <summary>Text as the game draws it in one of its fonts (<see cref="GameFont"/>), at its usual half size, with its
+    /// shadow.</summary>
+    public static void Text(double x, double y, string text, int? colour, int halign, int valign, GameFont font, double alpha = 1)
+        => GameText(x, y, text, colour ?? White, halign, valign, font == GameFont.Digits ? "f_digits" : "f_dmg", 0.5, alpha);
+
+    /// <summary>Text in the font being drawn with (not the GUI's: a name over a unit in the world, say), aligned, with a
+    /// one-pixel shadow unless <paramref name="shadow"/> is false. The drawing colour and alignment are put back after.</summary>
+    public static void PlainText(double x, double y, string text, int colour, int halign = AlignLeft, int valign = AlignTop, bool shadow = true)
+    {
+        int oldHalign = Game.CallBuiltin("draw_get_halign").AsInt, oldValign = Game.CallBuiltin("draw_get_valign").AsInt;
+        int oldColour = Game.CallBuiltin("draw_get_colour").AsInt;
+        Game.CallBuiltin("draw_set_halign", halign);
+        Game.CallBuiltin("draw_set_valign", valign);
+        if (shadow)
+        {
+            Game.CallBuiltin("draw_set_colour", Black);
+            Game.CallBuiltin("draw_text", x + 1, y + 1, text);
+        }
+        Game.CallBuiltin("draw_set_colour", colour);
+        Game.CallBuiltin("draw_text", x, y, text);
+        Game.CallBuiltin("draw_set_colour", oldColour);
+        Game.CallBuiltin("draw_set_halign", oldHalign);
+        Game.CallBuiltin("draw_set_valign", oldValign);
+    }
+
+    /// <summary>A circle around (x, y), filled or its outline.</summary>
+    public static void Circle(double x, double y, double radius, int colour, bool outline = false, double alpha = 1)
+    {
+        Shape(colour, alpha);
+        Game.CallBuiltin("draw_circle", x, y, radius, outline);
+        Unshape();
+    }
+
+    /// <summary>A filled triangle.</summary>
+    public static void Triangle(double x1, double y1, double x2, double y2, double x3, double y3, int colour, double alpha = 1)
+    {
+        Shape(colour, alpha);
+        Game.CallBuiltin("draw_triangle", x1, y1, x2, y2, x3, y3, false);
+        Unshape();
+    }
+
+    /// <summary>A line, <paramref name="width"/> wide.</summary>
+    public static void Line(double x1, double y1, double x2, double y2, int colour, double width = 1, double alpha = 1)
+    {
+        Shape(colour, alpha);
+        Game.CallBuiltin("draw_line_width", x1, y1, x2, y2, width);
+        Unshape();
+    }
+
+    // (Shapes draw with the drawing colour and alpha: set, then put back to white and opaque.)
+    private static void Shape(int colour, double alpha)
+    {
+        Game.CallBuiltin("draw_set_colour", colour);
+        if (alpha != 1)
+            Game.CallBuiltin("draw_set_alpha", alpha);
+    }
+
+    private static void Unshape()
+    {
+        Game.CallBuiltin("draw_set_colour", White);
+        Game.CallBuiltin("draw_set_alpha", 1);
+    }
+
+    /// <summary>A sprite's frame at (x, y) as GameMaker draws one (draw_sprite_ext): scaled, turned by
+    /// <paramref name="angle"/> degrees, tinted by <paramref name="colour"/> (white: as it is).</summary>
+    public static void SpriteExt(int sprite, double frame, double x, double y, double xscale = 1, double yscale = 1, double angle = 0, int? colour = null, double alpha = 1)
+    {
+        if (sprite >= 0)
+            Game.CallBuiltin("draw_sprite_ext", sprite, frame, x, y, xscale, yscale, angle, colour ?? White, alpha);
+    }
+
+    /// <summary>Whether a sprite exists.</summary>
+    public static bool SpriteExists(int sprite) => sprite >= 0 && Game.CallBuiltin("sprite_exists", sprite).AsBool;
+
+    /// <summary>A sprite's name ("" for none).</summary>
+    public static string SpriteName(int sprite) => SpriteExists(sprite) ? Game.CallBuiltin("sprite_get_name", sprite).AsString : "";
+
+    /// <summary>A sprite's origin: the point of it that's drawn at (x, y).</summary>
+    public static Point SpriteOrigin(int sprite)
+        => SpriteExists(sprite) ? new Point(Game.CallBuiltin("sprite_get_xoffset", sprite).AsReal, Game.CallBuiltin("sprite_get_yoffset", sprite).AsReal) : default;
 
     /// <summary>A sprite (e.g. from <see cref="ModContext.LoadSprite"/>), scaled.</summary>
     public static void Sprite(int sprite, double x, double y, double scale = 1, int frame = 0, double alpha = 1)

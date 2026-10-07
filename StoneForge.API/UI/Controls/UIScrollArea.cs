@@ -3,7 +3,7 @@ namespace StoneForge;
 /// <summary>A column of elements scrolled smoothly, as the game's Settings page: added elements go down it
 /// (their <see cref="UIElement.X"/> is an indent), cut at its edges, and once they don't all fit it scrolls
 /// with the game's scrollbar at its right - the wheel over it, the arrows, the thumb (drag it) and the track.
-/// <see cref="UIWindow.Page"/> is one; <see cref="AddHeader"/>, <see cref="AddText"/>... fill it as a settings
+/// <see cref="UISettingsWindow.Page"/> is one; <see cref="AddHeader"/>, <see cref="AddText"/>... fill it as a settings
 /// page.</summary>
 public class UIScrollArea : UIElement
 {

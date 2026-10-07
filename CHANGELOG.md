@@ -1,5 +1,295 @@
 # StoneForge changes
 
+## Unreleased
+
+- Remove the redundant System.Drawing.Common package reference and its unused bundled notices, avoid copying the MSL helper twice during packaging, and document MSL's default metadata placeholder.
+
+## 0.8.0 — MSL mod support
+
+- **MSL mods are now supported alongside StoneForge mods on the VM modbranch.** Drop `.sml` packages directly into the game's `mods` folder; they are enabled by default and can be switched off in the Mods window. No separate ModShardLauncher installation is required. Only install packages you trust: they execute unrestricted C# while patching.
+
+- Include applied MSL packages in loading-screen and main-menu mod counts. Separate mod details, description, status, warnings and MSL settings into labeled sections.
+- Stream MSL helper output into the patching console, show preparation and saving stages, and report elapsed time during silent work; keep the full diagnostic log.
+- Keep MSL parent scripts and their nested functions together before serialization, preventing invalid bytecode pointers when mods insert children ahead of their parent.
+- Keep long tab names inside their buttons and scroll selected names with pauses at either end. Show MSL-provided names, authors, versions and descriptions; retain matching cached details for disabled packages.
+- Include all pinned MSL DLLs in source checkouts, correct the launcher binary's source revision/checksum, and check/document the .NET 10 Windows Desktop Runtime required by the DLL-based helper.
+
+- VM-only `.sml` packages appear in the Mods window with an unrestricted-code warning. Adding, changing, disabling or removing packages takes effect after restarting; MSL packages cannot be hot-reloaded and do not support the native branch.
+- Bundled headless MSL 0.13.2.0 helper applies packages in filename order before StoneForge, using separate legacy dependencies. Package content hashes invalidate preparation; removing packages rebuilds from the preserved base. Failed helper runs do not replace game data.
+- MSL launcher UI and scripting-server integrations are unsupported. Compatibility requires validation per mod and game version.
+
+## 0.7.1 — Branding
+
+- StoneForge's branding: the loading screen shows its splash art (logo and title) behind the progress bar, and
+  the README its banner. The art is in `branding/`.
+- On the native build a mod skill's icon gets its base icon's other events again (what some game skills check before
+  they can be used, and what they show): the game skill's icon's events run in place of `o_skill_ico`'s for it.
+
+## 0.7.0 — The game's native build
+
+- **StoneForge starts on the game's native (YYC) branch - the first part of moving off the VM branch.** On the native
+  build the game's GML is compiled into the exe, so nothing can be added as GML; StoneForge works with it instead:
+  - The bridge finds every compiled `gml_*` function by name in the exe's own table of them, and tells the loader which
+    build it's on (`Game.IsNative`). Bridge API version 6.
+  - **Any script can be hooked**, by detouring its compiled function: no `[assembly: HookScript]`, no patching, no
+    restart. Before and after hooks, replacing a call, `CallOriginal` and conflicts work as they do on the VM build.
+  - The patcher adds the loader's objects to the native `data.win` with no code: each runs its events from a parent of
+    the game's (`o_stonemod_gui` under `o_cursorController`, `o_stonemod_hud` under `o_disclaimer`,
+    `o_stonemod_modal` under `o_presset_town_encounter`), and the loader hooks those events for its own instances. So
+    the Draw GUI and HUD passes, mod windows and Escape on them all work there.
+  - The UI's scaling and clipping are done in C# on both builds (they were GML).
+  - Everything else the loader did in GML now works there too:
+    - **Mods' game objects** are added with no code under their parent, or under the game's unused `o_GMLiveDebug` if
+      they have none, and each C# event is hooked on the nearest ancestor that has it. An event that no ancestor has
+      can't run there, and the log says which.
+    - **Items, consumables and skills** are defined into the game's tables by C# (`scr_stonemod_item_define`,
+      `_consum_define`, `_item_give`, `_item_sprite`, `_skill_define` and `_skill_category_setup` are gone, on both
+      builds). On the native build, mod skills' Create events and their page's layout run in C# too, using the game's
+      own `new` for its skill points. A mod skill's icon there doesn't get its base icon's other events.
+    - **Buffs and visual effects** run their parents' events, hooked for them. An effect played once is removed as its
+      animation ends.
+    - **Combat damage** (`Combat.Damage`) is C# on both builds, through the game's `o_damage_dealer`.
+    - **Game hotkeys** are held off while a mod's text box is typed in. The bridge detours the game's key checks, so
+      nothing crosses into C# for them.
+  - **A mod with GML of its own isn't loaded** on the native build, and its page says why.
+  - **Installing works there as it does on the VM branch**: `install`, `run` and `uninstall` back up, patch and put back
+    the native exe and data.win, and the game data step adds only the code-less objects.
+  - Building StoneForge against the native build's data works too: its API is still generated from the VM build's data
+    (the native data has no GML to read it from), using the last VM dump kept in `%LOCALAPPDATA%\StoneForge\GameData`.
+- **Mods can need other mods, and use them.** In mod.json, `"requires": ["othermod"]` names mods that must be there, and `"after": ["othermod"]` names mods to load after if they're there. Mods still load in folder order, except that each one waits for the mods it names.
+  - A mod whose required mod isn't running is switched off, and that's saved for the next start. The log and its page in the Mods window say which mod it needs and why it isn't running: not installed, didn't load, switched off, or not allowed yet. It comes back on when that mod is switched on. Switching it on yourself switches on what it requires, or it goes back off and says why. Requires that form a loop are refused. An "after" that forms a loop is ignored, with a warning.
+  - A mod is compiled against the mods it requires, so it can use their public types as its own. It's loaded with the copy of each that is running.
+  - Switching off a required mod switches off the mods that require it too, and they come back when it's switched on again. Switching on a mod switches on what it requires. Both are saved for the next start.
+  - The Mods window shows what a mod requires. It warns on a mod's page when other running mods require it and would be switched off with it, and it says when a mod was switched off along with one it requires. It refreshes as mods switch on and off.
+- **`context.Mods`: find another running mod.** `Get("othermod")` returns its mod class as an `IStoneMod`, or `Get<OtherMod>("othermod")` returns it as its own type, from a mod you require. `Get<T>()` finds one by its class. There are also `IsLoaded`, `Manifest(id)` and `All`, the mods loaded so far, in load order. `ModManifest` has `Requires` and `After`.
+- **`ModData`: a mod's own values in what the game keeps, under keys only that mod uses**, so two mods' `"kills"` are two values and neither touches the game's. `item.ModData(context)["kills"]` on an `InventoryItem`, `Item` or `GroundItem` (in the item's data: kept and saved with it wherever it goes), `SaveData.ModData(context)` (saved with the game), and `instance.ModData(context)` (variables on any instance). It has `Has`, `Remove`, `Keys` (the mod's own) and `GameKey` ("mymod:kills" in a map, "mymod__kills" as a variable). `SetData` with a hand-made prefix still works.
+- **A loot table takes any number of items.** The game's roll reads nine item slots. With those taken,
+  `LootTable.Add` now puts an item in one of StoneForge's own, kept in the table's row as `slot10` onward, where the
+  game doesn't read. StoneForge rolls them just after the game's own roll (an after-hook on scr_loot_from_tables), by
+  the same script, for the same container and tier: nine at a time, from a copy of the table with those in its nine
+  slots and no equipment. Chances, counts, kinds, tags, gold and drop-once items all go as for the game's own slots.
+  `Add` never fails now (it returned null once nine were taken). `Slots` lists the extra slots after the game's nine,
+  and `LootSlot.IsExtra` tells which is which.
+- **Hook conflicts aren't silent any more.** When two mods' before hooks both replace the same call, StoneForge logs
+  it once, naming both mods and the script or code entry, and shows it on both mods' pages in the Mods window. That's a
+  script both replace (the game's code is skipped and the later hook's result is used) or a code entry both skip. It's
+  found as it happens: a hook that only sometimes replaces isn't a conflict until it does. A mod's own hooks never
+  conflict with each other.
+- **Hook order: when a hook runs among every mod's on the same call.** It's an `order` number, lower first, then load
+  order within the same number. It's an optional last parameter on `Script.Before` / `After` / `Replace`, on code
+  events' `Before` / `After`, and on `ModContext.OnScript` / `OnCode`. `HookOrder` names some values: `First` (-200),
+  `Early` (-100), `Normal` (0, the default), `Late` (100) and `Last` (200). Any number between works too, such as
+  `HookOrder.Late + 10` for just after the Late ones. A mod that must have the last word on a script hooks it `Last`
+  (its result's the one used), and one that only watches hooks it `First`.
+- **Where mods might conflict, before they do.** Two or more mods with before hooks on the same script or code entry at
+  the same `HookOrder` (so which runs first is only load order) are logged once the mods have loaded, a line for each
+  pair of mods ("Possible hook conflicts"). Each mod's page in the Mods window gets a Possible Conflicts section at the
+  bottom, under its settings and only when there's something in it. It has a line for each other mod: yellow for calls
+  both replaced, grey for calls both hook at the same order. The tooltips list the calls, so the page isn't flooded.
+  Moving a hook to another order ends it.
+- **`LootTables`: the game's loot tables**, what containers in the world roll as they're first opened (its `drop_table`). `Names`, `Get(name)`, and `Edit(context, name, table => ...)` / `EditAll(context, which, ...)`, which wait for the game to load its tables when called from a mod's Load. A `LootTable` has nine `Slots` (an item, a kind of item such as "gem", or several to choose from, with a chance, a count range and tags) and five `EquipmentSlots` (kinds, tags, rarities, a durability range and a chance), read and set, `Clear()`ed, or filled with `Add("wine", 33, 1, 2)` / `Add(myConsumable, ...)`. Changes last for the rest of the game's run. `Containers.SetLootTable(chest, key, tier)` and `LootTableOf(chest)` choose the table a container rolls from, before it's first opened.
+
+## 0.6.0 — Events, containers and crash reports
+
+- **Fixed: `Game.CallBuiltin` with a name that isn't a built-in function crashed the game.** For a script's name, YYToolkit fetches the script as it looks the name up, and that faults on this GameMaker version. The bridge checks the name with the game's own lookup first (once a name): one that isn't a built-in is a `GameCallException` ("no built-in function named ...: a script's name? Game.CallScript"). Putting an item in a closed container hit it (`ds_map_clone` is one of the game's scripts).
+- **More events:**
+  - `Player.OnDying(() => bool)`: the player is about to die, before the game's death. Return true to stop it; bringing them back is the mod's. `Player.OnLevelUp(level)`: a level-up in play, not a level a save loads with.
+  - **`Inventory`: what the player carries** (the items the player's inventory owns, worn and in hand included, as the game's save counts them): `Items()`, with `OnAdded(item)`, `OnRemoved(item)` and `OnEquipped(item, on)`, compared once a frame so every way an item comes or goes counts. A game loaded starts afresh. An `InventoryItem` has its `Slot`, `Name`, `IsEquipped`, `Stack` and `Owner`. What's in a bag isn't in it: a bag's contents are saved in the bag while it's closed (`Containers`).
+  - `Skills.OnUsed(cast)`: any skill used, the player's or a unit's, the game's or a mod's, after its energy is spent and its cooldown started. Not the plain actions that are skills in name only (moving, throwing, crafting...).
+  - **`Containers`**: chests, barrels and the like in the world, and the player's bags. A container holds its items three ways, as the game keeps them: not at all until first opened (its loot rolled then, from a seed of its place), as item slots in its window while open, and saved in it while closed. `Open()` and `IsOpen`, `OnOpened(open)` and `OnClosed(container)`, `OnItemAdded` / `OnItemRemoved(open, item)` while it's open, `HasBeenOpened`, and a closed one's items read and set in the game's own save format (`ContentsJson`, `SetContents`; setting a never-opened one's makes them all it has, instead of rolling). Items are put in and taken out as the game does: `Containers.AddItem(container, name, stack, quality)` and `RemoveItem(container, name, count)` for one open or closed (a closed one's saved as the game's save does, put in its first free cell as it opens; a never-opened one stays unopened, its loot rolled as it first opens and the items joining it then), `OpenContainer.Add` / `Remove`, and `Inventory.Add` / `Remove` for the player. Names are those of `Items.Give`: one of the game's items by its o_inv_ name less "o_inv_" ("wine"), or a weapon or armour by its name. An item that doesn't fit in an open one is dropped on the ground, as the game does. A mod's own items go in by type or instance: `Inventory.Add<MyBlade>()`, `Containers.AddItem<MyBlade>(chest)`, `RemoveItem<MyBlade>`, `OpenContainer.Add<MyBlade>()`, and `Add(myConsumable, stack)` / `Remove(myConsumable, count)` (`AddItem` / `RemoveItem` for containers) for consumables. `Items.Get<T>()` is the mod item of a type that was added. Each item has its own data, kept and saved with it wherever it goes: an `InventoryItem` has `Durability` (settable), `MaxDurability`, `DurabilityPercent`, `Quality`, `IsIdentified` (settable), and `Data(key)` / `SetData(key, value)` for a mod's own values (name them for the mod: `"mymod:kills"`). Every `Add` takes a `setup` that sets an item's values as it's made, a closed container's before it's saved: `Containers.AddItem<MyBlade>(chest, setup: blade => blade.Durability = 50)`. An `OpenContainer` has its `Window`, the `Container` it belongs to and its `Items()`.
+  - **`Quests`**: `IsStarted`, `IsCompleted` and `IsFailed`, and `OnStarted(quest)`, `OnProgress(quest, task, value)`, `OnCompleted(quest)` and `OnFailed(quest)`, told only when something changed. The patcher makes the quest scripts hookable itself.
+- **Fixed: a hooked script run as an instance on its way out failed.** The game runs some scripts as an instance in its own Destroy event (a thrown item's world turn, say), when it already counts the instance gone. Calling the game's own script for the after hooks, and `Script.CallOriginal`, looked the instance up by id and threw. That paused the mod after a few throws: for StoneshardMP, the other players lost the game. The original is called with the very instance the game lent for the call now.
+- **YYToolkit's console window ("YYToolkit Log") no longer opens with the game.** It opens only on request: a file named `yytoolkit-console.on` in the game's `dotnet` folder. `YYToolkit.log` in the game folder is written either way. (Part of `lib\YYToolkit\stoneforge.patch`.)
+- **Fixed: every GML error crashed the game instead of showing its error.** YYToolkit's hook on GameMaker's error function walks the game's scripts to name its stack trace, and that walk faults on this GameMaker version, before anything is logged. StoneForge's YYToolkit is built with a patch now (`lib\YYToolkit\stoneforge.patch`, shipped in `LICENSES`) that leaves the names out: a GML error shows the game's own error message (the script and what went wrong), and YYToolkit.log gets the details.
+- `WorldMap.Save()` writes the world map's fog and paper into the save data, as the game's save does. The save data holds them as of the last save otherwise (a new world's not at all), so call it before handing the save data to anything that will load it.
+- **Events for what happens in the game**, each registered as `Area.OnSomething(context, handler)` like `ContextMenus.OnOpen`: a mod's handlers go with it, and an exception in one is that mod's.
+  - `Doors.OnChanged(door, open)`: a door starts opening or closing, whoever does it (the player, NPCs and enemies, the game's scripts, `Doors.SetOpen`). Crypt doors too.
+  - `Rooms.OnEntered(room)`, on the room's first frame, once its instances are set up; `Rooms.OnLeaving(room)`, as the game leaves it. A dungeon's floors count, since each is the same room started again.
+  - `Turns.OnTurn()`: a world turn has passed (`scr_global_turn`).
+  - `Locations.OnSaved(preset)`: the game has saved the place the player is leaving.
+  - `GroundItems.OnAdded(item)`, on the frame after it's made, and `GroundItems.OnRemoved(item)`, while it can still be read: an item comes onto the ground in play (dropped, thrown, a kill's loot, a mod's) or leaves it (picked up, destroyed). Not the items a place has as it loads.
+  - `Units.OnSpawned(unit)`, on the frame after it's made; `Units.OnDied(unit, killer)`, before it's destroyed (its loot and corpse to come), with its last attacker. Not the units a place has as it loads.
+  - `Combat.OnAttack(attack)` for every attack resolved (hit, crit, block, dodge, fumble, its damage dealt) and `Combat.OnHit(attack)` for those that strike. The `Attack` keeps its attacker and target by id.
+  - `SaveData.OnLoaded(save)`, once a save has been read, before the game sets itself up from it; `SaveData.OnSaving(save)`, before one is written, when a mod can still change the save data.
+  - The patcher makes `scr_global_turn`, `scr_slotLoad` and `scr_slotSaveUpdate` hookable itself for these: no `[assembly: HookScript]` needed.
+- **`MapMarkers`: the markers players put on the world map.** `All()` reads them, whether the map is open or closed: the save's list, or the open map's own markers. `Set(markers)` makes them those, `Add` and `Remove` change one. With the map open, its markers are made again on the spot, as the game places one. A `MapMarker` is its sprite's name, which image, and its `Position` in world-map pixels (`MapMarkers.CellSize`, 52 to a cell), with the `Tile` it's on. `MapMarkers.Sprites` are the 12 the map's menu offers. `MapMarkers.OnPlaced(context, marker => ...)` and `OnRemoved` run as the player places a marker on the map or takes one off (right-clicking it, or placing another over it), after the change; not for markers a mod sets.
+- **Crash windows with stack traces.**
+  - **The game crashes:** a window shows the GML that was running (innermost first, each code entry with the instance running it), the game's own GML call stack (each script and line, from `debug_get_callstack`) and the native stack (module and offset). The full report goes to `dotnet\crash-report.txt`, with the last 512 code entries the game ran. The bridge traces code entries as they start and end for this, always on and cheap.
+  - **C# crashes the game** (an exception nothing caught): a window shows its stack trace, and it's written to the same report.
+  - **A mod's handler throws** (StoneForge catches it and the game goes on): a window shows its stack trace, the first time for each mod and place, without stopping the game. A mod that keeps failing is paused as before.
+  - `"errorWindows": false` in `dotnet\stoneforge.json` turns the C# windows off. The game's own crash window always shows.
+- `Units.ReturnToTurns(units)` gives units back their own turns - their AI on, and in the player's list of units to run each turn again - after another game ran them (`RemoveFromTurns`). Their references to units that are gone (a target they fought meanwhile) are cleared first.
+- **Fixed: a room instance handed to the game while its pointer was lent (a callback's `self`) went as that pointer, not its id.** The game kept it as given: `Factions.Join(self)` put a raw pointer in the faction's list of units. Once the instance was destroyed, a unit looking through that list for enemies read freed memory and the game crashed, and `Factions.Leave` by id never found it to take it out. A room instance always goes as its id now, as the game's own code keeps one; only a struct or the global scope goes as its pointer.
+- **Fixed: a crash after `Units.Remove`.** Other units still named the removed one as their target (or as who last hit them...), and their AI read it once it was gone. `Remove` clears those references now. It also takes the unit out of its faction's list, as o_unit's Destroy event (which `Remove` skips) does: the units hostile to that faction looked for enemies there and read the removed unit once it was gone.
+- **`Doors`: the doors in a room that open and close** (the game's o_door_parent and its kinds). `Doors.All()` finds them (off-screen ones too with `includeCulled`), `IsOpen` and `IsLocked` read them, and `SetOpen(door, open)` opens or closes one as the game does - its own animation, sound and noise, its collision following - unlocking a locked one it opens unless `unlock: false`. The ways out of a place (an entrance, stairs, a map edge), which were `Doors`, are `Exits` now.
+- **`Cell` and `Point` instead of `(x, y)` tuples.** A `Cell` is a cell of the room's grid (`X`, `Y`), with its `Center` and `Corner` as `Point`s, `DistanceTo` (the game's tile distance, diagonals counting one), `IsNextTo`, `Neighbours`, `Offset` and `+` / `-`; `Cell.At(x, y)` is the cell a room position is in, and `Cell.Size` its 26 pixels. A `Point` is a position or offset in pixels, with `DistanceTo` and `+` / `-` / `*`. Both deconstruct (`var (x, y) = cell`).
+  - `Units`, `Mouse.Cell`, `Player.WalkTo` and `Exits.Nearest` take and give them, in place of `(int X, int Y)` tuples and `x, y` pairs. `Units.CellSize`, `CellOf(position)` and `PositionOf(cell)` are gone: `Cell.Size`, `Cell.At` and `Center`.
+  - **Changed from 0.4.0:** `WorldMap.PlayerCell` is a `WorldTile?` (the world map's cells are `WorldTile`s), `Draw.SpriteOrigin` a `Point`, and a `LookLayer`'s `SpriteOrigin` / `MaskOrigin` `Point`s. A mod comparing them with a tuple (`== (12, 7)`) compares with a `WorldTile` / `Point` instead; deconstructing them still works.
+- **`"stoneforge": "latest"` for a mod in development.** In mod.json, it means the mod is built against StoneForge
+  as it is now. Any StoneForge loads it; the version check is skipped, and the log says "development build". Its
+  release names the StoneForge it was built against. `ModManifest.InDevelopment` tells which a mod is.
+- **`Units`: the room's units on the game's grid.**
+  - `CellOf(unit)` gives the cell it stands on, and `At(cell)` who stands there (the game's position grid).
+  - `CanTake(unit, cell)` checks a unit may take a cell. `Move(unit, cell)` moves it as its own movement does, through the collision grid, the position grid and a big unit's extra cells. `NearestFreeCell(unit, cell)` finds the nearest free cell.
+  - `Remove(unit)` takes a unit out quietly, with no loot or corpse, together with the effects on it. `Create(obj, x, y)` spawns one as the game does. `SetRecord(unit, "Caravan Dummy")` gives it a mob record.
+  - Also `IsPlayer`, `EndTurn(unit)`, and the player's list of units to run each turn (`TurnsCount`, `RemoveFromTurns`).
+- **`UnitEffects`: the game's effects on any unit.**
+  - `On(unit)` lists them as `GameEffect`s: name, object, turns left, whether shown, whether harmful.
+  - `Create(effect, target, turns, owner, stage)` and `Refresh(...)` put one on as the game does, with immunities and fortitude.
+  - `Has`, `IconOf`, and `RemoveAll(unit)`, which takes them all off before a unit goes without its Destroy event. Left behind, they crash the game.
+- **`Player`: the player's character.**
+  - `Attribute(name)` (scr_atr), `Level`, `HealthCap` / `EnergyCap` (its thresholds), `InCombat`, and `IsHuntedBy(unit)`.
+  - `GiveXp(xp, killed)` gives XP as the game does, logged as a kill. `KillXp(unit)` is what a unit's death is worth.
+  - `WalkTo(cell)` walks there as a click does, and `CrossAreaEdge()` crosses into the next area. `AddStat` and `ChangePsyche` change its stats and psyche.
+- **Combat:** `Combat.Attack(attacker, target, forced)` (scr_attack), `Combat.Hit(target, amount, source)` (plain damage), `DamageShare` / `AddDamageShare` (a unit's damage list, for kills), and `Factions.Join` / `Leave`.
+- **`Draw`:** `Circle`, `Triangle`, `Line`, `SpriteExt` (scale, angle, tint, alpha), `Text` in a `GameFont` (`Default` or `Digits`), `PlainText` (the current font with a shadow, for the world), `SpriteExists` / `SpriteName` / `SpriteOrigin`, and `Frame(..., alpha)`.
+- **`Blackout`:** the screen held black, with a line of text, until `Hide()` or the next room change.
+- **`GameDialogs.Confirm(context, text, onYes, onNo)`:** the game's own confirmation panel asking a mod's question. Yes runs C#.
+- **`Journal`** (its task lists, `AddTask` / `RemoveTask`, the diary page), **`Contracts.Delete` / `DeleteQuestItems`**, **`ActionsLog.NameOf` / `Write`**, **`Steam.PersonaName`**, **`Exits.Nearest` / `Use`** (ways out, used as a click), and **`Turns.PassWorld` / `RunUnits`** (the game's turns, run by hand).
+- **Smaller additions:**
+  - `Instance.Of(value)`: the instance a reference or id names.
+  - `Instances.Count` and `Instances.Nearest`, by object index.
+  - `WorldTile.SetDungeonValue` / `SetDungeonMap` / `SetDungeonList`, and `WorldMap.DungeonFloor`.
+  - `Locations.TagAt` and `Locations.Exists`.
+  - `SaveData.Save(kind)` runs the game's save step, and `SaveData.WriteTo(save)` writes the save data over a save.
+  - `Gm.IrandomRange`.
+- `Rooms.ToMainMenu(save: true)` runs the game's own Save and Exit (scr_smoothSaveExit), so a mod hooking it sees it.
+- `Mouse.Unit` uses `Units.At`.
+
+- **`Mouse` in the world, and what it's over.** Alongside its screen position, buttons and wheel:
+  - `Mouse.WorldX` / `WorldY` are the mouse in the room's coordinates (the game's mouse_x / mouse_y, its camera taken into account), and `Mouse.Cell` the grid cell under it (`Mouse.World` and `Mouse.Position` give the room and screen positions as a `Point`).
+  - `Mouse.Unit` is the unit standing on that cell, as the game finds who stands where (its position grid): an enemy, an NPC, the player, another mod's unit. It's none for an empty cell or off the room.
+  - `Mouse.OverGameUI` (any of the game's shown GUI elements under it), `OverModUI` (any mod's UI, as of the last frame drawn) and `OverUI` (either), and `Mouse.HasFocus` (the game's window has the focus).
+  - `Mouse.ClickedWorld(button)`: pressed this frame on the world, in the focused window and not on any UI - a click meant for the world, as the game takes one to move or attack.
+  - The HUD layer's check for the game's UI drawn over it is the same code now.
+
+## 0.5.0 — Menus, the HUD and the profiler
+
+- **Main build workflow:** every push to main is packaged on the Stoneshard runner as the rolling `main-latest` pre-release (`StoneForge-main.zip`), so mods' CI can check their pushes against StoneForge's latest API.
+- **`ContextMenus`: the game's right-click menus.** `ContextMenus.OnOpen(context, menu => ...)` runs as any menu opens, with its options as the game made them: `menu.Target` is what was right-clicked, `menu.Items` its options (each a key - the game's "Attack", "Talk", "Explore"... -, its text, whether it can be clicked and its hover hint), and `Add`, `Remove`, `SetText` and `SetEnabled` change them. A menu left with no options is closed, and one that grows is sized again as the game sizes it.
+  - `ContextMenus.Add(context, text, appliesTo, onClick)` adds an option to the menus of the instances `appliesTo` picks. A mod's option runs its C# on what the menu's for when clicked (not while greyed out), then the menu closes as for the game's own.
+  - StoneForge makes scr_create_context_menu hookable itself; a mod needs no `[assembly: HookScript]`.
+- **A HUD layer for mod UI: `ModUI.Hud` and `ModContext.DrawHud`.** Drawn with the game's HUD, under its windows (inventory, map, Esc menu) and its bottom panel, and hidden when its HUD is (its UI turned off, a cutscene). `ModUI.When(active, UILayer.Hud)` puts a screen of your own there. A HUD element only has the mouse where none of the game's UI drawn over it is under it.
+  - It's drawn in the game's own Draw pass, at the HUD's depth: the game draws its UI there, by depth, laid out from its visible GUI container, so the game's windows draw over it. (Draw GUI comes after all of that, so mods' `Gui` layer stays over everything.) Mods draw in the same UI coordinates as on the `Gui` layer.
+  - The patcher adds o_stonemod_hud, whose Draw event the loader hooks; no GML of its own.
+- **`EscMenu`: the in-game Esc menu's buttons, as `MainMenu` is the main menu's.** `EscButton` names the game's (Resume, Load Game, Message Log, Settings, Exit, Save and Exit, and Exit Game, to the desktop).
+  - `EscMenu.AddButton` / `AddBefore` / `AddAfter` add a mod's button or one of the game's: above the exit by default, or by a button's name, its shown text or another mod's button.
+  - `ClearButtons`, `RestoreButtons` and `UndoChanges` (just this mod's changes since it loaded) work as on the main menu.
+  - The menu starts each time as the game makes it there (Load Game only with saves outside permadeath, Exit in place of Save and Exit where the game can't save). The mods' calls apply to that, laid out and centred as the game lays it out, and a change shows at once, open or not. The game's buttons are made as it makes them, sounds and all.
+- **Removing the game's buttons:** `MainMenu.RemoveButton` and `EscMenu.RemoveButton`, by button or by name. A name that isn't there yet (another mod's button, added later) is taken out when it comes. `MainMenu.UndoChanges` too.
+- The bridge reads and writes the engine's built-in variables (`x`, `image_index`, `alarm[n]`, an instance's id...) through their accessors, found once per name, rather than YYToolkit's `GetBuiltin` / `SetBuiltin`, which look the name up on every call. Alarm reads and writes went from about 18 µs to 14 µs; the rest is the engine's own alarm accessor.
+- The reliability probe times calls into the game by kind (`LIVE SPEED`): built-ins, instance and global variables, alarms, and scripts unhooked and hooked each way.
+- **No more patcher window behind the game.** The patcher was a console program. Started by Steam's launch option (`run %command%`), it waits for the game so Steam sees it playing, and its console window stayed open the whole time. It's a windowed program now, and that wait is unseen. Its console opens only when there's something to show (patching again after a game update, an error): in the terminal it was started from, as `Install StoneForge.cmd`'s, or else in a window of its own.
+- `Time.Set` / `Time.Advance` only work the time of day out again (the time controller's user event 4) when it has changed. A mod keeping the clock in step every few frames no longer runs the event each time.
+- **Profiler: where the frame goes.** **Ctrl+Shift+P** shows an overlay with the frame rate, the worst frame, and each mod's time per frame. Mods are listed slowest first, with the total of their code and their slowest parts: average and worst over the last second, and how many times each ran.
+  - StoneForge times every mod handler itself: `Tick`, frame and Draw GUI handlers, script hooks (before and after), code hooks, and so a mod's objects' events. Its own UI (mod screens and windows) is listed under StoneForge.
+  - `Profiler.Measure(context, "name", work)` (or with a result) times a part of a mod's own, listed under it.
+  - `Profiler.Timings`, `Fps` and `WorstFrameMs` give the last second's numbers to code; `Profiler.Visible` switches it.
+  - Nothing is timed while the overlay is off.
+- **Fix: `DsMap.FromJson` (and `DsList.FromJson`) read JSON written by .NET.**
+  - System.Text.Json escapes characters that matter in HTML (an apostrophe, `<`, `>`, `&`, `+`) as backslash-u codes by default, and the game's json_decode gives up on some of them. A save with a dungeon named "Bernarhof's Cenotaph", passed through `JsonNode`, didn't decode at all.
+  - The text is now handed to the game with its characters as they are; numbers keep their exact text.
+- **`CharacterLook`: a character's appearance**, as the game composites the player's sprite from it (scr_playerSpriteUpdate): its layers - body, head, hair, each piece of equipment worn - each a sprite at an offset, clipped and masked, over a frame grid. For companions, mannequins, or another player drawn in your game.
+  - `CharacterLook.OfPlayer()` reads the player's (null before there's a character). `ToJson()` / `FromJson()` carry it elsewhere: sprite ids are the same in every game from the same game data. Each `LookLayer` has its `Values` (the compositor's: `Sprite`, `Frame`, `Mask`...) and the origins its sprite and mask had where the look was read.
+  - `look.Build()` makes another character's sprites from it with the game's own compositor, so they look exactly as the player's would. Each layer's sprite sits at its read origins while it composites - equipment's origins are set per wearer at run time, so another game's copy may sit differently - then the player's globals and origins are put back. Call it in a Draw event (it draws to surfaces). Null if the look's body sprite isn't in this game.
+  - `CharacterSprites` are the five sprites the player is drawn with: `Normal`, `Blinking`, `FlashNegative` / `FlashPositive` (its hit flash), `Mask`, and `For(flash, blinking)` picks one as o_player does. `Dispose()` deletes them.
+- Tests: a fake for the game's sprites (origins, deletes).
+
+## 0.4.0 — The world, saves and screens
+
+- **`Rooms`: moving between screens** as the game does (scr_smoothRoomChange): a fade to black, the room changer's events in the game's order, then the next room. Each returns false, doing nothing, while another room change is under way (`Rooms.IsChanging`) or when it isn't the screen for it. `Rooms.Current`, `CurrentName` and `InMainMenu` say where the game is.
+  - `Rooms.Change(room)` (by index or name) goes to another room of the game being played, as a door does: the room being left is saved first so it's as it was when the player comes back (`saveLocation: false` skips that), through black unless `fade: false`.
+  - `Rooms.ToMainMenu()` goes back to the main menu as the Esc menu's Exit does, without saving. With `save: true` it does what Save and Exit does: the room is saved, then an exit save is made.
+  - `Rooms.LoadSave(save)` loads a `SaveFile` as the save menu does, from the main menu or from a game (which is left without saving). False if the save isn't on disk or isn't valid.
+  - `Rooms.StartNew()` starts a new adventure from the main menu as its button does, with the world map generated afresh; `prologue: true` starts the prologue, and `permadeath` sets the mode.
+- Tests: the fake game's scripts keep one index per name across tests, as the game's calls cache them. The fake room answers `instance_exists` for an object index when asked to, and test globals set from C# can be kept.
+- **`SaveData`: the save data of the game being played** (global.saveDataMap), the live map the game writes to disk as it saves. `SaveData.Sections` names its sections, `SaveData.CharacterSections` the character's (characterDataMap, characterStatsDataMap, skillsDataMap, inventoryDataList, scrollsDataList, locationsFogDataMap) and `SaveData.WorldSections` the rest. `Section(name)` / `SectionList(name)` give one. `SaveData.ToJson()` is the whole save as the game encodes it, `ToJson(sections)` just those, and `CharacterJson()` the character's without the world they're in. `SaveData.ModMap(key)` is a map of a mod's own in the save data, saved and loaded with it; the game's section names are refused.
+- **`SaveSlots`: the saves on disk**, as the save menu shows them. `SaveSlots.All` lists the character folders newest first, `Current` / `CurrentSave` are the game being played (null for a character never saved), and `Get(name)` finds one by name. A `SaveSlot` has its `Number`, `Info` (its character.map: `CharacterName`, `IsPermadeath`, `IsPrologue`, `SavedAt` in local time (the game keeps UTC), any value by key) and `Saves` (`SaveFile`s with their `Kind` - Manual, Auto, Exit - and `Info`: `IsValid`, the character, `LocationTitleKey`, `Avatar`, `SavedAt`). All read through the game's own scripts.
+  - `SaveSlots.OnInfoSaving(context, (slot, info) => ...)` runs as the game writes a folder's info each time it saves: what a mod adds to `info` is kept with the folder and read back from `slot.Info`. StoneForge makes scr_slotMapSave hookable itself.
+  - `SaveSlots.SetTitle(context, slot => ...)` gives a folder a header of the mod's own in the save menu, numbered and styled as the game does its own ("FailMelon, Friend (1)"); null keeps the game's.
+- **`GroundItems`: items lying on the ground.** `GroundItems.All()` is every item on the ground in the room (o_loot and its children), the off-screen ones too unless `includeCulled: false`. A `GroundItem` has `X` / `Y`, `ObjectName` ("o_loot_wine", "o_weapon_loot" for every weapon and armour), `IsOnGround`, and `IsStatic` for one placed with the location rather than dropped or found there.
+  - `item.ToJson()` (or `Save()`, a `DsMap` copy) is its saved state in the game's own format, as a location's save keeps it (scr_locationRoomEntityLootSaveDataGet): its object or weapon, where it lies, stack, charge and item data. Null for a static item, which the game doesn't save. `GroundItems.Create(json)` makes it back as loading a location does, where it lay with no hop onto a neighbouring tile, or returns null if the game can't make it.
+  - `GroundItems.Spawn(name, x, y)` puts a new item on that cell: one of the game's items by its o_inv_ name less "o_inv_" ("wine"), or a weapon or armour by its name (the game's or a mod's) at a `quality`. It lies where it's put; with `hop: true` it's tossed onto a free neighbouring tile, as the game drops loot.
+  - `item.Flight` is its hop while it's in the air (`InFlight`), an `ItemFlight`: where it is, the tile it's landing on, its speeds, gravity, drawn height and spin, with `ToJson()` / `FromJson()`. `item.Fly(flight)` puts another item in the air the same way, and the game's own step flies it along the same arc and lands it on the same tile, with its sound and dust. `item.Land()` cuts a hop short.
+  - An off-screen (culled) item is woken for the moment to be read or changed, then put back.
+- **`Locations`: what's dead, taken, opened and moved in each place.** The game's saved state of its locations (locationsRoomsDataMap): `Locations.Get(tag)` / `At(x, y)` is a location ("12_7", its world-map cell), with its rooms (`Rooms`, `Room(tag)`: "r_global" outdoors, "r_dungeon_<floor>", a building's room name), and each room its presets (`Presets`, `Preset(tag)`). `Locations.Here` is the location and room the player is in. A location is saved as the player leaves it, so the one they're in is written over then.
+  - A `LocationPreset` has its `Flags`, `HasSaveData`, `EntitiesJson` and `Entities` (a copy as a `DsMap`: mobsMap, npcMap, lootMap, containersMap... each with its "static" and "dynamic" entities), `SetEntities`, `Delete`, and `Export()` as a `LocationState`.
+  - `LocationFlags` are what spawns afresh on the next visit, by the game's names (Mobs, Npc, Corpses, LootRoom, LootDrop, ..., Insects): a set flag makes the loader ignore that kind's saved entities and spawn new ones, then clears it. `SetFlags` / `UnsetFlags` / `ResetFlags` on a preset, and `SetFlags` on a whole room or location, go through the game's scripts, a flag at a time as it sets them.
+  - `LocationState` is a saved state as plain data, with `ToJson()` / `FromJson()` keeping the tags' types (the game's key 3 isn't "3"). `Locations.Store(state)` puts one back where the game keeps it, making the location, room and preset if they're new, and refuses entities that aren't JSON the game can read back.
+- **`WorldMap`: the world map.** `WorldMap.PlayerCell` is the cell the player is on, `WorldMap.Floor` the dungeon floor (0 on the surface), and `WorldMap.Place` where they are as one string, the same in every game for the same spot: the room, "#f<floor>" in a dungeon and "@x_y", the cell ("r_globalmap_forest#f2@12_7"). Neighbouring cells and a dungeon's floors are built in the same room, so the room alone can't tell them apart. `WorldMap.Available` is false on the main menu and in the prologue, which has a map of its own (`WorldMap.InPrologue`).
+  - `WorldMap.Tile(x, y)` (or `WorldMap.Here`) is a cell. `tile["key"]` reads its saved value over the one the map generated, as the game does; `Get(key, TileLayer.Saved / Generated)` reads just one, and `Saved` / `Generated` are the maps themselves. Setting a value sets the saved one, through the game's scr_globaltile_set. `tile.Location` is the location's key ("Osbrook").
+  - `tile.Seeds`: the seeds its areas are built from - `Layout`, `Growth`, `Mobs`, `Preset`, `Containers`, `Trade` - -1 until the cell's been visited, -2 when it's to be rolled again (a respawn).
+  - `tile.Dungeon` (null for a cell without one): its values, `GetMap` / `GetList` for the nested ones (saved floor graphs, which rooms dropped what, its levels), and `SetMap` / `SetList`. Writes go through the game's scr_globaltile_dungeon_set scripts, so anything hooking them sees them.
+- **`Time`: the game's clock.** `Time.Now` is what time it is in the world, a `GameTime` (months, days 0-29, hours, minutes, seconds), with `Time.Timestamp` (minutes since the calendar began, as the game's scr_timeGetTimestamp), `Time.OfDay` and `Time.Turns` (turns completed). `Time.IsFrozen` says when the game holds time still (the Black Tablet's ritual). `Time.Available` says whether there's a clock at all: a game loaded or begun.
+  - `Time.Advance(minutes)` lets time pass as play does (scr_timePartsUpdate): minute by minute, with the game's every-minute, hour, day and month effects - upkeep, villages restocking, dungeons resetting, contracts' deadlines. It runs as the player, as play runs it in the player's turn: some of those effects need an instance, so with no player it throws.
+  - `Time.Set(time)` jumps there at once (scr_timeSet): nothing in between happens.
+  - After either, the time of day is brought up to date: the time controller only works it out when a room starts, so NPCs would otherwise keep the old one (working at night, a lantern in the day) until the next room.
+  - `TimeOfDay` is the game's: Morning 6:00-11:59, Day 12:00-18:59, Evening 19:00-22:59, Night 23:00-5:59. `GameTime` has `OfDay`, `DayFraction` and `FromTimestamp`, and throws for a moment outside the calendar.
+- **Game values as JSON.** `GmValue.ToJsonNode()` and `GmValue.FromJsonNode(node)` convert between game values and System.Text.Json nodes: a number, true/false, text, undefined as null, and arrays and structs as `JsonArray` / `JsonObject` with everything in them, at any depth. `GmArray.ToJsonNode()` / `GmStruct.ToJsonNode()` give the typed node, and `GmArray.FromJsonNode(JsonArray)` / `GmStruct.FromJsonNode(JsonObject)` make new ones in the game.
+  - Written value by value, as `DsList` writes its JSON, not through the game's json_stringify, so the result is always JSON. JSON has no way to write some things, so they become null: NaN and infinity, and a method (it reaches C# as a struct). An instance is written as its id, what the game's functions take. A struct that contains itself throws. A struct reached twice side by side is written twice.
+  - `GmArray.ToJson()` / `GmStruct.ToJson()` go through it too, so numbers are written as JSON writes them (`3`, not the game's `3.0`). `GmArray.FromJson` / `GmStruct.FromJson` read the text first and return null if it isn't the right JSON, rather than handing it to the game's json_parse.
+  - `DsList.ToJsonNode()` and `DsMap.ToJsonNode()` are public. A NaN in a list is written as null too, which JSON has no other way to write.
+  - **Mods can use System.Text.Json's nodes**: the sandbox now references System.Text.Json and allows `JsonNode`, `JsonArray`, `JsonObject` and `JsonValue` (and `JsonValueKind`, `JsonException` and the options their methods default to). Not `JsonSerializer`, which makes objects of any type by reflection, nor the generic `JsonValue.Create<T>`, which writes any object by reflection: a plain value has its own `Create` overload.
+- **`Game.IsBusy`:** whether the game is mid-way through something a mod shouldn't step into: a room change, a fade, a dialogue or a cutscene. **`Game.IsCutscene`:** the game's own check (scr_is_cutscene), run as the player, as it needs to be. It reads the instance's object_index and fails with none. Both are false with no player, except that a room change on the main menu still counts as busy.
+- **Script hooks after the call:** `Scripts.x.After(context, call => ...)` (or `OnScript(name, after: ...)`) runs once the game's call is done, with what it returned in `call.Result`. Set it to change what the caller gets.
+  - The loader makes the call itself, with the call's own self, other and arguments. That's the game's version, or a before handler's replacement, which after handlers then follow. Several mods' after handlers share that one call.
+- **Functions defined inside another script's file can be hooked**, e.g. Gwynel's house cutscene steps (`scr_rewards_find_guinnel_1`... in scr_rewards_find_guinnel) or the vineyard thief's wine check (in scr_npc_lines_mannshire_satellites). `[assembly: HookScript(...)]` on one now hooks it in the file that defines it. Before, the patcher said it "can't be hooked".
+- `CallOriginal` skips the hooks for its own call only. It used to turn the script's hooks off for the whole call, so the calls it made in turn (a recursive one included) weren't hooked either.
+- **Seeded random:** `Game.WithSeed(seed, action)` (or `WithSeed(seed, () => value)`) runs code with the game's random generator seeded, so its irandom, random, choose... draw the same numbers every time, in every game. Then the generator carries on.
+  - GameMaker can't save where its generator is: `random_get_seed` gives only the seed it started from, so setting that back replays the numbers already drawn. Instead the seed to carry on with is drawn from the generator first. A random game stays random, a seeded one stays the same everywhere, and nothing repeats. This also holds when the code throws, and when calls are nested.
+  - Any whole number works as a seed; it's brought into GameMaker's range (0 to 2^31 - 2) the same way everywhere.
+- **ds_maps and ds_lists in C#.** The game keeps almost everything in ds_maps (saves, characters, contracts...). `GmValue.AsDsMap` / `AsDsList` (or `DsMap.From` / `DsList.From`) gives the one a number names, null if there's none; `DsMap.Create()` / `DsList.Create()` makes one.
+  - `DsMap`: `map[key]` (get and set), `Get(key, fallback)`, `Has`, `Remove`, `Keys`, `Count`. `DsList`: `list[i]` (get and set), `Count`, `Add`, `RemoveAt`, `Clear`.
+  - Nested maps and lists: `IsMap` / `IsList`, `GetMap` / `GetList`, and `AddMap` / `AddList`, which mark them as owned (as `ds_map_add_map` / `ds_list_mark_as_map`). Setting or removing a slot that holds a nested one destroys it, and the slot loses its mark. (The game's own ds_map_delete and ds_list_delete don't: the nested one is left behind, owned by nothing.)
+  - `ToJson()`, and `DsMap.FromJson` / `DsList.FromJson`, which return null for text that isn't JSON. The game's json_decode makes a map out of it instead.
+  - `AssignFrom(source)` copies another map or list into this one in place, because the game holds references to its maps. Nested maps and lists are copied into the ones already there, at any depth. Keys the source lacks are removed, and a list is cut to the source's length. A slot whose kind changes (plain value, map or list) is destroyed and made anew. Nothing nested is shared with the source.
+
+## 0.3.0 — Game values and off-screen instances
+
+- **A hook on a script that isn't hookable fails at once.** A mod's `Scripts.x.Before(...)` or `OnScript("x", ...)` on a script the game data doesn't hook would never be called, so it throws. The mod's `Load` fails, in the log and on its Mods page, with the attribute to add: `[assembly: HookScript(nameof(Scripts.x))]`.
+  - The patcher records the scripts it made hookable (the loader's, and every mod's `[assembly: HookScript]`) in `dotnet\stoneforge-hooks.txt`, which the loader checks against. The game data is rebuilt once to write it.
+  - StoneForge's own scripts aren't checked, and neither is anything without that file (an older install).
+- **Arrays and structs in C#.** A GameMaker array or struct now reaches C# as itself - `GmValue.AsArray` (`GmArray`) or `AsStruct` (`GmStruct`) - from a built-in's or script's result, an instance or global variable, or a hooked script's arguments. It's the game's own value, by reference: changes through it change the game's, and passing it back passes that one.
+  - `GmArray`: `Length`, `array[i]` (get and set), `Push`, `Insert`, `Delete`, `ToArray()`; a new one with `GmArray.Create(length, fill)`, `GmArray.From(values)` or `GmArray.FromJson(text)`.
+  - `GmStruct`: `strukt["name"]` (get and set), `Has`, `Remove`, `Names`, `Count`; a new one with `GmStruct.Create()` or `GmStruct.FromJson(text)`.
+  - Both have `ToJson()`, and compare equal when they're the same game value.
+  - Kept alive for the game's garbage collector while C# holds them (the bridge roots them in a global struct, `__stoneforge_refs`), and let go of once C# doesn't (or at once with `Dispose()`).
+  - **Breaking:** an array used to arrive as its text (a string), and a struct as a temporary `Instance`.
+  - The native bridge's API is version 3: install the matching StoneForge.Bridge.dll and loader together.
+- **Alarms from C#:** `instance.Alarm[n]` (or a typed instance's `Alarm[n]`) reads and sets GameMaker's `alarm[0]` to `alarm[11]` - steps until it goes off, -1 when it's off - through the engine's own accessor. An index outside 0-11 throws.
+  - The native bridge's API is version 4 (`GetVarAt` / `SetVarAt`: an element of an instance's indexed engine variable).
+- **Off-screen instances.** The game culls what's off screen (ground loot, decorations...): o_cullingController deactivates it into its `deactivatedInstancesList`, where GameMaker's `with` and `instance_exists` don't see it.
+  - `Instances.All(obj, includeCulled: true)` lists those too, with the active ones (an object's children as well). There are overloads by `GameObjectId`, object index or a mod's own `GameObject`, and typed (`All<T>`). Every instance listed is kept by its id.
+  - `instance.IsCulled`: off screen and deactivated, still in the world. `instance.IsGone`: really left it (destroyed, picked up), where `Exists` is also false for one that's only culled.
+  - `instance.Destroy(runDestroyEvent = true)` destroys an instance culled or not. A culled one is first taken out of the controller's list, its cached `deactivatedInstancesListSize` kept in step, and activated: destroyed where it was, the controller would read a destroyed instance. Nothing happens to one already gone.
+  - A culled instance's built-ins (`x`, `object_index`, alarms...) can be read: the native bridge finds its pointer by id among the room's deactivated instances (the engine's own id lookup only has the active ones), and `Get` gives undefined if it can't be found. Its own variables can't be read (`Get` gives undefined) or set (`Set` throws) until it's back on screen, so keep a mod's data about it by its id.
+  - `Instances.All<T>(obj)` now keeps its instances by id rather than by a pointer only good in the current callback, so the list can be held.
+  - What's culled comes from the native bridge in one walk of the room's deactivated instances, which gives every one's id and object type. There can be hundreds or thousands after a room change (decorations too), and they're read once per frame. `IsCulled` is then a lookup, and `All` asks about each object type once. The controller's list is only searched to take one out of it (`Destroy`). The bridge's API is version 5 (`InactiveInstances`): install the matching StoneForge.Bridge.dll and loader together.
+- The patcher reads its own GML by the system's path separator. Installed deep enough for Windows' long-path form, it failed to read `GML\Items/...`.
+- **Breaking: windows reworked to work with any frame.**
+  - `UIWindow` is now only the window: open/close, Escape, the dimmed screen and input blocking as before, a frame and a close button.
+    - The frame is any sprite (`FrameSprite`; the game's version for the resolution unless `AdaptiveSprite` is off), drawn at its size. Or 9-sliced to `FrameWidth` x `FrameHeight` with `Slice` borders, or a plain panel with no sprite.
+    - `Content` is the frame less `ContentInsets`, emptied and sized on each open; everything goes there.
+    - `CloseButton` is an element you can move or hide. `Title` has `TitleX`/`TitleY`, and `DimBackground` turns the dimming off.
+    - `OnFit()` adjusts insets and positions for the resolution.
+  - No tabs, page or button slots any more. They're layout pieces usable anywhere:
+    - `UITabStrip`: a column (scrolling when full) or a row of `UITab`s, with `TabOpened` and any tab sprite. `UITab.Window` becomes `UITab.Strip`.
+    - `UIButtonRow`: any number of buttons spread across its width, or packed left/right. For frames with button places drawn in, `Positions` sets them and `Pin(button, n)` keeps a button in one.
+    - `UIScrollArea`, as before.
+  - `UISettingsWindow` is the Settings-menu look built from those pieces: `Tabs`, `Page`, `Buttons`, `SetTabs`, `OnTabOpened`, and `AddButton(text)` / `AddCloseButton()` with no slot number. Its buttons sit in the four places its frame sprite has drawn for them, filling from the left, with Close in the last; more than four are spread along the row. The Mods window uses it.
+  - `Draw.SpriteNineSlice` and `UIInsets` are new.
+- Main menu layout:
+  - `MainMenu.AddBefore` / `AddAfter(context, anchor, text, onClick)` place a button relative to any button. The anchor is a game button (`VanillaButton.Play`, or the names `"Play"`/`"Start"`, `"Settings"`, `"Credits"`, `"Exit"`), the text shown on a button (in the game's language), or another mod's button text.
+  - The game's own buttons are added the same way: `AddButton(context, VanillaButton.Exit)`, `AddBefore` / `AddAfter(context, anchor, VanillaButton.Settings)`. One already in the menu is moved.
+  - `MainMenu.ClearButtons(context)` empties the menu: the game's buttons and every mod's added so far.
+  - `VanillaButton` has every button of the game's menu screens: Play, Settings, Credits, Exit, Continue, NewGame, LoadGame, Prologue, Adventure and Back. They can be named with or without spaces ("New Game").
+    - Each one does what it does in the game, with the game's text in its language.
+    - Each is greyed out as the game's is: Continue when the last save can't be loaded (left out if there's none), New Game at 10 characters, Load Game with no saves.
+  - Back is the game's Back. It goes back one menu, as the game's goes back a screen: the last `ClearButtons` and everything after it are undone, then the game makes the main list again. So mods' menus nest.
+  - `MainMenu.RestoreButtons(context)` puts it back as it was at startup: the game's buttons and what every mod did while loading.
+  - The menu is laid out from every loaded mod's calls in load order. A change shows at once (the main list is rebuilt the next frame), or when a window over the menu closes. An anchor that isn't there yet is waited for, then falls back to above Exit (or last). A mod switched off takes its changes with it.
+  - `AddButton(context, text, onClick)` still adds above Exit, or last if Exit isn't there.
+
 ## 0.2.0 — GameObject release
 
 - **Breaking:** the generated enum of the game's objects is now `GameObjectId` (`GameObjectId.o_player`), not `GameObject`. That name is the base class of a mod's own objects.

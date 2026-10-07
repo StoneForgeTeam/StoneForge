@@ -6,7 +6,8 @@ namespace StoneForge;
 // give it. Layouts match StoneForge.Bridge's ModuleMain.cpp exactly.
 
 /// <summary>A value crossing to and from the game. Kind: 0 real, 1 string (UTF-8), 2 other (its text),
-/// 5 undefined, 6 instance / struct (Ptr), 13 bool (Real 0/1), 15 reference (its id in Real).</summary>
+/// 5 undefined, 6 instance / the global scope (Ptr), 7 array / 8 struct (a reference: its id in Real, the game's pointer in
+/// Ptr - GmRef), 13 bool (Real 0/1), 15 reference (its id in Real).</summary>
 [StructLayout(LayoutKind.Sequential)]
 internal struct NValue
 {

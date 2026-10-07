@@ -9,9 +9,21 @@ public class ReliabilityTests : FakeGame
     public unsafe void Bridge_ABI_layout()
     {
         Assert.Equal(32, sizeof(NValue));
-        Assert.Equal(80, sizeof(BridgeApi));
+        Assert.Equal(144, sizeof(BridgeApi));
         Assert.Equal(40, sizeof(ManagedCallbacks));
         Assert.Equal(8, Marshal.OffsetOf<BridgeApi>(nameof(BridgeApi.Log)).ToInt32());
+        // (Version 3 added ReleaseRefs at the end, after InstanceId.)
+        Assert.Equal(80, Marshal.OffsetOf<BridgeApi>(nameof(BridgeApi.ReleaseRefs)).ToInt32());
+        // (Version 4: GetVarAt and SetVarAt after it.)
+        Assert.Equal(88, Marshal.OffsetOf<BridgeApi>(nameof(BridgeApi.GetVarAt)).ToInt32());
+        Assert.Equal(96, Marshal.OffsetOf<BridgeApi>(nameof(BridgeApi.SetVarAt)).ToInt32());
+        // (Version 5: InactiveInstances after them.)
+        Assert.Equal(104, Marshal.OffsetOf<BridgeApi>(nameof(BridgeApi.InactiveInstances)).ToInt32());
+        // (Version 6: IsNative, HookScript, HasFunction and SetTyping - the native build - after it.)
+        Assert.Equal(112, Marshal.OffsetOf<BridgeApi>(nameof(BridgeApi.IsNative)).ToInt32());
+        Assert.Equal(120, Marshal.OffsetOf<BridgeApi>(nameof(BridgeApi.HookScript)).ToInt32());
+        Assert.Equal(128, Marshal.OffsetOf<BridgeApi>(nameof(BridgeApi.HasFunction)).ToInt32());
+        Assert.Equal(136, Marshal.OffsetOf<BridgeApi>(nameof(BridgeApi.SetTyping)).ToInt32());
     }
 
     [Fact]
@@ -60,6 +72,23 @@ public class ReliabilityTests : FakeGame
     }
 
     [Fact]
+    public void A_room_instance_goes_to_the_game_as_its_id_even_with_its_pointer_lent()
+    {
+        // (A pointer the game keeps - in a faction's list of units, a variable - outlives the instance: read once it's
+        // destroyed, it crashes the game. The game's own code keeps ids.)
+        using (new CallbackLifetime())
+        {
+            NValue instance = Game.ToNative(new Instance((IntPtr)42), new List<IntPtr>());
+            Assert.Equal(0, instance.Kind);
+            Assert.Equal(123, instance.Real);
+            // (A struct, with no id, still goes as its pointer.)
+            NValue structure = Game.ToNative(new Instance((IntPtr)43), new List<IntPtr>());
+            Assert.Equal(6, structure.Kind);
+            Assert.Equal((IntPtr)43, structure.Ptr);
+        }
+    }
+
+    [Fact]
     public void Expired_struct_cannot_be_dereferenced_or_passed_back()
     {
         Instance temporary;
@@ -93,6 +122,8 @@ public class ReliabilityTests : FakeGame
     public void Sprites_retire_and_reuse_without_deleting_a_referenced_ID()
     {
         Adds = Replaces = 0;
+        // (Its own calls: the log is every test's.)
+        int start = Calls.Count;
         int first = ModContent.LoadSprite("test assets", "test.png", 1, 0, 0);
         Assert.Equal(first, ModContent.LoadSprite("test assets", "test.png", 1, 0, 0));
         Assert.Equal(1, Adds);
@@ -108,7 +139,7 @@ public class ReliabilityTests : FakeGame
         ReplaceFails = false;
         ModContent.RemoveMod("test assets");
         Assert.Equal(0, ModContent.ActiveSprites);
-        Assert.DoesNotContain("sprite_delete", Calls);
+        Assert.DoesNotContain("sprite_delete", Calls.Skip(start));
     }
 
     [Fact]

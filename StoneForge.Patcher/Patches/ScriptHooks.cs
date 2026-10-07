@@ -22,10 +22,22 @@ internal static class ScriptHooks
         "scr_attack_result_hit", "scr_attack_result_block", "scr_attack_result_dodge", "scr_attack_result_fumble",
         "scr_itemCharSpritesInit",
         "scr_cast_spell", "scr_cast_aoe_spell", "scr_skill_reparse_locked",
+        // (SaveSlots.OnInfoSaving.)
+        "scr_slotMapSave",
+        // (ContextMenus: a menu as it opens.)
+        "scr_create_context_menu",
+        // (Turns.OnTurn: the world's turn.)
+        "scr_global_turn",
+        // (SaveData.OnLoaded / OnSaving: a save read, or about to be written.)
+        "scr_slotLoad", "scr_slotSaveUpdate",
+        // (Quests: started, a step on, done, failed.)
+        "scr_quest_start", "scr_quest_set_progress", "scr_quest_set_complete", "scr_quest_set_failed",
+        // (LootTables: a table's slots beyond the game's nine, rolled after its own roll.)
+        "scr_loot_from_tables",
     };
 
     /// <summary>Each script made hookable; how many could be.</summary>
-    public static int HookAll(GameDataEditor editor, IEnumerable<string> names)
+    public static int HookAll(GameDataEditor editor, IEnumerable<string> names, List<string>? hooked = null)
     {
         int made = 0;
         foreach (string name in names)
@@ -34,6 +46,7 @@ internal static class ScriptHooks
             {
                 ScriptEditor.InsertAtBodyStart(editor, name, Stub(name));
                 made++;
+                hooked?.Add(name);
                 PatcherConsole.Log($"  {name}: hookable");
             }
             catch (Exception e)

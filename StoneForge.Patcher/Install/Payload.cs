@@ -10,7 +10,9 @@ namespace StoneForge.Patcher;
 internal static class Payload
 {
     // Made by StoneForge as it runs (not shipped): removed on uninstall too.
-    private static readonly string[] Generated = { @"dotnet\bridge.log", "aurie.log", "YYToolkit.log" };
+    // (bridge-2.log... are the logs of more games running at once.)
+    private static readonly string[] Generated = new[] { @"dotnet\bridge.log", "aurie.log", "YYToolkit.log" }
+        .Concat(Enumerable.Range(2, 7).Select(n => $@"dotnet\bridge-{n}.log")).ToArray();
 
     /// <summary>The release's files\ folder, when this patcher is a release's copy (not installed in a game).</summary>
     public static string? ReleaseRoot()

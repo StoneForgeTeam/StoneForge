@@ -16,12 +16,16 @@ public sealed class UIScreen : UIElement
     private readonly Func<bool> _active;
     private bool _wasActive;
 
-    internal UIScreen(Func<bool> active, string owner)
+    internal UIScreen(Func<bool> active, string owner, UILayer layer = UILayer.Gui)
     {
         HitTest = false;
         _active = active;
         Owner = owner;
+        Layer = layer;
     }
+
+    /// <summary>Where it's drawn: over everything, or with the game's HUD (under its windows).</summary>
+    public UILayer Layer { get; }
 
     // The mod it's for.
     internal string Owner { get; }
@@ -85,6 +89,10 @@ public sealed class UIScreen : UIElement
                     hovered = _overlays[i].HitAt(mx, my);
             hovered ??= top != null ? top.HitAt(mx, my) : HitAt(mx, my);
         }
+        // (On the HUD: where the game's GUI drawn over it - a window, the bottom panel - is under the mouse, the mouse
+        // is the game's.)
+        if (hovered != null && Layer == UILayer.Hud && Mouse.GameUIUnder(nearerThan: Hooks.HudDepth))
+            hovered = null;
         // What the mouse is on (even disabled) - and what's held, while dragged off it - is kept from the game.
         if (hovered != null)
             InputBlock.Report(RootOf(hovered));

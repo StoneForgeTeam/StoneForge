@@ -1,7 +1,7 @@
 namespace StoneForge;
 
-/// <summary>A mod skill being cast (<see cref="ModSkill.OnCast"/>): who cast it, at what, and whether it's a miracle (a
-/// spell's crit).</summary>
+/// <summary>A skill being cast - a mod's (<see cref="ModSkill.OnCast"/>), or any (<see cref="Skills.OnUsed"/>): who cast
+/// it, at what, and whether it's a miracle (a spell's crit).</summary>
 public sealed class SkillCast
 {
     internal SkillCast(Instance skill, Instance caster, Instance target, bool isCrit)

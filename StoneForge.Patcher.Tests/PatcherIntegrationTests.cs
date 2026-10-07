@@ -12,7 +12,7 @@ public class PatcherIntegrationTests : IClassFixture<PatchedGameData>
 
     private void RequireData()
     {
-        Skip.If(_game.Input == null, @"No unpatched game data: set STONEFORGE_TEST_DATA, or install StoneForge in Steam's Stoneshard (dotnet\data_base.win).");
+        Skip.If(_game.Input == null, @"No unpatched VM game data: set STONEFORGE_TEST_DATA, or install StoneForge in Steam's Stoneshard on the VM branch (dotnet\data_base.win).");
         Assert.True(_game.InputWasUnpatched, _game.Input + " already has StoneForge's patches; the tests need unpatched data.");
     }
 
@@ -103,6 +103,27 @@ public class PatcherIntegrationTests : IClassFixture<PatchedGameData>
         RequireData();
         foreach (string hook in ScriptHooks.LoaderHooks)
             Assert.True(_game.Read.ReadGml("gml_GlobalScript_" + hook).Contains("__stonemod_script__"), hook);
+    }
+
+    [SkippableFact]
+    public void Functions_inside_another_scripts_file_are_hookable()
+    {
+        RequireData();
+        Assert.Equal(PatchedGameData.InnerHooks, _game.InnerHooked);
+        foreach (string hook in PatchedGameData.InnerHooks)
+        {
+            string file = _game.Read.ScriptFile(hook);
+            Assert.NotEqual("gml_GlobalScript_" + hook, file);
+            // (The block in its own function: after its declaration, before the next one's.)
+            var lines = _game.Read.ReadGml(file).Replace("\r\n", "\n").Split('\n');
+            int start = Array.FindIndex(lines, l => l.TrimStart().StartsWith("function " + hook + "("));
+            int end = Array.FindIndex(lines, start + 1, l => l.TrimStart().StartsWith("function "));
+            var body = lines[(start + 1)..(end < 0 ? lines.Length : end)];
+            Assert.Contains(body, l => l.Contains("\"__stonemod_script__\", \"" + hook + "\""));
+        }
+        // (And every other function in those files is still there.)
+        foreach (var (file, functions) in _game.InnerFiles)
+            Assert.Equal(functions, _game.Restored.Code.ByName(file).ChildEntries.Select(c => c.Name.Content).OrderBy(n => n, StringComparer.Ordinal));
     }
 
     [SkippableFact]

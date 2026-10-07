@@ -17,6 +17,14 @@ public class ModIdentityTests
         => Assert.Equal(new ManifestData("m", "M", "1", "", "", null), ModIdentity.ParseManifest("""{ "id": "m", "name": "M", "version": "1" }"""));
 
     [Fact]
+    public void A_mod_in_development_needs_the_latest_StoneForge()
+    {
+        var manifest = ModIdentity.ParseManifest("""{ "id": "m", "name": "M", "version": "1", "stoneforge": "latest" }""");
+        Assert.Equal("latest", manifest.StoneForge);
+        Assert.True(ModIdentity.IsLatest(manifest.StoneForge!));
+    }
+
+    [Fact]
     public void Trusted_is_a_boolean_off_by_default()
     {
         Assert.True(ModIdentity.ParseManifest("""{ "id": "m", "name": "M", "version": "1", "trusted": true }""").Trusted);
@@ -77,6 +85,9 @@ public class ModIdentityTests
     [InlineData("0.1.1", "0.1", true)]
     [InlineData("0.0.9", "0.1", false)]
     [InlineData("1.0.0-beta", "0.1.0", true)]
+    // (A mod in development: built against StoneForge as it is now - any StoneForge loads it.)
+    [InlineData("0.0.1", "latest", true)]
+    [InlineData("0.5.0", "Latest", true)]
     public void StoneForge_version_requirements(string current, string needed, bool ok)
         => Assert.Equal(ok, ModIdentity.Satisfies(current, needed));
 }

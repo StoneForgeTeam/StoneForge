@@ -1,0 +1,51 @@
+diff --git a/YYToolkit/source/ModuleMain.cpp b/YYToolkit/source/ModuleMain.cpp
+index d95a652..408055d 100644
+--- a/YYToolkit/source/ModuleMain.cpp
++++ b/YYToolkit/source/ModuleMain.cpp
+@@ -44,9 +44,11 @@ EXPORTED AurieStatus ModulePreinitialize(
+ 	IN const fs::path& ModulePath
+ )
+ {
+-	UNREFERENCED_PARAMETER(ModulePath);
+-
+-	CmpCreateConsole();
++	// (StoneForge: the console window only on request - a file named yytoolkit-console.on in the game's dotnet folder,
++	// beside this module's aurie folder. The log file is written either way.)
++	std::error_code console_error;
++	if (fs::exists(ModulePath.parent_path().parent_path() / "dotnet" / "yytoolkit-console.on", console_error))
++		CmpCreateConsole();
+ 	CmpCreateLogFile("YYToolkit.log");
+ 
+ 	AurieStatus last_status = AURIE_SUCCESS;
+@@ -89,8 +91,11 @@ EXPORTED AurieStatus ModuleUnload(
+ {
+ 	// Close the console window only AFTER freeing it, otherwise we close the game as well!
+ 	HWND console_window = GetConsoleWindow();
+-	FreeConsole();
+-	PostMessageW(console_window, WM_CLOSE, 0, 0);
++	if (console_window)
++	{
++		FreeConsole();
++		PostMessageW(console_window, WM_CLOSE, 0, 0);
++	}
+ 	CmWriteLogOutput("[%s:%d] Unloading.", __FILE__, __LINE__);
+ 
+ 	YYTK::CmpCloseLogFile();
+diff --git a/YYToolkit/source/YYTK/Module Internals/Hooks/Hooks.cpp b/YYToolkit/source/YYTK/Module Internals/Hooks/Hooks.cpp
+index 0b45aea..532bcbf 100644
+--- a/YYToolkit/source/YYTK/Module Internals/Hooks/Hooks.cpp	
++++ b/YYToolkit/source/YYTK/Module Internals/Hooks/Hooks.cpp	
+@@ -208,10 +208,9 @@ namespace YYTK
+ 			size_t function_index = 0;
+ 			for (auto& entry : stacktrace)
+ 			{
+-				// description will be empty if resolve_game_symbol fails.
+-				std::string description = GmResolveGameSymbolFromAddress(stacktrace._To_voidptr_array()[function_index]);
+-				if (description.empty())
+-					description = entry.description();
++				// (StoneForge: not GmResolveGameSymbolFromAddress - its walk of the game's scripts (GetScriptData) faults on
++				// GameMaker 2022.9, which turned every GML error into a crash before this logged anything.)
++				std::string description = entry.description();
+ 
+ 				yytk_crash_message.append(
+ 					std::format("{:02}\t{:016X}\t{}\n", 

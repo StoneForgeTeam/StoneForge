@@ -3,8 +3,10 @@ using System.Text.RegularExpressions;
 
 namespace StoneForge;
 
-/// <summary>A mod's mod.json, as read (shared by the loader's API and the patcher).</summary>
-internal sealed record ManifestData(string Id, string Name, string Version, string Author, string Description, string? StoneForge, bool Trusted = false);
+/// <summary>A mod's mod.json, as read (shared by the loader's API and the patcher). Requires and After: the mods it needs,
+/// and the ones it loads after if they're there, by ID (null: none given).</summary>
+internal sealed record ManifestData(string Id, string Name, string Version, string Author, string Description, string? StoneForge, bool Trusted = false,
+    IReadOnlyList<string>? Requires = null, IReadOnlyList<string>? After = null);
 
 /// <summary>Who a mod is - its mod.json - and how its content is named: content keyed "key" in the mod "examplemod"
 /// is "examplemod:key" to mods, and "examplemod__key" in the game's data (objects, tables, saves). A mod ID has no
@@ -15,7 +17,7 @@ internal static class ModIdentity
 
     // Lowercase letters and digits, single underscores between them: "examplemod", "failmelon_examplemod".
     private static readonly Regex IdPattern = new("^[a-z][a-z0-9]*(_[a-z0-9]+)*$", RegexOptions.CultureInvariant);
-    private static readonly string[] Keys = { "id", "name", "version", "author", "description", "stoneforge", "trusted" };
+    private static readonly string[] Keys = { "id", "name", "version", "author", "description", "stoneforge", "trusted", "requires", "after" };
 
     public static bool IsValidId(string id) => id.Length <= 64 && IdPattern.IsMatch(id);
 
@@ -63,6 +65,7 @@ internal static class ModIdentity
                 throw new InvalidDataException($"{ManifestFile} must be a JSON object");
             var values = new Dictionary<string, string>(StringComparer.Ordinal);
             bool trusted = false;
+            var lists = new Dictionary<string, IReadOnlyList<string>>(StringComparer.Ordinal);
             foreach (var property in root.EnumerateObject())
             {
                 if (!Keys.Contains(property.Name))
@@ -78,6 +81,12 @@ internal static class ModIdentity
                     };
                     continue;
                 }
+                // (Other mods, by ID: ["othermod", ...].)
+                if (property.Name is "requires" or "after")
+                {
+                    lists[property.Name] = ModIds(property);
+                    continue;
+                }
                 if (property.Value.ValueKind != JsonValueKind.String)
                     throw new InvalidDataException($"{ManifestFile}: \"{property.Name}\" must be a string");
                 values[property.Name] = property.Value.GetString()!.Trim();
@@ -88,16 +97,49 @@ internal static class ModIdentity
             if (!IsValidId(id))
                 throw new InvalidDataException($"{ManifestFile}: id \"{id}\" - lowercase letters and digits, single underscores between them (\"examplemod\", \"failmelon_examplemod\")");
             string? stoneForge = values.GetValueOrDefault("stoneforge");
-            if (stoneForge != null && !System.Version.TryParse(stoneForge.Count(c => c == '.') == 0 ? stoneForge + ".0" : stoneForge, out _))
-                throw new InvalidDataException($"{ManifestFile}: stoneforge \"{stoneForge}\" - the StoneForge version it needs, e.g. \"0.1\"");
+            if (stoneForge != null && !IsLatest(stoneForge)
+                && !System.Version.TryParse(stoneForge.Count(c => c == '.') == 0 ? stoneForge + ".0" : stoneForge, out _))
+                throw new InvalidDataException($"{ManifestFile}: stoneforge \"{stoneForge}\" - the StoneForge version it needs, e.g. \"0.1\" (or \"latest\", for a mod in development)");
+            foreach (var (key, ids) in lists)
+                if (ids.Contains(id))
+                    throw new InvalidDataException($"{ManifestFile}: \"{key}\" names the mod itself (\"{id}\")");
             return new ManifestData(id, Required("name"), Required("version"), values.GetValueOrDefault("author") ?? "",
-                values.GetValueOrDefault("description") ?? "", stoneForge, trusted);
+                values.GetValueOrDefault("description") ?? "", stoneForge, trusted, lists.GetValueOrDefault("requires"), lists.GetValueOrDefault("after"));
         }
     }
 
-    /// <summary>Whether this StoneForge is at least <paramref name="needed"/> ("0.1", "0.1.2").</summary>
+    // "requires" / "after": a list of mod IDs (each once).
+    private static IReadOnlyList<string> ModIds(JsonProperty property)
+    {
+        string example = $"\"{property.Name}\": [\"othermod\"]";
+        if (property.Value.ValueKind != JsonValueKind.Array)
+            throw new InvalidDataException($"{ManifestFile}: \"{property.Name}\" must be a list of mod IDs ({example})");
+        var ids = new List<string>();
+        foreach (var item in property.Value.EnumerateArray())
+        {
+            string? id = item.ValueKind == JsonValueKind.String ? item.GetString()!.Trim() : null;
+            if (id == null || !IsValidId(id))
+                throw new InvalidDataException($"{ManifestFile}: \"{property.Name}\" has {(id == null ? item.GetRawText() : $"\"{id}\"")} - "
+                    + $"a mod's ID: lowercase letters and digits, single underscores between them ({example})");
+            if (!ids.Contains(id))
+                ids.Add(id);
+        }
+        return ids;
+    }
+
+    /// <summary>The "stoneforge" of a mod in development: built against StoneForge as it is now - any StoneForge loads it
+    /// (its release names the StoneForge it was built against).</summary>
+    public const string Latest = "latest";
+
+    /// <summary>Whether a "stoneforge" requirement is <see cref="Latest"/>.</summary>
+    public static bool IsLatest(string needed) => string.Equals(needed.Trim(), Latest, StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>Whether this StoneForge is at least <paramref name="needed"/> ("0.1", "0.1.2"); any is, for
+    /// <see cref="Latest"/>.</summary>
     public static bool Satisfies(string current, string needed)
     {
+        if (IsLatest(needed))
+            return true;
         static System.Version Parse(string v) => System.Version.Parse(v.Count(c => c == '.') == 0 ? v + ".0" : v);
         return Parse(current.Split('-', '+')[0]) >= Parse(needed);
     }

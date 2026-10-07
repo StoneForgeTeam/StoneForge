@@ -19,6 +19,7 @@ public sealed class ScriptCall
     public Instance Other { get; }
     /// <summary>Its arguments.</summary>
     public GmValue[] Args { get; }
-    /// <summary>What the script returns, when a handler replaces the call.</summary>
+    /// <summary>What the script returns: set by a before handler that replaces the call; in an after handler, what it
+    /// returned - change it to change what the caller gets.</summary>
     public GmValue Result { get; set; }
 }

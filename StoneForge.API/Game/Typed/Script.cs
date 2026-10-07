@@ -1,7 +1,7 @@
 namespace StoneForge;
 
-/// <summary>One of the game's GML scripts (generated as <c>Scripts.scr_atr</c>...). Hooking it needs the
-/// mod to declare it: <c>[assembly: HookScript(nameof(Scripts.scr_atr))]</c>.</summary>
+/// <summary>One of the game's GML scripts (generated as <c>Scripts.scr_atr</c>...) - every function, those defined in
+/// another script's file too. Hooking it needs the mod to declare it: <c>[assembly: HookScript(nameof(Scripts.scr_atr))]</c>.</summary>
 public sealed class Script
 {
     /// <summary>Its name in the game.</summary>
@@ -16,17 +16,23 @@ public sealed class Script
     }
 
     /// <summary>Runs when the game calls it, before its code. Set <see cref="ScriptCall.Result"/> and return
-    /// true to replace the call.</summary>
-    public void Before(ModContext context, Func<ScriptCall, bool> handler) => context.OnScript(Name, handler);
+    /// true to replace the call. <paramref name="order"/>: when, among every mod's hooks on it (<see cref="HookOrder"/>).</summary>
+    public void Before(ModContext context, Func<ScriptCall, bool> handler, int order = HookOrder.Normal)
+        => context.OnScript(Name, handler, order: order);
+
+    /// <summary>Runs when the game's call is done, with what it returned in <see cref="ScriptCall.Result"/> - set it to
+    /// change what the caller gets. (Done by the game's own version, or a before handler that replaced it.)</summary>
+    public void After(ModContext context, Action<ScriptCall> handler, int order = HookOrder.Normal)
+        => context.OnScript(Name, after: handler, order: order);
 
     /// <summary>Replaces the call with your own: whatever <paramref name="replacement"/> returns is what the
     /// game gets. <see cref="CallOriginal(ScriptCall)"/> inside it runs the game's own version (to adjust its result).</summary>
-    public void Replace(ModContext context, Func<ScriptCall, GmValue> replacement)
+    public void Replace(ModContext context, Func<ScriptCall, GmValue> replacement, int order = HookOrder.Normal)
         => context.OnScript(Name, call =>
         {
             call.Result = replacement(call);
             return true;
-        });
+        }, order: order);
 
     /// <summary>Calls it (its hooks run, as for any call).</summary>
     public GmValue Call(GameInstance? self = null, params GmValue[] args) => Game.CallScript(Name, self?.Instance ?? default, args);
@@ -35,17 +41,9 @@ public sealed class Script
     public GmValue CallOriginal(GameInstance? self = null, params GmValue[] args) => CallOriginal(self?.Instance ?? default, args);
 
     /// <summary>As <see cref="CallOriginal(GameInstance?, GmValue[])"/>, with the call's own self and arguments.</summary>
-    public GmValue CallOriginal(ScriptCall call) => CallOriginal(call.Self, call.Args);
+    public GmValue CallOriginal(ScriptCall call) => Hooks.CallOriginal(Name, call.Self, call.Other, call.Args);
 
-    private GmValue CallOriginal(Instance self, GmValue[] args)
-    {
-        // (The hook block in the script checks global.__smh_<name>: off for the call, back on after.)
-        string flag = "__smh_" + Name;
-        bool hooked = Game.Global[flag].AsBool;
-        Game.Global[flag] = false;
-        try { return Game.CallScript(Name, self, args); }
-        finally { if (hooked) Game.Global[flag] = true; }
-    }
+    private GmValue CallOriginal(Instance self, GmValue[] args) => Hooks.CallOriginal(Name, self, self, args);
 
     public override string ToString() => Name;
 }

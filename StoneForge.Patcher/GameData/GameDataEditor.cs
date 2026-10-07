@@ -15,8 +15,10 @@ internal sealed class GameDataEditor
 
     public GameDataEditor(UndertaleData data)
     {
-        if (data.Code == null || data.Code.Count == 0)
-            throw new InvalidOperationException("StoneForge needs Stoneshard's VM modbranch (no editable CODE entries were found).");
+        // (The native - YYC - build has no GML in its data at all: only its objects, sprites and rooms are edited there.
+        // A VM build without code entries is something else.)
+        if (!data.IsYYC() && (data.Code == null || data.Code.Count == 0))
+            throw new InvalidOperationException("Stoneshard's game data has no code entries and isn't the native build - restore it (Steam: Verify integrity of game files).");
         Data = data;
     }
 
@@ -48,6 +50,12 @@ internal sealed class GameDataEditor
             throw new InvalidOperationException($"Edit the parent script of '{name}', not its child entry.");
         Import(name, source);
     }
+
+    /// <summary>The code entry that declares function <paramref name="name"/>: its global script - gml_GlobalScript_&lt;name&gt;,
+    /// or another's for a function defined in another script's file (scr_rewards_find_guinnel_1, in
+    /// gml_GlobalScript_scr_rewards_find_guinnel).</summary>
+    public string ScriptFile(string name)
+        => Data.Code.ByName("gml_Script_" + name)?.ParentEntry?.Name?.Content ?? "gml_GlobalScript_" + name;
 
     /// <summary>A global script declaring function <paramref name="name"/> (gml_GlobalScript_&lt;name&gt;, which the
     /// game runs at start to define it).</summary>

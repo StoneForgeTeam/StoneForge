@@ -7,11 +7,24 @@ public class CombatTests : FakeGame
     private static GameInstance Unit => GameInstance.Wrap<GameInstance>(Instance.FromId(123));
 
     [Fact]
-    public void Damage_goes_through_the_games_damage_script()
+    public void Damage_goes_through_the_games_damage_dealer()
     {
-        int before = Calls.Count;
+        var world = DealerWorld();
         Combat.Damage(Unit, DamageType.Shock, 12, Unit);
-        Assert.Contains("script_execute", Calls.Skip(before));
+        // (An o_damage_dealer at the target, its shock damage set, its user event 0 run.)
+        var (dealer, ev) = Assert.Single(world.UserEvents);
+        Assert.Equal(0, ev);
+        Assert.Equal(12, world.Vars[dealer]["Shock_Damage"].AsReal);
+    }
+
+    // A room with the target in it, where an o_damage_dealer can be made.
+    private FakeWorld DealerWorld()
+    {
+        var world = new FakeWorld();
+        world.Add(123, 300);
+        world.Vars[123] = new();
+        World = world;
+        return world;
     }
 
     [Fact]
@@ -20,7 +33,7 @@ public class CombatTests : FakeGame
         int before = Calls.Count;
         Assert.Equal(0, Combat.Damage(Unit, DamageType.Fire, 0));
         Assert.Equal(0, Combat.Damage(Unit, new Dictionary<DamageType, double> { [DamageType.Fire] = -3 }));
-        Assert.DoesNotContain("script_execute", Calls.Skip(before));
+        Assert.DoesNotContain("event_user", Calls.Skip(before));
     }
 
     [Fact]
@@ -29,7 +42,7 @@ public class CombatTests : FakeGame
         Alive = false;
         int before = Calls.Count;
         Assert.Equal(0, Combat.Damage(Unit, DamageType.Frost, 5));
-        Assert.DoesNotContain("script_execute", Calls.Skip(before));
+        Assert.DoesNotContain("event_user", Calls.Skip(before));
     }
 
     [Theory]
@@ -54,11 +67,11 @@ public class CombatTests : FakeGame
         var lightning = new Lightning();
         Assert.Equal("Shock", lightning.GameName);
         Assert.Equal("Lightning", lightning.Name);
-        int before = Calls.Count;
+        var world = DealerWorld();
         Combat.Damage(Unit, lightning, 5, Unit);
         Assert.Equal(5, lightning.Asked);
         Assert.Equal(10, lightning.Dealt?.Amount); // (doubled by Modify)
-        Assert.Contains("script_execute", Calls.Skip(before));
+        Assert.Single(world.UserEvents);
     }
 
     [Fact]
@@ -68,7 +81,7 @@ public class CombatTests : FakeGame
         int before = Calls.Count;
         Assert.Equal(0, Combat.Damage(Unit, warded, 7));
         Assert.False(warded.WasDealt);
-        Assert.DoesNotContain("script_execute", Calls.Skip(before));
+        Assert.DoesNotContain("event_user", Calls.Skip(before));
     }
 
     // (Tests see the API's internals, so these say "protected internal"; a mod writes "protected override".)

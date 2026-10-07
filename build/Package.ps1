@@ -6,7 +6,7 @@
 #       AurieCore.dll                 Aurie (third-party, lib\Aurie - see its README)
 #       aurie\YYToolkit.dll           YYToolkit (third-party, lib\YYToolkit)
 #       aurie\StoneForge.Bridge.dll   the native bridge
-#       dotnet\                       StoneForge.Loader, StoneForge.API (+ docs), Roslyn
+#       dotnet\                       StoneForge.Loader, StoneForge.API (+ docs), Roslyn, the splash art
 #       dotnet\patcher\               StoneForge.Patcher (+ GML, UndertaleModLib), AuriePatcher.exe
 #
 # usage: powershell -ExecutionPolicy Bypass -File build\Package.ps1 [-Configuration Release] [-NoBuild]
@@ -54,6 +54,8 @@ foreach ($f in "StoneForge.Loader.dll", "StoneForge.Loader.deps.json", "StoneFor
                "StoneForge.API.dll", "StoneForge.API.xml", "StoneForge.GmlGenerator.dll", "Microsoft.CodeAnalysis.dll", "Microsoft.CodeAnalysis.CSharp.dll") {
     Put "$loader\$f" "$files\dotnet\$f"
 }
+# (The loading screen's splash art.)
+Put "$root\branding\splash.png" "$files\dotnet\StoneForge.Splash.png"
 $patcher = "$root\StoneForge.Patcher\bin\$Configuration\net10.0-windows"
 # A stale build directory must not silently reintroduce dependencies the patcher no longer has.
 foreach ($obsolete in 'UndertaleModTool.dll', 'Serilog.dll') {
@@ -64,6 +66,9 @@ Get-ChildItem $patcher -Recurse -File | Where-Object Extension -ne ".pdb" | ForE
 }
 
 # The release's own files (Windows line endings for the .cmd files), the version in the README, the licences.
+if (-not (Test-Path "$files\dotnet\patcher\msl\StoneForge.MslHost.exe")) {
+    throw "MSL helper missing from patcher output. Rebuild the patcher before packaging."
+}
 Get-ChildItem "$PSScriptRoot\release" -Recurse -File | ForEach-Object {
     $target = Join-Path $out $_.FullName.Substring("$PSScriptRoot\release".Length + 1)
     New-Item -ItemType Directory -Force (Split-Path $target -Parent) | Out-Null
@@ -76,10 +81,13 @@ Put "$lib\YYToolkit\LICENSE" "$out\LICENSES\YYToolkit-AGPL-3.0.txt"
 # (Where the AGPL binaries come from: upstream commits, and the patch for the modified Aurie.)
 Put "$lib\Aurie\README.md" "$out\LICENSES\Aurie-SOURCE.md"
 Put "$lib\Aurie\stoneforge.patch" "$out\LICENSES\Aurie-stoneforge.patch"
+Put "$lib\YYToolkit\stoneforge.patch" "$out\LICENSES\YYToolkit-stoneforge.patch"
 Put "$lib\YYToolkit\README.md" "$out\LICENSES\YYToolkit-SOURCE.md"
 Put "$lib\UndertaleModLib\LICENSE.txt" "$out\LICENSES\UndertaleModLib-GPL-3.0.txt"
 Put "$lib\UndertaleModLib\Underanalyzer-LICENSE.txt" "$out\LICENSES\Underanalyzer-MPL-2.0.txt"
 Put "$lib\UndertaleModLib\README.md" "$out\LICENSES\UndertaleModLib-SOURCE.md"
+Put "$root\StoneForge.MslHost\LICENSE" "$out\LICENSES\MSL-GPL-3.0.txt"
+Put "$lib\MSL\README.md" "$out\LICENSES\MSL-SOURCE.md"
 
 $zip = Join-Path $root "artifacts\StoneForge-$version.zip"
 if (Test-Path $zip) { Remove-Item $zip -Force }

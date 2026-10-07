@@ -1,11 +1,11 @@
-# StoneForge
+<p align="center"><img src="branding/banner.png" alt="StoneForge - A Modloader For Stoneshard"></p>
 
 A C# mod loader for Stoneshard on Windows. Mods are source folders with a `mod.json` manifest, C# code and optional assets and GML bindings. StoneForge provides context APIs for items, consumables, buffs, skills, UI and game hooks.
 
 ## Requirements
 
-- Stoneshard (Steam), on the **VM modbranch**.
-- The **.NET 10 Runtime, x64** to play with mods.
+- Stoneshard (Steam), works on both main and mod branches!.
+- The **.NET 10 Windows Desktop Runtime, x64** for all mod types, including MSL packages. The base .NET 10 Runtime is sufficient only for ordinary StoneForge mods.
 - To build: .NET 10 SDK and Visual Studio with MSBuild and C++ tools (the current native build uses toolset `v145`).
 
 StoneForge uses UndertaleModLib 0.9.2.0 and Underanalyzer directly to patch game data. Game data is read from your local install; it is not included in this repository.
@@ -40,50 +40,17 @@ The stand-in holds only the game names StoneForge's own code and tests use. If y
 
 Pinned native binaries and their rebuild instructions are under `lib/Aurie`, `lib/YYToolkit` and `build/BuildThirdParty.ps1`. Library provenance and checksums are under `lib/UndertaleModLib`.
 
-## Releases
+Publishing releases is for the StoneForgeTeam maintainers: see [RELEASING.md](RELEASING.md).
 
-Releases are built and published by the [Release workflow](.github/workflows/release.yml) when a version tag is pushed. The API build needs Stoneshard's own game data, so the workflow runs on a self-hosted Windows runner labelled `stoneshard` rather than on GitHub's runners.
+## MSL packages (VM modbranch only)
 
-To publish a release:
+Drop `.sml` files directly into `<Stoneshard>/mods`, then start the game. Packages are enabled by default: only put mods you trust there. The Mods window shows their metadata and an unrestricted-code warning; untick Enabled to switch a package off on the next start. File names identify packages, so renaming a disabled package makes it a new, enabled package. Metadata is collected during patching and cached; disabled packages are not executed merely to display their details.
 
-1. Set `<Version>` in `Directory.Build.props`, for example `0.2.0`.
-2. Add a `## 0.2.0 — <title>` section to [CHANGELOG.md](CHANGELOG.md). Its text becomes the release notes.
-3. Merge to `main`, then tag the merged commit and push the tag:
+Enabled packages run in filename order through the bundled MSL 0.13.2.0 compatibility helper, followed by StoneForge's patches. No separate MSL installation is needed. Adding, changing, disabling or removing packages rebuilds from the preserved base on the next start. Changes are not hot-reloaded. The preserved base must be clean modbranch data, not previously MSL-patched data.
 
-   ```powershell
-   git fetch origin
-   git tag v0.2.0 origin/main
-   git push origin v0.2.0
-   ```
+MSL mods execute unrestricted C# during preparation. The helper's separate process isolates its older dependencies, not its permissions. Packages depending on MSL's launcher UI or scripting server are unsupported; compatibility with individual mods still depends on the game and MSL API version. Logs are in `dotnet/msl-patch.log`. Failed patching leaves the last game data in place; do not assume a changed mod selection was applied after an error.
 
-The workflow checks that the tag matches `Directory.Build.props`, builds, runs both test projects (failing if the integration tests have no game data), and publishes `StoneForge-<version>.zip` with the changelog notes. Versions with a suffix such as `0.2.0-beta.1` are published as pre-releases. Follow the run under **Actions**; it stays queued until the runner is online.
-
-To fix a failed release, use **Re-run jobs**. If the fix needs a new commit, merge it, then move the tag to it and push it again:
-
-```powershell
-git fetch origin
-git tag -f v0.2.0 origin/main
-git push origin :refs/tags/v0.2.0
-git push origin v0.2.0
-```
-
-### Release runner
-
-On a Windows PC with Stoneshard (VM modbranch, StoneForge installed), Visual Studio's C++ tools (`v145`) and the .NET 10 SDK:
-
-1. In this repository's **Settings → Actions → Runners**, choose **New self-hosted runner**, **Windows**, **x64**, and run the commands shown in PowerShell.
-2. When `config.cmd` asks, press Enter for the **Default** runner group and the default name. At **additional labels**, type `stoneshard`. `self-hosted`, `Windows` and `X64` are added automatically. Answer **N** to running as a service.
-3. Allow PowerShell scripts for your account (no administrator needed):
-
-   ```powershell
-   Set-ExecutionPolicy RemoteSigned -Scope CurrentUser
-   ```
-
-4. Start the runner with `.\run.cmd` and keep the window open. At `Listening for Jobs` it picks up queued releases.
-
-A runner installed as a Windows service runs under another account: it needs `Set-ExecutionPolicy RemoteSigned -Scope LocalMachine`, and `STONESHARD_DIR` and `STONEFORGE_TEST_DATA` set as system environment variables unless the game is in Steam's default folder. A self-hosted runner executes workflow code on that PC, so require approval for fork pull request workflows (**Settings → Actions → General**). Full details are in [Releasing](https://github.com/StoneForgeTeam/StoneForgeDocs/blob/main/docs/development/releasing.md).
-
-## Write a mod
+## Write a StoneForge mod
 
 The documentation lives in the [StoneForgeDocs](https://github.com/StoneForgeTeam/StoneForgeDocs) repository and is published with GitBook.
 

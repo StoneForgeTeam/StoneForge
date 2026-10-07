@@ -1,7 +1,9 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <OutputType>Exe</OutputType>
+    <!-- (A windowed app: no console of its own - run, Steam's launch option, waits for the game behind it, unseen. Its
+         console opens only to show something, in the terminal it was started from if there is one: PatcherConsole.) -->
+    <OutputType>WinExe</OutputType>
     <!-- Windows installer APIs; the patch engine itself has no WPF/launcher dependency. -->
     <TargetFramework>net10.0-windows</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
@@ -20,7 +22,10 @@
     <Reference Include="Underanalyzer"><HintPath>..\lib\UndertaleModLib\Underanalyzer.dll</HintPath></Reference>
     <InternalsVisibleTo Include="StoneForge.Patcher.Tests" />
     <ProjectReference Include="..\StoneForge.GmlGenerator\StoneForge.GmlGenerator.csproj" />
+    <!-- (Built first, for its copy into msl/ - CopyMslHost - and not copied beside the patcher too.) -->
+    <ProjectReference Include="..\StoneForge.MslHost\StoneForge.MslHost.csproj" ReferenceOutputAssembly="false" Private="false" />
     <Compile Include="..\Shared\GmlCatalog.cs" Link="Mods\GmlCatalog.cs" />
+    <Compile Include="..\Shared\SmlCatalog.cs" Link="Mods\SmlCatalog.cs" />
     <Compile Include="..\Shared\ModIdentity.cs" Link="Mods\ModIdentity.cs" />
     <Compile Include="..\Shared\SteamLibrary.cs" Link="Steam\SteamLibrary.cs" />
   </ItemGroup>
@@ -31,4 +36,10 @@
     <None Include="GML\**\*.gml" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
+  <Target Name="CopyMslHost" AfterTargets="Build">
+    <ItemGroup>
+      <MslHostFiles Include="../StoneForge.MslHost/bin/$(Configuration)/net10.0-windows/**/*" Exclude="../StoneForge.MslHost/bin/$(Configuration)/net10.0-windows/**/*.pdb" />
+    </ItemGroup>
+    <Copy SourceFiles="@(MslHostFiles)" DestinationFiles="@(MslHostFiles->'$(OutDir)msl/%(RecursiveDir)%(Filename)%(Extension)')" />
+  </Target>
 </Project>

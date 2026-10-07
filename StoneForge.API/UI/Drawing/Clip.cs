@@ -2,8 +2,8 @@ namespace StoneForge;
 
 // UIElement.ClipChildren: the children drawn into a surface the size of the clipped area (GUI pixels, at the
 // game's UI scale), drawn back in its place - as the game clips its own scrolled lists (it has no scissor on this
-// runtime). The patcher's scr_stonemod_clip_begin / _end switch to the surface and back, keeping the Draw GUI
-// pass's matrices. A surface not used for a while (its element gone or hidden) is freed.
+// runtime). Begin switches to the surface and End back, keeping the Draw GUI pass's matrices (nested clips stack). A
+// surface not used for a while (its element gone or hidden) is freed.
 internal static class Clip
 {
     private const int UnusedFrames = 300;
@@ -17,6 +17,8 @@ internal static class Clip
     }
 
     private static readonly Dictionary<UIElement, Entry> Surfaces = new(ReferenceEqualityComparer.Instance);
+    // The matrices each Begin found (view, projection, world: matrix_get 0, 1, 2), put back by its End.
+    private static readonly Stack<GmValue[]> Matrices = new();
     private static int _frame;
 
     // Drawing into the element's surface from here (false: nothing to draw into - an empty area).
@@ -45,15 +47,31 @@ internal static class Clip
         double x = Math.Floor(area.X * scale), y = Math.Floor(area.Y * scale);
         entry.X = x / scale;
         entry.Y = y / scale;
-        Game.CallScript("scr_stonemod_clip_begin", default, entry.Surface, scale, x, y);
+        Matrices.Push(new[] { Builtin("matrix_get", 0), Builtin("matrix_get", 1), Builtin("matrix_get", 2) });
+        Builtin("surface_set_target", entry.Surface);
+        // (Cleared: c_black, transparent.)
+        Builtin("draw_clear_alpha", 0, 0);
+        using (GmArray? world = Builtin("matrix_build", -x, -y, 0, 0, 0, 0, scale, scale, 1).AsArray)
+            Builtin("matrix_set", 2, world);
         return true;
     }
 
     internal static void End(UIElement element)
     {
         var entry = Surfaces[element];
-        Game.CallScript("scr_stonemod_clip_end", default, entry.Surface, Draw.Scale, entry.X, entry.Y);
+        Builtin("surface_reset_target");
+        if (Matrices.TryPop(out var matrices))
+            for (int i = 0; i < 3; i++)
+            {
+                Builtin("matrix_set", i, matrices[i]);
+                matrices[i].AsArray?.Dispose();
+            }
+        // (Back at the pass's scale, which it's drawn under: shrunk by it. 16777215: c_white.)
+        double scale = Draw.Scale;
+        Builtin("draw_surface_ext", entry.Surface, entry.X, entry.Y, 1 / scale, 1 / scale, 0, 16777215, 1);
     }
+
+    private static GmValue Builtin(string name, params GmValue[] args) => Game.CallBuiltinTrusted(name, default, default, args);
 
     // After each Draw GUI pass: surfaces no element has drawn into lately, freed.
     internal static void Sweep()

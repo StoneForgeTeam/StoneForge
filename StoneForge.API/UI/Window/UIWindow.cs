@@ -1,78 +1,97 @@
 namespace StoneForge;
 
-/// <summary>A window as the game's Settings menu - its frame, title and close button, over the screen dimmed -
-/// with tabs down its left (<see cref="SetTabs(string[])"/>: more than fit scroll), a scrolling page on its
-/// right (<see cref="Page"/>) and up to four buttons along its bottom (<see cref="AddButton"/>). While it's
-/// open nothing under it takes the mouse or the game's hotkeys, and Escape closes it, as the game's own
-/// windows. Put it on a screen, then <see cref="Open"/> it; inherit from it, building it in
-/// <see cref="OnOpen"/> and filling its page in <see cref="OnTabOpened"/>:
+/// <summary>A window as the game's own: a frame (any sprite - or a plain panel), its title and close button, in the
+/// middle of the screen over it dimmed. While it's open nothing under it takes the mouse or the game's hotkeys, and
+/// Escape closes it. Put it on a screen, then <see cref="Open"/> it; inherit from it and build it in
+/// <see cref="OnOpen"/>, adding what goes in it to <see cref="Content"/> - the frame's inside, less its borders
+/// (<see cref="ContentInsets"/>):
 /// <code>
 /// public class MyWindow : UIWindow
 /// {
-///     public MyWindow() : base("My Mod") { }
+///     public MyWindow() : base("My Mod")
+///     {
+///         FrameSprite = (int)Sprite.s_journal_window;
+///         ContentInsets = new UIInsets(20, 30, 20, 20);
+///     }
 ///     protected override void OnOpen()
 ///     {
-///         SetTabs("General", "Advanced");
-///         AddCloseButton();
-///         Tabs[0].Open();
-///     }
-///     protected override void OnTabOpened(UITab tab)
-///     {
-///         Page.Clear();
-///         Page.AddHeader(tab.Text);
-///         Page.AddCheckbox("Something", true);
+///         var page = Content.Add(new UIScrollArea(0, 0, Content.Width, Content.Height - 34));
+///         page.AddText("Hello");
+///         var buttons = Content.Add(new UIButtonRow(0, Content.Height - 26, Content.Width));
+///         buttons.Add("Close").Clicked += _ => Close();
 ///     }
 /// }
 /// var window = context.UI.MainMenu.Add(new MyWindow());
 /// MainMenu.AddButton(context, "My Mod", window.Open);
 /// </code>
-/// Each <see cref="Open"/> builds it anew. Anything can go on its page (it's a <see cref="UIScrollArea"/>) or
-/// its <see cref="Frame"/>.</summary>
+/// Its size: its sprite's (the game's version of it for the resolution, as its windows pick theirs); or, with
+/// <see cref="Slice"/> - or no sprite - <see cref="FrameWidth"/> x <see cref="FrameHeight"/>, the sprite 9-sliced to it.
+/// Nothing in it is laid out for it: place things in <see cref="Content"/> yourself, or with the layout elements
+/// (<see cref="UIScrollArea"/>, <see cref="UITabStrip"/>, <see cref="UIButtonRow"/>...). <see cref="UISettingsWindow"/>
+/// is one laid out as the game's Settings menu. Each <see cref="Open"/> empties <see cref="Content"/> and builds it
+/// anew.</summary>
 public class UIWindow : UIElement
 {
-    // The settings menu's layout, from its content's corner in the frame: its tab column, page and bottom row
-    // (the buttons' middles, as the game places them).
-    private const double PageX = 110, PageWidth = 310, AreaHeight = 247, TabWidth = 100, TabHeight = 26, ButtonsY = 270;
-    private static readonly double[] ButtonColumns = { 50, 183, 285, 387 };
-
     // Open windows; and each one's stand-in in the game's escape list (o_stonemod_modal), by its id.
     private static readonly List<UIWindow> OpenWindows = new();
     private static readonly Dictionary<int, UIWindow> ByModal = new();
 
-    private readonly List<UITab> _tabs = new();
-    private UIScrollArea? _tabArea;
-    private UIScrollArea? _page;
     private Instance _modal;
-    private double _offsetX, _offsetY;
 
-    public UIWindow(string title)
+    public UIWindow(string title = "")
     {
         Title = title;
         Visible = false;
         Frame = Add(new WindowFrame(this));
+        Content = Frame.Add(new UIGroup());
+        CloseButton = Frame.Add(new WindowCloseButton(this) { Anchor = UIAnchor.TopRight, X = 4, Y = 4 });
     }
 
     public string Title { get; set; }
     public bool IsOpen => Visible;
-    /// <summary>The window itself - its frame, at the middle of the screen: what's on it is placed from its corner.</summary>
+
+    /// <summary>Its frame's sprite: any sprite (-1: none - a plain panel, <see cref="FrameWidth"/> x
+    /// <see cref="FrameHeight"/>).</summary>
+    public int FrameSprite { get; set; } = -1;
+    /// <summary>Whether the game's version of <see cref="FrameSprite"/> for its resolution is drawn - &lt;name&gt;_&lt;view
+    /// height&gt;, as its windows pick theirs (default: yes; the sprite itself if there's none).</summary>
+    public bool AdaptiveSprite { get; set; } = true;
+    /// <summary>The frame sprite's borders, to draw it 9-sliced to <see cref="FrameWidth"/> x <see cref="FrameHeight"/>
+    /// (null: drawn at its own size, the window its size).</summary>
+    public UIInsets? Slice { get; set; }
+    /// <summary>Its size when its sprite is sliced, or it has none (default 400 x 300).</summary>
+    public double FrameWidth { get; set; } = 400;
+    public double FrameHeight { get; set; } = 300;
+    /// <summary>The frame's borders: <see cref="Content"/> is the frame less these.</summary>
+    public UIInsets ContentInsets { get; set; } = new(16);
+    /// <summary>Whether the screen behind it is dimmed (default: yes).</summary>
+    public bool DimBackground { get; set; } = true;
+    /// <summary>Where its title is drawn: from the middle of the frame's top (default 13 down).</summary>
+    public double TitleX { get; set; }
+    public double TitleY { get; set; } = 13;
+
+    /// <summary>The window itself - its frame, in the middle of the screen.</summary>
     public UIElement Frame { get; }
-    /// <summary>The right side: a scrolling page to fill (while it's open).</summary>
-    public UIScrollArea Page => _page ?? throw new InvalidOperationException("The window isn't open: fill it in OnOpen / OnTabOpened");
-    public IReadOnlyList<UITab> Tabs => _tabs;
-    /// <summary>The open tab (none before one's opened).</summary>
-    public UITab? SelectedTab { get; private set; }
+    /// <summary>The frame's inside, less <see cref="ContentInsets"/>: what's in the window goes here (sized and emptied
+    /// when it opens, before <see cref="OnOpen"/>).</summary>
+    public UIElement Content { get; }
+    /// <summary>Its close button: the game's, at the frame's top right (<see cref="UIElement.X"/> / <see cref="UIElement.Y"/>
+    /// in from that corner). Hide it, or move it, as the frame needs.</summary>
+    public UIElement CloseButton { get; }
 
     /// <summary>It opened (after <see cref="OnOpen"/>).</summary>
     public event Action<UIWindow>? Opened;
-    /// <summary>A tab was opened (after <see cref="OnTabOpened"/>).</summary>
-    public event Action<UITab>? TabOpened;
     /// <summary>It closed (whoever closed it; after <see cref="OnClosed"/>).</summary>
     public event Action<UIWindow>? Closed;
 
-    /// <summary>It's just been opened: build it here - tabs, buttons, the page.</summary>
+    /// <summary>Opening, its frame sized for the game's resolution: change what depends on it here - its
+    /// <see cref="ContentInsets"/>, <see cref="CloseButton"/>, title - before <see cref="Content"/> is sized.</summary>
+    protected virtual void OnFit() { }
+    /// <summary>(For a window laid out in advance, as <see cref="UISettingsWindow"/>: its layout made in the emptied
+    /// <see cref="Content"/>, before <see cref="OnOpen"/>.)</summary>
+    protected virtual void OnBuild() { }
+    /// <summary>It's just been opened: build what's in it here, in <see cref="Content"/>.</summary>
     protected virtual void OnOpen() { }
-    /// <summary>A tab was opened (clicked, or <see cref="UITab.Open"/>): fill the page for it here.</summary>
-    protected virtual void OnTabOpened(UITab tab) { }
     /// <summary>It closed.</summary>
     protected virtual void OnClosed() { }
 
@@ -103,77 +122,21 @@ public class UIWindow : UIElement
         Shut();
     }
 
-    /// <summary>The tabs down its left, in place of any it had - more than fit (9) scroll, beside a scrollbar.
-    /// Open one with <see cref="UITab.Open"/>.</summary>
-    public IReadOnlyList<UITab> SetTabs(params string[] names) => SetTabs((IEnumerable<string>)names);
-
-    public IReadOnlyList<UITab> SetTabs(IEnumerable<string> names)
-    {
-        var list = names.ToList();
-        foreach (var tab in _tabs)
-            tab.Parent?.Remove(tab);
-        _tabs.Clear();
-        SelectedTab = null;
-        if (_tabArea != null)
-            Frame.Remove(_tabArea);
-        _tabArea = null;
-        if (list.Count * TabHeight > AreaHeight)
-        {
-            // (The column the tabs have - 0 to 100 - with the scrollbar's track at its right, clear of the page's
-            // frame at about 106; the tabs narrowed for it.)
-            _tabArea = Frame.Add(new UIScrollArea(_offsetX, _offsetY, 88 + 15, AreaHeight) { Padding = 0, Spacing = 0 });
-            for (int i = 0; i < list.Count; i++)
-                _tabs.Add(_tabArea.Add(new UITab(this, list[i], i, 86)));
-        }
-        else
-        {
-            for (int i = 0; i < list.Count; i++)
-                _tabs.Add(Frame.Add(new UITab(this, list[i], i, TabWidth) { X = _offsetX, Y = _offsetY + TabHeight * i }));
-        }
-        return _tabs;
-    }
-
-    /// <summary>A button (the Settings menu's) in the bottom row, in one of its four places: 0 left ... 3
-    /// right, where the settings menu has Cancel.</summary>
-    public UIButton AddButton(int place, string text)
-    {
-        if (place < 0 || place >= ButtonColumns.Length)
-            throw new ArgumentOutOfRangeException(nameof(place), "0 to 3");
-        return Frame.Add(new UIButton(text, _offsetX + ButtonColumns[place] - 50, _offsetY + ButtonsY - 13));
-    }
-
-    /// <summary>A button that closes the window, in the bottom row (as the settings menu's Cancel).</summary>
-    public UIButton AddCloseButton(int place = 3, string text = "Close")
-    {
-        var button = AddButton(place, text);
-        button.Clicked += _ => Close();
-        return button;
-    }
-
-    // A tab opened: shown as the open one, scrolled to - in the middle where it can be - if its list scrolls;
-    // then OnTabOpened and TabOpened.
-    internal void Select(UITab tab)
-    {
-        SelectedTab = tab;
-        _tabArea?.ScrollToShow(tab);
-        try { OnTabOpened(tab); }
-        catch (Exception e) { Game.Log($"{GetType().Name}.OnTabOpened threw: {e}"); }
-        try { TabOpened?.Invoke(tab); }
-        catch (Exception e) { Game.Log($"{GetType().Name} TabOpened handler threw: {e}"); }
-    }
-
-    // Made anew for each opening: the frame emptied but for its close button, the page.
+    // Made anew for each opening: the frame fitted to the resolution, the content emptied and sized.
     private void Build()
     {
-        Frame.Clear();
-        _tabs.Clear();
-        _tabArea = null;
-        SelectedTab = null;
         var frame = (WindowFrame)Frame;
         frame.Fit();
-        (_offsetX, _offsetY) = frame.ContentOffset;
-        _page = Frame.Add(new UIScrollArea(_offsetX + PageX, _offsetY, PageWidth + 15, AreaHeight));
-        Frame.Add(frame.MakeCloseButton());
+        try { OnFit(); }
+        catch (Exception e) { Game.Log($"{GetType().Name}.OnFit threw: {e}"); }
+        var insets = ContentInsets;
+        Content.Clear();
+        Content.X = insets.Left;
+        Content.Y = insets.Top;
+        Content.Width = Math.Max(0, Frame.Width - insets.Left - insets.Right);
+        Content.Height = Math.Max(0, Frame.Height - insets.Top - insets.Bottom);
+        try { OnBuild(); }
+        catch (Exception e) { Game.Log($"{GetType().Name}.OnBuild threw: {e}"); }
     }
 
     protected override void OnUpdate(double deltaTime)
@@ -190,7 +153,10 @@ public class UIWindow : UIElement
     }
 
     protected override void OnDraw(double x, double y)
-        => Scripts.scr_drawBG.Call(null, x, y, Width, Height, Draw.Black, 0.7);
+    {
+        if (DimBackground)
+            Scripts.scr_drawBG.Call(null, x, y, Width, Height, Draw.Black, 0.7);
+    }
 
     // ---- the game, while it's open ----
 
@@ -219,7 +185,6 @@ public class UIWindow : UIElement
             return;
         Visible = false;
         OpenWindows.Remove(this);
-        _page = null;
         try
         {
             if (!_modal.IsNone)
@@ -269,9 +234,16 @@ public class UIWindow : UIElement
     internal static IReadOnlyList<UIWindow> InOrder => OpenWindows.ToList();
     internal UIScreen? ScreenOf => Screen;
 
-    // Escape: its stand-in tells it (scr_stonemod_gui_event "close").
+    // Escape: its stand-in tells it (scr_stonemod_gui_event "close" - on the native build, its user event 15 itself:
+    // o_stonemod_modal's events are o_presset_town_encounter's, NativeHost).
     internal static void Install(ModContext loader)
     {
+        if (Game.IsNative)
+        {
+            NativeHost.Install(loader, "o_stonemod_modal", "o_presset_town_encounter", new[] { "Create_0", "Other_10", "Other_25" },
+                new Dictionary<string, Action<Instance>> { ["Other_25"] = CloseFor });
+            return;
+        }
         loader.OnScript("scr_stonemod_gui_event", call =>
         {
             if (call.Args.Length >= 1 && call.Args[0].AsString == "close")
@@ -283,6 +255,15 @@ public class UIWindow : UIElement
             }
             return true;
         });
+    }
+
+    // Escape on a window's stand-in: the window closed.
+    private static void CloseFor(Instance modal)
+    {
+        GmValue id = modal.Get("id");
+        int key = id.Kind == GmKind.Instance ? id.AsInstance.Id : (int)id.AsReal;
+        if (ByModal.TryGetValue(key, out var window))
+            window.Close();
     }
 
     // Windows on a screen leaving its context, or of a mod switched off: closed at once.

@@ -50,6 +50,10 @@ public sealed class ModContext
     /// <summary>The mod's own game objects (<see cref="GameObject"/>).</summary>
     public GameObjects Objects { get; }
 
+    /// <summary>The other mods running now, to find one by its ID and use what it offers (<see cref="ModList"/>; its
+    /// mod.json's <c>"requires"</c> lets a mod use another's types).</summary>
+    public ModList Mods { get; } = new();
+
     /// <summary>The mod's files: its own folder, the game's and Stoneshard's data folder (see <see cref="ModFiles"/>).</summary>
     public ModFiles Files => _files ?? throw new InvalidOperationException("No mod folder");
 
@@ -116,19 +120,38 @@ public sealed class ModContext
         remove { Hooks.DrawGuiHandlers.RemoveAll(h => h.Handler == value); }
     }
 
+    /// <summary>Every frame, with the game's HUD - under its windows (inventory, map, dialogue...) and its bottom
+    /// panel, which draw over what's drawn here - in GUI coordinates, as <see cref="DrawGui"/>: for what belongs with
+    /// the HUD (frames, markers) rather than over everything. Draw with <see cref="Draw"/>.</summary>
+    public event Action? DrawHud
+    {
+        add { if (value != null) Hooks.DrawHudHandlers.Add((Id, value)); }
+        remove { Hooks.DrawHudHandlers.RemoveAll(h => h.Handler == value); }
+    }
+
     /// <summary>Runs around one of the game's code entries - an object event such as
     /// "gml_Object_o_player_Step_0" (object o_player, Step), with that event's self and other.
     /// <paramref name="before"/> runs first; returning true skips the game's own code (and later mods'
-    /// before-handlers still run). <paramref name="after"/> runs once it's done.</summary>
-    public void OnCode(string codeName, Func<Instance, Instance, bool>? before = null, Action<Instance, Instance>? after = null)
-        => Hooks.Add(Id, codeName, before, after);
+    /// before-handlers still run). <paramref name="after"/> runs once it's done. Every mod's run by
+    /// <paramref name="order"/> (<see cref="HookOrder"/>), then in load order; two mods' before-handlers both skipping
+    /// the same call is a conflict, logged and shown in the Mods window.</summary>
+    public void OnCode(string codeName, Func<Instance, Instance, bool>? before = null, Action<Instance, Instance>? after = null,
+        int order = HookOrder.Normal)
+        => Hooks.Add(Id, codeName, before, after, order);
 
     /// <summary>Runs when the game calls GML script <paramref name="scriptName"/> ("scr_cast_knockback"), before
     /// its code: you get its name, self, other and arguments. Return true (after setting
     /// <see cref="ScriptCall.Result"/>) to replace the call - the script's own code doesn't run and the
     /// caller gets Result. The mod also declares the script with <see cref="HookScriptAttribute"/>, so the
-    /// patcher makes it hookable.</summary>
-    public void OnScript(string scriptName, Func<ScriptCall, bool> before) => Hooks.AddScript(Id, scriptName, before);
+    /// patcher makes it hookable.
+    /// <para><paramref name="after"/> runs once the call is done, with what it returned in <see cref="ScriptCall.Result"/>
+    /// (set it to change what the caller gets).</para>
+    /// <para>Every mod's hooks run by <paramref name="order"/> (<see cref="HookOrder"/>), then in load order. When two mods'
+    /// before hooks both replace a call, the later one's Result is used - a conflict, logged and shown in the Mods window
+    /// on both: hook <see cref="HookOrder.Last"/> to be the one that wins.</para></summary>
+    public void OnScript(string scriptName, Func<ScriptCall, bool>? before = null, Action<ScriptCall>? after = null,
+        int order = HookOrder.Normal)
+        => Hooks.AddScript(Id, scriptName, before, after, order);
 
     /// <summary>Writes a line to the loader's log, tagged with the mod's name.</summary>
     public void Log(string text) => Game.Log($"[{Name}] {text}");

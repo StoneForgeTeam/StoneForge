@@ -42,6 +42,40 @@ internal static class Dump
         "argument_count", "self", "other", "global",
     };
 
+    // The last VM build's dump, kept for this user (%LOCALAPPDATA%\StoneForge\GameData): the native build's data has no
+    // GML, so its builds - a fresh checkout's included - use it. The game's own data stays on the player's PC, as ever.
+    private static string Cache => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "StoneForge", "GameData");
+
+    // A dump's files (not its stamp) copied from one folder to another.
+    private static void CopyFiles(string from, string to)
+    {
+        Directory.CreateDirectory(to);
+        foreach (string file in Directory.GetFiles(from))
+            if (Path.GetFileName(file) != Stamp)
+                File.Copy(file, Path.Combine(to, Path.GetFileName(file)), overwrite: true);
+    }
+
+    // What this process sees of a folder, for an error: who it runs as, and the folder's files or why they can't be read.
+    private static string Seen(string folder)
+    {
+        string seen = $"running as {Environment.UserDomainName}\\{Environment.UserName}, LOCALAPPDATA={Environment.GetEnvironmentVariable("LOCALAPPDATA")}: ";
+        for (string? at = folder; at != null; at = Path.GetDirectoryName(at))
+        {
+            try
+            {
+                if (!Directory.Exists(at))
+                    continue;
+                string[] files = Directory.GetFileSystemEntries(at);
+                return seen + $"{at} has {files.Length} entries ({string.Join(", ", files.Take(12).Select(Path.GetFileName))})";
+            }
+            catch (Exception e)
+            {
+                return seen + $"{at} can't be read: {e.GetType().Name}: {e.Message}";
+            }
+        }
+        return seen + "none of its folders exist";
+    }
+
     /// <summary>Whether <paramref name="output"/> already holds a dump of this very file.</summary>
     public static bool IsCurrent(string source, string output)
     {
@@ -52,11 +86,35 @@ internal static class Dump
     public static void Write(string source, string output)
     {
         Directory.CreateDirectory(output);
-        // (The stamp goes last: an interrupted dump is made again next time.)
-        File.Delete(Path.Combine(output, Stamp));
         UndertaleData data;
         using (var stream = File.OpenRead(source))
             data = UndertaleIO.Read(stream, (_, _) => { }, _ => { });
+        // (The game's native - YYC - build has no GML in its data: the scripts, the objects' variables, the tables are
+        // only in the VM build's. Its dump is kept - the game's names are the same in both - and marked as this file's,
+        // so it isn't read again till it changes.)
+        if (data.IsYYC())
+        {
+            data.Dispose();
+            // (A fresh checkout - a release runner's - has none here: the one kept for this user, from their last VM build.)
+            if (!File.Exists(Path.Combine(output, "scripts.tsv")))
+            {
+                if (!File.Exists(Path.Combine(Cache, "scripts.tsv")))
+                    throw new InvalidDataException($"{source} is the game's native (YYC) build, which has no GML to read the typed API "
+                        + $"from, and there's no dump of the VM build's kept ({Cache}) - build once with the VM branch's data.win "
+                        + $"(--data, or the game on the VM branch), and it's kept for the native one. ({Seen(Cache)})");
+                CopyFiles(Cache, output);
+                Console.WriteLine($"warning SFDD003: {source} is the game's native (YYC) build: the VM build's dump kept in {Cache} is used");
+            }
+            else
+            {
+                Console.WriteLine($"warning SFDD003: {source} is the game's native (YYC) build: the dump made from the VM build is kept");
+                CopyFiles(output, Cache);
+            }
+            File.WriteAllText(Path.Combine(output, Stamp), StampOf(source));
+            return;
+        }
+        // (The stamp goes last: an interrupted dump is made again next time.)
+        File.Delete(Path.Combine(output, Stamp));
         using (data)
         {
             if (data.GameObjects.ByName("o_stonemod_gui") != null)
@@ -79,6 +137,8 @@ internal static class Dump
                 + $"{data.Sounds.Count} sounds, {data.Rooms.Count} rooms from {source}");
         }
         File.WriteAllText(Path.Combine(output, Stamp), StampOf(source));
+        // (Kept for this user too: the native build has no GML to dump from - its builds use this.)
+        CopyFiles(output, Cache);
     }
 
     private static string StampOf(string source)
