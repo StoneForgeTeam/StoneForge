@@ -1,9 +1,5 @@
 # StoneForge changes
 
-## Unreleased
-
-- `UIWindow.FrameSprite`: a window's frame can be any sprite, the game's or the mod's own, instead of only the Settings menu's. The page grows or shrinks with it, and the bottom row of buttons and the close button follow its edges.
-
 ## 0.2.0 — GameObject release
 
 - **Breaking:** the generated enum of the game's objects is now `GameObjectId` (`GameObjectId.o_player`), not `GameObject`. That name is the base class of a mod's own objects.
