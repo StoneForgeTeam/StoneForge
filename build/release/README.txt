@@ -8,7 +8,8 @@ and off from the Mods button on the main menu.
 
 Requirements
 ------------
-- Windows, and Stoneshard (Steam) on the VM modbranch.
+- Windows, and Stoneshard (Steam), on its default (native) branch or the VM modbranch. Mods with GML of their own
+  and MSL packages need the VM modbranch: on the native branch they don't run.
 - The .NET 10 Windows Desktop Runtime (x64): https://dotnet.microsoft.com/download/dotnet/10.0
   Choose Windows Desktop Runtime for MSL packages. The base .NET Runtime supports ordinary StoneForge mods only.
   (The installer tells you if it's missing.)
