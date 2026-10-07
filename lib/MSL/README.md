@@ -31,4 +31,4 @@ process isolation for dependencies, not a security sandbox.
 
 Build: `dotnet build StoneForge.MslHost -c Release`. The patcher build and release packaging copy its output into
 `dotnet/patcher/msl/`. Dependencies restored by the project: Newtonsoft.Json (MIT), Serilog and Serilog.Sinks.Console
-(Apache-2.0), System.Drawing.Common (MIT).
+(Apache-2.0). System.Drawing.Common is supplied by the installed Windows Desktop Runtime rather than bundled.

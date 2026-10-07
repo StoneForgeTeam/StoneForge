@@ -66,10 +66,8 @@ Get-ChildItem $patcher -Recurse -File | Where-Object Extension -ne ".pdb" | ForE
 }
 
 # The release's own files (Windows line endings for the .cmd files), the version in the README, the licences.
-$msl = "$root\StoneForge.MslHost\bin\$Configuration\net10.0-windows"
-if (-not (Test-Path "$msl\StoneForge.MslHost.exe")) { throw "Build StoneForge.MslHost before packaging." }
-Get-ChildItem $msl -Recurse -File | Where-Object Extension -ne '.pdb' | ForEach-Object {
-    Put $_.FullName (Join-Path "$files\dotnet\patcher\msl" $_.FullName.Substring($msl.Length + 1))
+if (-not (Test-Path "$files\dotnet\patcher\msl\StoneForge.MslHost.exe")) {
+    throw "MSL helper missing from patcher output. Rebuild the patcher before packaging."
 }
 Get-ChildItem "$PSScriptRoot\release" -Recurse -File | ForEach-Object {
     $target = Join-Path $out $_.FullName.Substring("$PSScriptRoot\release".Length + 1)

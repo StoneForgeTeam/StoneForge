@@ -34,9 +34,15 @@ try
     ModLoader.Initalize();
     LootUtils.ResetLootTables();
     var metadata = new System.Collections.Generic.Dictionary<string, object>();
+    // MSL's default author and description are "unknown" in Chinese; omit that placeholder.
+    const string Unknown = "\u672a\u77e5";
     string ReadDetail(Func<string> read)
     {
-        try { string value = read()?.Trim() ?? ""; return value == "未知" ? "" : value; }
+        try
+        {
+            string value = read()?.Trim() ?? "";
+            return value == Unknown ? "" : value;
+        }
         catch (Exception error) { Console.WriteLine("MSL metadata: " + error.Message); return ""; }
     }
     foreach (var entry in root.GetProperty("Packages").EnumerateArray())

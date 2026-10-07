@@ -1,5 +1,9 @@
 # StoneForge changes
 
+## Unreleased
+
+- Remove the redundant System.Drawing.Common package reference and its unused bundled notices, avoid copying the MSL helper twice during packaging, and document MSL's default metadata placeholder.
+
 ## 0.8.0 — MSL mod support
 
 - **MSL mods are now supported alongside StoneForge mods on the VM modbranch.** Drop `.sml` packages directly into the game's `mods` folder; they are enabled by default and can be switched off in the Mods window. No separate ModShardLauncher installation is required. Only install packages you trust: they execute unrestricted C# while patching.
