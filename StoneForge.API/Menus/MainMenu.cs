@@ -61,7 +61,10 @@ public static class MainMenu
     private sealed record RemoveOp(string Mod, string Name) : Op(Mod);
 
     // A mod's button: its Id (on the instance, IndexVar) finds it when it's clicked.
-    internal sealed record Button(int Id, string Mod, string Text, Action OnClick);
+    internal sealed record Button(int Id, string Mod, string Text, Action OnClick)
+    {
+        internal Func<string>? TextProvider { get; init; }
+    }
 
     // An entry in the laid-out list: one of the game's buttons, or a mod's.
     internal readonly record struct Entry(VanillaButton? Vanilla, Button? Mod);
@@ -79,6 +82,59 @@ public static class MainMenu
     /// clicked.</summary>
     public static void AddButton(ModContext context, string text, Action onClick)
         => Add(context, text, onClick, nameof(VanillaButton.Exit), after: false, waits: false);
+
+    /// <summary>Adds a button whose text refreshes when the mod's translations change.</summary>
+    public static void AddButton(ModContext context, Func<string> text, Action onClick)
+        => AddLocalized(context, text, onClick, nameof(VanillaButton.Exit), false, false);
+
+    /// <summary>Adds a translated button after a game button.</summary>
+    public static void AddAfter(ModContext context, VanillaButton anchor, Func<string> text, Action onClick)
+        => AddLocalized(context, text, onClick, anchor.ToString(), true, true);
+
+    /// <summary>Adds a translated button before a game button.</summary>
+    public static void AddBefore(ModContext context, VanillaButton anchor, Func<string> text, Action onClick)
+        => AddLocalized(context, text, onClick, anchor.ToString(), false, true);
+
+    private static void AddLocalized(ModContext context, Func<string> text, Action onClick, string anchor, bool after, bool waits)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        _ = context.Localization;
+        Add(context, text(), onClick, anchor, after, waits);
+        var op = (AddOp)Ops[^1];
+        var button = op.Button with { TextProvider = text };
+        Ops[^1] = op with { Button = button };
+        ById[button.Id] = button;
+    }
+
+    internal static void RefreshLocalizedButtons(string owner)
+    {
+        bool changed = false;
+        for (int i = 0; i < Ops.Count; i++)
+            if (Ops[i] is AddOp op && op.Mod == owner && op.Button.TextProvider is { } provider)
+            {
+                string text = provider();
+                if (text == op.Button.Text) continue;
+                var button = op.Button with { Text = text };
+                Ops[i] = op with { Button = button };
+                ById[button.Id] = button;
+                changed = true;
+            }
+        if (changed) Changed();
+    }
+
+    // Refresh the loader's localized button without changing its identity or creating another menu operation.
+    internal static void RefreshButtonText(string owner, string previous, string text)
+    {
+        if (previous == text) return;
+        for (int i = 0; i < Ops.Count; i++)
+            if (Ops[i] is AddOp op && op.Mod == owner && op.Button.Text == previous)
+            {
+                var button = op.Button with { Text = text };
+                Ops[i] = op with { Button = button };
+                ById[button.Id] = button;
+            }
+        Changed();
+    }
 
     /// <summary>Adds a button just above <paramref name="anchor"/> (a game button's name, or a button's text).</summary>
     public static void AddBefore(ModContext context, string anchor, string text, Action onClick)

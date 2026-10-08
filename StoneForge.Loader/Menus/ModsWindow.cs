@@ -6,12 +6,12 @@ namespace StoneForge.Loader;
 /// on the mod open last time.</summary>
 internal sealed class ModsWindow : UISettingsWindow
 {
-    private const string EnabledTooltip = "Switched on or off straight away. Switched off, its items are taken out of the game - load a save from before to get them back once it's on again.";
+    private static string EnabledTooltip => Localization.Get("mods.enabled_tooltip");
     private static readonly int ErrorColour = Draw.Rgb(200, 70, 60);
     // (The game's yellow, as its tooltips highlight with.)
     private static readonly int WarningColour = Draw.Rgb(232, 196, 82);
-    internal const string TrustedWarning = "This mod asks for full access: it runs outside StoneForge's security, with its own DLLs, and can do anything a program on your PC can - files, the network, other programs. Only allow mods you trust. Ticking Enabled allows it.";
-    internal const string GmlWarning = "This mod uses GML bindings and can bypass StoneForge's security. Its GML can't be hot-reloaded: changes need a restart of the game. Use at your own discretion.";
+    internal static string TrustedWarning => Localization.Get("mods.trusted_warning");
+    internal static string GmlWarning => Localization.Get("mods.gml_warning");
 
     private List<ModInfo> _mods = new();
     private UICheckbox? _enabled;
@@ -23,12 +23,19 @@ internal sealed class ModsWindow : UISettingsWindow
     // (The mods' state as last shown: changed since - a mod switched on or off, with the mods it requires or that require
     // it - the open page is made again.)
     private int _shownChanges;
+    private int _languageRevision = Localization.Revision;
 
-    public ModsWindow() : base("Mods") { }
+    public ModsWindow() : base(Localization.Get("mods.title")) { }
 
     protected override void OnUpdate(double deltaTime)
     {
         base.OnUpdate(deltaTime);
+        if (_languageRevision != Localization.Revision)
+        {
+            _languageRevision = Localization.Revision;
+            Title = Localization.Get("mods.title");
+            if (IsOpen) { Close(); Open(); }
+        }
         if (!IsOpen || _shownChanges == ModRegistry.Changes || _mods.Count == 0)
             return;
         _shownChanges = ModRegistry.Changes;
@@ -42,11 +49,11 @@ internal sealed class ModsWindow : UISettingsWindow
         if (_mods.Count > 0)
             Tabs.Tabs[Math.Clamp(_lastTab, 0, _mods.Count - 1)].Open();
         else
-            Page.AddText("No mods installed.\n\nA mod goes in its own folder, Stoneshard\\mods\\<mod>\\: its C# source, and its pictures in Assets\\.", Draw.Muted);
-        AddButton("Mods folder").Clicked += _ => OpenFolder();
-        AddButton("Enable all").Clicked += _ => SetAll(true);
-        AddButton("Disable all").Clicked += _ => SetAll(false);
-        AddCloseButton();
+            Page.AddText(Localization.Get("mods.empty"), Draw.Muted);
+        AddButton(Localization.Get("mods.folder")).Clicked += _ => OpenFolder();
+        AddButton(Localization.Get("mods.enable_all")).Clicked += _ => SetAll(true);
+        AddButton(Localization.Get("mods.disable_all")).Clicked += _ => SetAll(false);
+        AddCloseButton(Localization.Get("common.close"));
     }
 
     // A mod's page: as a settings tab's options.
@@ -60,52 +67,50 @@ internal sealed class ModsWindow : UISettingsWindow
         int icon = mod.Error == null && !mod.IsSml ? Icon(mod) : -1;
         if (icon >= 0)
             Page.AddImage(icon);
-        if (mod.Author.Length > 0) Page.AddText("Author: " + mod.Author);
-        if (mod.Version.Length > 0) Page.AddText("Version: " + mod.Version);
+        if (mod.Author.Length > 0) Page.AddText(Localization.Get("mods.author", mod.Author));
+        if (mod.Version.Length > 0) Page.AddText(Localization.Get("mods.version", mod.Version));
         if (mod.Description.Length > 0)
         {
-            Page.AddHeader("Description");
+            Page.AddHeader(Localization.Get("mods.description"));
             Page.AddText(mod.Description);
         }
-        Page.AddHeader("Status");
+        Page.AddHeader(Localization.Get("mods.status"));
         // (A mod that didn't compile, or uses what mods aren't allowed: why, in red.)
         if (!string.IsNullOrEmpty(mod.Error))
             Page.AddText(mod.Error, ErrorColour);
         if (!string.IsNullOrEmpty(mod.RuntimeError))
         {
-            Page.AddText("Paused: " + mod.RuntimeError, ErrorColour);
-            Page.Add(new UIButton("Retry", 5, 0, onClick: () => ModManager.Request(mod.Id, true)));
+            Page.AddText(Localization.Get("mods.paused", mod.RuntimeError), ErrorColour);
+            Page.Add(new UIButton(Localization.Get("common.retry"), 5, 0, onClick: () => ModManager.Request(mod.Id, true)));
         }
         // (The mods it needs: each by name, if it's there.)
         if (mod.Requires is { Count: > 0 } requires)
-            Page.AddText("Requires " + string.Join(", ", requires.Select(id => ModRegistry.All.FirstOrDefault(m => m.Id == id) is { } other
-                ? other.Name : id + " (not installed)")), Draw.Muted);
+            Page.AddText(Localization.Get("mods.requires", string.Join(", ", requires.Select(id => ModRegistry.All.FirstOrDefault(m => m.Id == id) is { } other
+                ? other.Name : Localization.Get("mods.not_installed", id)))), Draw.Muted);
         // (Switched off for a mod it requires - with it, or as that wasn't running: why.)
         if (!IsEnabled(mod) && ModManager.WhyOff(mod.Id) is { } why)
             Page.AddText(why, WarningColour);
         // (Mods running that need it: switched off with it.)
         if (ModManager.RequiredBy(mod.Id) is { Count: > 0 } requiredBy)
-            Page.AddText($"Required by {string.Join(", ", requiredBy)} - switching this off switches {(requiredBy.Count == 1 ? "it" : "them")} off too.", WarningColour);
+            Page.AddText(Localization.Get(requiredBy.Count == 1 ? "mods.required_by_one" : "mods.required_by_many", string.Join(", ", requiredBy)), WarningColour);
         if (mod.IsSml)
         {
-            Page.AddText(mod.Enabled ? "Applied to this run."
-                : IsEnabled(mod) ? "Enabled for the next start. Not applied to this run."
-                : "Not applied to this run.");
-            Page.AddText("Changes to Enabled take effect after restarting.", Draw.Muted);
+            Page.AddText(Localization.Get(mod.Enabled ? "mods.applied" : IsEnabled(mod) ? "mods.enabled_next_start" : "mods.not_applied"));
+            Page.AddText(Localization.Get("mods.restart_required"), Draw.Muted);
         }
-        _enabled = Page.AddCheckbox("Enabled", IsEnabled(mod), mod.IsSml ? "Applied on the next start; cannot be hot-reloaded." : EnabledTooltip);
+        _enabled = Page.AddCheckbox(Localization.Get("mods.enabled"), IsEnabled(mod), mod.IsSml ? Localization.Get("mods.sml_tooltip") : EnabledTooltip);
         _enabled.Changed += on => SetEnabled(mod, on);
         if (mod.IsSml || mod.Trusted || mod.ContainsGml)
         {
-            Page.AddHeader("Warnings");
-            if (mod.IsSml) Page.AddText(SmlCatalog.Warning, WarningColour);
+            Page.AddHeader(Localization.Get("mods.warnings"));
+            if (mod.IsSml) Page.AddText(Localization.Get("mods.sml_warning"), WarningColour);
             else if (mod.Trusted) Page.AddText(TrustedWarning, ErrorColour);
             if (mod.ContainsGml) Page.AddText(GmlWarning, WarningColour);
         }
         if (mod.IsSml)
         {
-            Page.AddHeader("Settings");
-            Page.AddText("MSL settings, when provided, remain in the game's MSL settings menu.", Draw.Muted);
+            Page.AddHeader(Localization.Get("settings.title"));
+            Page.AddText(Localization.Get("settings.msl"), Draw.Muted);
         }
         // (Its settings, if it's loaded and has some.)
         SettingsPage.Add(Page, mod.Id, () => tab.Open());
@@ -121,20 +126,19 @@ internal sealed class ModsWindow : UISettingsWindow
         var overlaps = ModRegistry.OverlapsOf(id);
         if (conflicts.Count == 0 && overlaps.Count == 0)
             return;
-        Page.AddHeader("Possible Conflicts");
+        Page.AddHeader(Localization.Get("conflicts.title"));
         foreach (var (with, calls) in conflicts)
-            HoverLine($"With {with}: both replaced {Count(calls.Count, "call")}", WarningColour,
-                "Both mods' hooks replaced these calls (the game's own code was skipped):", calls);
+            HoverLine(Localization.Get("conflicts.replaced", with, Count(calls.Count)), WarningColour,
+                Localization.Get("conflicts.replaced_tooltip"), calls);
         foreach (var (with, calls) in overlaps)
-            HoverLine($"With {with}: both hook {Count(calls.Count, "call")} at the same order", Draw.Muted,
-                "Both mods hook these before they run, at the same order - which runs first is load order. A conflict only if "
-                + "both replace one of them (HookOrder sets the order):", calls);
+            HoverLine(Localization.Get("conflicts.overlap", with, Count(calls.Count)), Draw.Muted,
+                Localization.Get("conflicts.overlap_tooltip"), calls);
         // Every one of them, a line each - collapsed until asked for (the page made again, open or shut).
         int total = conflicts.Sum(c => c.Calls.Count) + overlaps.Sum(o => o.Calls.Count);
         bool shown = _hooksShown.Contains(id);
-        var toggle = Page.AddText(shown ? "[-] Hide the hooks" : $"[+] Show every hook ({total})", Draw.Muted);
+        var toggle = Page.AddText(shown ? Localization.Get("conflicts.hide") : Localization.Get("conflicts.show", total), Draw.Muted);
         toggle.HitTest = true;
-        toggle.Tooltip = shown ? "Collapse the list" : "List every call above, with the mod it's shared with";
+        toggle.Tooltip = Localization.Get(shown ? "conflicts.collapse_tooltip" : "conflicts.expand_tooltip");
         toggle.Clicked += _ =>
         {
             if (!_hooksShown.Remove(id))
@@ -145,10 +149,10 @@ internal sealed class ModsWindow : UISettingsWindow
             return;
         foreach (var (with, calls) in conflicts)
             foreach (string call in calls)
-                Page.AddText($"    {call}  (with {with})", WarningColour);
+                Page.AddText(Localization.Get("conflicts.shared_call", call, with), WarningColour);
         foreach (var (with, calls) in overlaps)
             foreach (string call in calls)
-                Page.AddText($"    {call}  (with {with})", Draw.Muted);
+                Page.AddText(Localization.Get("conflicts.shared_call", call, with), Draw.Muted);
     }
 
     protected override void OnClosed() => _enabled = null;
@@ -160,10 +164,10 @@ internal sealed class ModsWindow : UISettingsWindow
         var label = Page.AddText(text, colour);
         label.HitTest = true;
         label.Tooltip = heading + "\n" + string.Join("\n", items.Take(Shown))
-            + (items.Count > Shown ? $"\n... and {items.Count - Shown} more" : "");
+            + (items.Count > Shown ? Localization.Get("conflicts.more", items.Count - Shown) : "");
     }
 
-    private static string Count(int count, string what) => $"{count} {what}{(count == 1 ? "" : "s")}";
+    private static string Count(int count) => Localization.Get(count == 1 ? "conflicts.call_one" : "conflicts.call_many", count);
 
     // Every mod switched on / off, the open page's checkbox with them.
     private void SetAll(bool on)

@@ -253,6 +253,7 @@ internal static unsafe class Hooks
     // game stops calling into us for it. (Code entries stay hooked natively: with no handler they cost a lookup.)
     internal static void RemoveMod(string mod)
     {
+        ModLocalization.RemoveMod(mod);
         FrameHandlers.RemoveAll(h => h.Mod == mod);
         DrawGuiHandlers.RemoveAll(h => h.Mod == mod);
         DrawHudHandlers.RemoveAll(h => h.Mod == mod);

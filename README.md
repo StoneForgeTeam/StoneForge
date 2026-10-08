@@ -80,6 +80,10 @@ The documentation lives in the [StoneForgeDocs](https://github.com/StoneForgeTea
 
 The example builds against an installed StoneForge SDK and has its own release history. See [repository layout](https://github.com/StoneForgeTeam/StoneForgeDocs/blob/main/docs/development/repositories.md) for the organization and repository boundaries.
 
+## Localization
+
+StoneForge's interface uses a built-in US English (`en-US`) catalog and follows the game's selected language with English fallback. C# mods can provide `Localization/<language>.json` files and use `context.Localization.Get("key", arguments)` and `TranslationsChanged` or UI bindings to refresh their UI. See [localization documentation](docs/Localization.md) for formatting, fallback and examples. Only US English is included in this release.
+
 ## License
 
 StoneForge's source license is in [LICENSE](LICENSE). Native components and game-data libraries have their own licenses and provenance in `lib/`; release notices are in [THIRD-PARTY.txt](build/release/LICENSES/THIRD-PARTY.txt). Stoneshard and its game data belong to their respective owners.

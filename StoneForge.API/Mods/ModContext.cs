@@ -100,6 +100,10 @@ public sealed class ModContext
     }
 
     private ModSettings? _settings;
+    private ModLocalization? _localization;
+
+    /// <summary>This mod's JSON translation catalog, following the game's language with US English fallback.</summary>
+    public ModLocalization Localization => _localization ??= new ModLocalization(this, _files);
 
     /// <summary>The mod's settings: declare them in Load (Toggle, Slider, Choice, Text) - they're saved for it,
     /// and shown on its page in the Mods window for the player to change.</summary>

@@ -161,14 +161,14 @@ internal sealed class LoadingScreen : UIElement
 
         string status;
         if (!startup.Finished)
-            status = $"Loading mods: {startup.Current} ({startup.CurrentIndex + 1}/{startup.Total})";
+            status = Localization.Get("loading.current", startup.Current, startup.CurrentIndex + 1, startup.Total);
         else if (startup.Loaded == 0)
-            status = "No mods loaded";
+            status = Localization.Get("loading.none");
         else
-            status = $"{startup.Loaded} mod{(startup.Loaded == 1 ? "" : "s")} loaded";
+            status = Localization.Get(startup.Loaded == 1 ? "loading.loaded_one" : "loading.loaded_many", startup.Loaded);
         Draw.Text(cx, barY + 12, status, Draw.Muted, Draw.AlignCenter, alpha: alpha);
         if (startup.Failed > 0)
-            Draw.Text(cx, barY + 28, $"{startup.Failed} couldn't be loaded - see the Mods window", ErrorColour, Draw.AlignCenter, alpha: alpha);
+            Draw.Text(cx, barY + 28, Localization.Get("loading.failed", startup.Failed), ErrorColour, Draw.AlignCenter, alpha: alpha);
     }
 
     // The splash art: dotnet\StoneForge.Splash.png (branding\splash.png, 1920x1080) as a sprite, loaded the first

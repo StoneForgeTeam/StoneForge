@@ -52,6 +52,7 @@
 
   <ItemGroup>
     <!-- mod.json and content naming, shared with the patcher. -->
+    <EmbeddedResource Include="Localization\*.json" LogicalName="StoneForge.Localization.%(Filename)%(Extension)" WithCulture="false" />
     <Compile Include="..\Shared\ModIdentity.cs" Link="Mods\ModIdentity.cs" />
   </ItemGroup>
 

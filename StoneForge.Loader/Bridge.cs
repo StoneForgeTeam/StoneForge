@@ -50,6 +50,7 @@ public static unsafe class Bridge
                 Hooks.LoadHookable(Path.Combine(Path.GetDirectoryName(typeof(Bridge).Assembly.Location)!, "stoneforge-hooks.txt"));
             // Main menu buttons (ours and mods'), the Mods window, mods' items, the Draw GUI pass.
             var loader = new ModContext(Hooks.LoaderId);
+            loader.Frame += Localization.RefreshFromGame;
             MainMenu.Install(loader);
             EscMenu.Install(loader);
             GameDialogs.Install(loader);

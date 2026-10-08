@@ -18,7 +18,7 @@ internal static class SettingsPage
         var shown = settings.All.Where(s => s.Visible).ToList();
         if (shown.Count == 0)
             return;
-        page.AddHeader("Settings");
+        page.AddHeader(Localization.Get("settings.title"));
         foreach (var setting in shown)
         {
             switch (setting)
@@ -55,11 +55,11 @@ internal static class SettingsPage
             }
         }
         var buttons = page.Add(new UIGroup(5, 0, RowWidth, 26));
-        buttons.Add(new UIButton("Reset", 0, 0, onClick: () =>
+        buttons.Add(new UIButton(Localization.Get("settings.reset"), 0, 0, onClick: () =>
         {
             settings.ResetAll();
             reopen();
-        }) { Tooltip = "Every setting back to its default." });
+        }) { Tooltip = Localization.Get("settings.reset_tooltip") });
     }
 
     // A row: the setting's name, its control right of it.

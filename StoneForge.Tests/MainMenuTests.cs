@@ -23,6 +23,17 @@ public class MainMenuTests : IDisposable
     }
 
     [Fact]
+    public void Localized_button_refresh_preserves_other_mods_and_menu_order()
+    {
+        MainMenu.AddButton(A, "Mods", Nothing);
+        MainMenu.AddButton(B, "Mods", Nothing);
+        MainMenu.RefreshButtonText(A.Id, "Mods", "Modifications");
+        Assert.Equal(new[] { "Play", "Settings", "Credits", "Modifications", "Mods", "Exit" }, MainMenu.Describe());
+        MainMenu.RefreshButtonText(A.Id, "Modifications", "Modifications");
+        Assert.Equal(6, MainMenu.Describe().Count);
+    }
+
+    [Fact]
     public void Before_and_after_a_game_button_by_name_or_Start()
     {
         MainMenu.AddBefore(A, "Start", "Multiplayer", Nothing);

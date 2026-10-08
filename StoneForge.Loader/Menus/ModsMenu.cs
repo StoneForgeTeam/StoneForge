@@ -7,6 +7,16 @@ internal static class ModsMenu
     internal static void Install(ModContext context)
     {
         var window = context.UI.MainMenu.Add(new ModsWindow());
-        MainMenu.AddButton(context, "Mods", window.Open);
+        string title = Localization.Get("mods.title");
+        MainMenu.AddButton(context, title, window.Open);
+        int revision = Localization.Revision;
+        context.Frame += () =>
+        {
+            if (revision == Localization.Revision) return;
+            revision = Localization.Revision;
+            string translated = Localization.Get("mods.title");
+            MainMenu.RefreshButtonText(context.Id, title, translated);
+            title = translated;
+        };
     }
 }
