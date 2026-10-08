@@ -43,7 +43,10 @@ internal static class GameDataBuilder
             }
             catch (Exception e) { PatcherConsole.Log("MSL metadata cache unreadable: " + e.Message); }
         }
-        string smlKey = SmlCatalog.Fingerprint(sml) + (sml.Any(p => p.Enabled) ? SmlPatches.HostKey() : "");
+        var smlRuntime = SmlRuntimeSelection.Select(game, sml);
+        sml = smlRuntime.OrderPackages(sml);
+        string smlKey = SmlCatalog.Fingerprint(sml) + (sml.Any(p => p.Enabled) ? SmlPatches.HostKey() + smlRuntime.Key : "")
+            + SmlAudioFiles.Fingerprint(game, smlRuntime.Enhanced);
         string key = Key(newBase ? game.Data : game.BaseData, hooks, consumables, skills, objects) + gml.Fingerprint + smlKey;
         if (!newBase && key == builtFrom && File.Exists(Path.Combine(game.Dotnet, "stoneforge-gml.txt")) && File.Exists(game.HookedScripts) && File.Exists(Path.Combine(game.Dotnet, SmlCatalog.StateFile)))
         {
@@ -54,6 +57,7 @@ internal static class GameDataBuilder
         }
 
         PatcherConsole.Show();
+        using var audio = new SmlAudioFiles(game, smlRuntime.Enhanced);
         PatcherConsole.Log("Updating Stoneshard's game data for mods - once, until the mods or the game change...");
         UndertaleData? gameData = null;
         if (newBase)
@@ -89,7 +93,7 @@ internal static class GameDataBuilder
             if (gameData.GameObjects.ByName("o_msl_log") != null || gameData.GameObjects.ByName("o_msl_mod_disclaimer") != null)
                 throw new InvalidOperationException("The preserved game data already contains MSL patches. Restore clean modbranch data before enabling .sml packages.");
             gameData.Dispose();
-            gameData = SmlPatches.Apply(game, sml, out var loadedMetadata);
+            gameData = SmlPatches.Apply(game, sml, smlRuntime, audio, out var loadedMetadata);
             foreach (var pair in loadedMetadata) metadata[pair.Key] = pair.Value;
         }
         PatcherConsole.Log("Applying StoneForge's game-data changes...");
@@ -122,7 +126,12 @@ internal static class GameDataBuilder
         PatcherConsole.Log("Saving game data...");
         using (var output = File.Create(temp))
             UndertaleIO.Write(output, gameData, _ => { });
-        File.Move(temp, game.Data, true);
+        audio.Commit(temp);
+        File.Delete(temp);
+        // Audio outputs and their preserved originals now contribute to the stable next-start key.
+        smlKey = SmlCatalog.Fingerprint(sml) + (sml.Any(p => p.Enabled) ? SmlPatches.HostKey() + smlRuntime.Key : "")
+            + SmlAudioFiles.Fingerprint(game, smlRuntime.Enhanced);
+        key = Key(game.BaseData, hooks, consumables, skills, objects) + gml.Fingerprint + smlKey;
         File.WriteAllLines(Path.Combine(game.Dotnet, "stoneforge-gml.txt"),
             new[] { Stamp(game.Data) }.Concat(gml.Projects.Values.Select(p => p.Name + "|" + p.Fingerprint)));
         File.WriteAllLines(game.DataKey, new[] { Stamp(game.Data), key });
@@ -140,6 +149,8 @@ internal static class GameDataBuilder
     /// <summary>Uninstall: the game's own data.win back (if ours is in place), our files gone.</summary>
     public static void Restore(GameFolder game)
     {
+        using var audio = new SmlAudioFiles(game);
+        audio.Commit();
         string[] state = File.Exists(game.DataKey) ? File.ReadAllLines(game.DataKey) : Array.Empty<string>();
         if (File.Exists(game.BaseData) && state.Length > 0 && Stamp(game.Data) == state[0])
         {

@@ -75,6 +75,20 @@ public sealed class PatchedGameData : IDisposable
         foreach (string file in InnerHooks.Select(editor.ScriptFile).Distinct())
             InnerFiles[file] = Data.Code.ByName(file).ChildEntries.Select(c => c.Name.Content).OrderBy(n => n, StringComparer.Ordinal).ToArray();
         ScriptHooks.HookAll(editor, InnerHooks, InnerHooked);
+        // A mod can leave eager boolean evaluation in the data. An unset hook flag must still be safe.
+        Data.ShortCircuit = false;
+        editor.AddFunction("function scr_stonemod_guard_probe() { return 123; }", "scr_stonemod_guard_probe");
+        if (ScriptHooks.HookAll(editor, new[] { "scr_stonemod_guard_probe" }) != 1)
+            throw new InvalidOperationException("Failed to compile the eager hook regression fixture.");
+        var eager = new UndertaleModLib.Compiler.CodeImportGroup(Data) { AutoCreateAssets = true };
+        eager.QueueReplace("gml_GlobalScript_scr_stonemod_eager_probe",
+            "function scr_stonemod_eager_probe() { return variable_global_exists(\"sf_missing\") && global.sf_missing; }");
+        eager.Import();
+        editor.AddFunction("function scr_stonemod_effect_guard_probe() { var _effect = noone; if (_effect && _effect.is_data_exist) return 1; return 0; }",
+            "scr_stonemod_effect_guard_probe");
+        if (ScriptHooks.HookAll(editor, new[] { "scr_effect_create", "scr_effect_update" }) != 2)
+            throw new InvalidOperationException("Failed to recompile the effect scripts with mixed boolean bytecode.");
+        if (Data.ShortCircuit) throw new InvalidOperationException("The compiler changed the input's inferred boolean mode.");
         using (var output = File.Create(_output))
             UndertaleIO.Write(output, Data, _ => { });
         using (var roundtrip = File.OpenRead(_output))

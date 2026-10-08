@@ -45,6 +45,6 @@ internal static class SmlCatalog
         Encoding.UTF8.GetBytes(string.Join("\n", packages.Where(p => p.Enabled).Select(p => p.Id + "|" + p.Hash)))));
 }
 
-internal sealed record SmlMetadata(string Hash, string Name, string Author, string Version, string Description);
+internal sealed record SmlMetadata(string Hash, string Name, string Author, string Version, string Description, string Runtime = "MSL");
 internal sealed record SmlPrepared(string DataStamp, Dictionary<string, string> Applied,
     Dictionary<string, SmlMetadata>? Metadata = null);

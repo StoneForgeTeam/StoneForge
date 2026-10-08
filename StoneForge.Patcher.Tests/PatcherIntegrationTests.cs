@@ -106,6 +106,36 @@ public class PatcherIntegrationTests : IClassFixture<PatchedGameData>
     }
 
     [SkippableFact]
+    public void Unset_hook_flags_are_guarded_even_with_eager_boolean_evaluation()
+    {
+        RequireData();
+        // Verify the fixture actually compiled && eagerly, then check the hook's serialized control flow.
+        var eager = _game.Restored.Code.ByName("gml_GlobalScript_scr_stonemod_eager_probe").Instructions;
+        Assert.Contains(eager, i => i.Kind == UndertaleInstruction.Opcode.And);
+        var guarded = _game.Restored.Code.ByName("gml_GlobalScript_scr_stonemod_guard_probe").Instructions;
+        Assert.DoesNotContain(guarded, i => i.Kind == UndertaleInstruction.Opcode.And);
+        Assert.True(guarded.Count(i => i.Kind == UndertaleInstruction.Opcode.Bf) >= 3,
+            "The existence check, hook flag and return-array check must have separate branches.");
+    }
+
+    [SkippableFact]
+    public void Missing_instances_are_not_dereferenced_when_recompiling_mixed_boolean_bytecode()
+    {
+        RequireData();
+        var instructions = _game.Restored.Code.ByName("gml_GlobalScript_scr_stonemod_effect_guard_probe").Instructions.ToList();
+        int field = instructions.FindIndex(i => i.ToString().Contains("self.is_data_exist"));
+        Assert.True(field > 0, "Missing the guarded instance-field read.");
+        Assert.Contains(instructions.Take(field), i => i.Kind == UndertaleInstruction.Opcode.Bf);
+        Assert.DoesNotContain(instructions, i => i.Kind == UndertaleInstruction.Opcode.And);
+        Assert.False(_game.Data.ShortCircuit);
+        var effect = _game.Restored.Code.ByName("gml_GlobalScript_scr_effect_create").Instructions.ToList();
+        int instance = effect.FindIndex(i => i.ToString().Contains("pushloc.v local._will_to_survive"));
+        int read = effect.FindIndex(instance, i => i.ToString().Contains("self.is_data_exist"));
+        Assert.True(instance >= 0 && read > instance);
+        Assert.Contains(effect.Skip(instance + 1).Take(read - instance - 1), i => i.Kind == UndertaleInstruction.Opcode.Bf);
+    }
+
+    [SkippableFact]
     public void Functions_inside_another_scripts_file_are_hookable()
     {
         RequireData();

@@ -20,7 +20,7 @@ internal static class SmlPatches
     }
 
     internal static UndertaleModLib.UndertaleData Apply(GameFolder game, List<SmlPackage> packages,
-        out Dictionary<string, SmlMetadata> metadata)
+        SmlRuntimeSelection runtime, SmlAudioFiles audio, out Dictionary<string, SmlMetadata> metadata)
     {
         string host = Path.Combine(HostDirectory, "StoneForge.MslHost.exe");
         if (!File.Exists(host)) throw new FileNotFoundException("MSL compatibility helper missing. Reinstall the complete StoneForge release.", host);
@@ -29,6 +29,8 @@ internal static class SmlPatches
         Directory.CreateDirectory(work);
         try
         {
+            host = Path.Combine(runtime.Stage(work), "StoneForge.MslHost.exe");
+            if (runtime.Enhanced) audio.StageTo(work);
             var copies = new List<string>();
             foreach (var package in packages.Where(p => p.Enabled))
             {
@@ -44,11 +46,11 @@ internal static class SmlPatches
             string output = Path.Combine(work, "patched.win");
             string request = Path.Combine(work, "request.json");
             string details = Path.Combine(work, "metadata.json");
-            File.WriteAllText(request, JsonSerializer.Serialize(new { Input = game.BaseData, Output = output, Packages = copies, Metadata = details }));
+            File.WriteAllText(request, JsonSerializer.Serialize(new { Input = game.BaseData, Output = output, Packages = copies, Metadata = details, Enhanced = runtime.Enhanced }));
             var start = new ProcessStartInfo(host) { UseShellExecute = false, CreateNoWindow = true,
                 WorkingDirectory = work, RedirectStandardOutput = true, RedirectStandardError = true };
             start.ArgumentList.Add(request);
-            PatcherConsole.Log($"MSL: Preparing {copies.Count} package(s). Detailed log: dotnet/msl-patch.log");
+            PatcherConsole.Log($"MSL: Using {(runtime.Enhanced ? "MSL Enhanced" : "standard MSL")}. Preparing {copies.Count} package(s). Detailed log: dotnet/msl-patch.log");
             var elapsed = Stopwatch.StartNew();
             using var process = Process.Start(start) ?? throw new IOException("Could not start MSL helper.");
             // Drain both pipes concurrently, keeping live console output and the complete diagnostic log.
@@ -85,6 +87,7 @@ internal static class SmlPatches
             }
             Task.WaitAll(stdout, stderr);
             if (process.ExitCode != 0) throw new InvalidOperationException("MSL patching failed. Game data was not replaced. See dotnet/msl-patch.log.");
+            if (runtime.Enhanced) audio.Collect(work);
             metadata = JsonSerializer.Deserialize<Dictionary<string, SmlMetadata>>(File.ReadAllText(details)) ?? new();
             PatcherConsole.Log("MSL: Checking patched game data...");
             using var input = File.OpenRead(output);

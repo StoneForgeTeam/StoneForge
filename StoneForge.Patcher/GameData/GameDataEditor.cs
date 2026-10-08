@@ -92,10 +92,19 @@ internal sealed class GameDataEditor
     // The code entry replaced with this GML (made, and linked to its script or object event, if new).
     private void Import(string entry, string source)
     {
-        var group = new CodeImportGroup(Data) { AutoCreateAssets = true };
-        group.QueueReplace(entry, source);
-        var result = group.Import(throwOnFailedCompile: false);
-        if (!result.Successful)
-            throw new InvalidOperationException($"GML compilation failed for '{entry}': {result.PrintAllErrors(false)}");
+        // The reader infers this flag from any eager boolean instruction in the entire file.
+        // MSL packages can introduce such instructions into an otherwise modern game. That must not
+        // turn the decompiled source's &&/|| guards into eager reads when we recompile unrelated scripts.
+        bool shortCircuit = Data.ShortCircuit;
+        try
+        {
+            Data.ShortCircuit = true;
+            var group = new CodeImportGroup(Data) { AutoCreateAssets = true };
+            group.QueueReplace(entry, source);
+            var result = group.Import(throwOnFailedCompile: false);
+            if (!result.Successful)
+                throw new InvalidOperationException($"GML compilation failed for '{entry}': {result.PrintAllErrors(false)}");
+        }
+        finally { Data.ShortCircuit = shortCircuit; }
     }
 }

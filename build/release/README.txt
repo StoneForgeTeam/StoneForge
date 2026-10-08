@@ -37,6 +37,16 @@ untick Enabled to disable a package on the next start. The bundled MSL 0.13.2.0
 helper patches them before StoneForge; no separate launcher is needed. These packages cannot be hot-reloaded.
 MSL launcher UI and scripting-server integrations are unsupported. Patch failures are logged in dotnet\msl-patch.log.
 
+MSL Enhanced 1.15 is included in dotnet\msle. To override its location, set EnhancedDirectory in
+dotnet\msl-runtime.json to its extracted folder. Example:
+    { "Mode": "auto", "EnhancedDirectory": "msle" }
+Enhanced format/API requirements are detected automatically. Set Mode to enhanced to force that runtime, or
+standard to force the bundled regular MSL. Optional PackageOrder lists .sml filenames to run first, in order.
+Enhanced dependencies/order/resource conflicts stop preparation and are explained in the patch log.
+Audio, font and shader-file changes are staged with game data; originals are preserved in dotnet\msl-audio-base
+and restored on removal/uninstall. Keep those originals until restoration. Applied Enhanced packages show [MSLE].
+Enhanced build provenance and licence are in LICENSES\MSLE-SOURCE.md and LICENSES\MSLE-GPL-3.0.txt.
+
 Writing mods: https://github.com/StoneForgeTeam/StoneForgeDocs
 
 

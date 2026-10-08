@@ -6,12 +6,16 @@ using UndertaleModLib;
 public sealed class SmlIntegrationTests
 {
     // An actual, trusted .sml is opt-in. Never execute arbitrary packages found on the test machine.
-    [SkippableFact]
-    public void Real_package_composes_with_StoneForge_caches_and_removes_cleanly()
+    [SkippableTheory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Real_package_composes_with_StoneForge_caches_and_removes_cleanly(bool enhanced)
     {
         string? source = Environment.GetEnvironmentVariable("STONEFORGE_TEST_DATA");
         string? package = Environment.GetEnvironmentVariable("STONEFORGE_TEST_SML");
         Skip.If(!File.Exists(source) || !File.Exists(package), "Set STONEFORGE_TEST_DATA and STONEFORGE_TEST_SML to trusted VM fixtures.");
+        string? enhancedDirectory = Environment.GetEnvironmentVariable("STONEFORGE_TEST_MSLE");
+        Skip.If(enhanced && !Directory.Exists(enhancedDirectory), "Set STONEFORGE_TEST_MSLE to the trusted Enhanced build.");
         string folder = Path.Combine(Path.GetTempPath(), "sf-sml-integration-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(folder);
         bool passed = false;
@@ -23,6 +27,8 @@ public sealed class SmlIntegrationTests
             var game = new GameFolder(folder);
             Directory.CreateDirectory(game.Dotnet);
             Directory.CreateDirectory(game.Mods);
+            if (enhanced) File.WriteAllText(Path.Combine(game.Dotnet, SmlRuntimeSelection.ConfigFile),
+                JsonSerializer.Serialize(new { Mode = "enhanced", EnhancedDirectory = enhancedDirectory }));
             File.Copy(source!, game.Data);
             string mod = Path.Combine(game.Mods, Path.GetFileName(package!));
             File.Copy(package!, mod);
@@ -40,6 +46,7 @@ public sealed class SmlIntegrationTests
             Assert.Equal(SmlCatalog.Id(mod), details.Key);
             Assert.Equal(Hash(mod), details.Value.Hash);
             Assert.False(string.IsNullOrWhiteSpace(details.Value.Name));
+            Assert.Equal(enhanced ? "MSLE" : "MSL", details.Value.Runtime);
             using (var stream = File.OpenRead(game.Data))
             using (var data = UndertaleIO.Read(stream))
             {

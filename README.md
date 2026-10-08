@@ -50,6 +50,24 @@ Enabled packages run in filename order through the bundled MSL 0.13.2.0 compatib
 
 MSL mods execute unrestricted C# during preparation. The helper's separate process isolates its older dependencies, not its permissions. Packages depending on MSL's launcher UI or scripting server are unsupported; compatibility with individual mods still depends on the game and MSL API version. Logs are in `dotnet/msl-patch.log`. Failed patching leaves the last game data in place; do not assume a changed mod selection was applied after an error.
 
+### MSL Enhanced
+
+StoneForge includes [MSL Enhanced by Tbonex28b](https://www.nexusmods.com/stoneshard/mods/103?tab=description) in `<Stoneshard>/dotnet/msle`. No separate Enhanced installation is needed. Optional settings in `<Stoneshard>/dotnet/msl-runtime.json` can override the runtime directory and package order:
+
+```json
+{
+  "Mode": "auto",
+  "EnhancedDirectory": "msle",
+  "PackageOrder": ["ShardMaster.sml", "AmbientAnimals.sml"]
+}
+```
+
+All settings are optional. `auto` selects Enhanced when an enabled package uses its extended resource format or references MSL types/members absent from regular MSL; otherwise it uses the bundled regular helper. Set `Mode` to `enhanced` for packages whose requirements are hidden through reflection or overloads sharing existing names. `standard` forces regular MSL and refuses detected Enhanced requirements. `PackageOrder` lists filenames to run first, in that order; unlisted packages follow in filename order. Disabled packages remain disabled. Editing this file takes effect on the next start; the Mods window preserves it.
+
+The bundled Enhanced build is the supplied September 17, 2026 build, corresponding to Nexus 1.15. Its exact dependency hashes are pinned in the adapter and release packaging; see [binary provenance](lib/MSLE/README.md). Both runtimes use StoneForge's .NET 10 Windows Desktop helper; running the Enhanced launcher separately is unnecessary. The selected runtime handles the entire enabled batch in an isolated process, and its dependency hashes and package order participate in rebuild caching. Applied packages display `[MSLE]` when prepared with Enhanced.
+
+Enhanced dependency and load-order errors, resource conflicts, and logged patch/import errors stop preparation with details in `dotnet/msl-patch.log`. Separate `audiogroup*.dat` outputs, fonts and shader exports are staged and replaced with `data.win`; ordinary write failures roll back the changes. Fonts and shader exports go to the game's usual AppData `StoneShard/fonts` and `StoneShard/shaders` folders only during commit. Originals are kept in `dotnet/msl-audio-base` (including `fonts` and `shaders` subfolders) and restored when affected mods are removed or during uninstall. External resource updates become the new base. Keep these preserved files until restoration. This supports the VM modbranch; Enhanced's own YYC features and launcher UI/server features are outside this adapter's scope.
+
 ## Write a StoneForge mod
 
 The documentation lives in the [StoneForgeDocs](https://github.com/StoneForgeTeam/StoneForgeDocs) repository and is published with GitBook.

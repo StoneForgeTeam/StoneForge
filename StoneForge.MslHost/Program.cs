@@ -13,11 +13,14 @@ using UndertaleModLib;
 if (args.Length != 1) { Console.Error.WriteLine("Expected an MSL patch request JSON file."); return 1; }
 try
 {
-    Log.Logger = new LoggerConfiguration().WriteTo.Console().CreateLogger();
+    var failures = new StoneForge.MslHost.EnhancedFailures();
+    Log.Logger = new LoggerConfiguration().WriteTo.Console().WriteTo.Sink(failures).CreateLogger();
     using var request = JsonDocument.Parse(File.ReadAllText(args[0]));
     var root = request.RootElement;
     string input = root.GetProperty("Input").GetString()!;
     string output = root.GetProperty("Output").GetString()!;
+    bool enhanced = root.TryGetProperty("Enhanced", out var selected) && selected.GetBoolean();
+    StoneForge.MslHost.EnhancedSupport.ResolveDependencies();
     if (Path.GetFullPath(input).Equals(Path.GetFullPath(output), StringComparison.OrdinalIgnoreCase))
         throw new InvalidOperationException("MSL output must be separate from the preserved base.");
     Console.WriteLine("MSL: Reading preserved game data...");
@@ -31,6 +34,7 @@ try
     var modList = (ModInfos)RuntimeHelpers.GetUninitializedObject(typeof(ModInfos));
     modList.Mods = new();
     ModInfos.Instance = modList;
+    if (enhanced) StoneForge.MslHost.EnhancedSupport.Initialize(main, modList, output);
     ModLoader.Initalize();
     LootUtils.ResetLootTables();
     var metadata = new System.Collections.Generic.Dictionary<string, object>();
@@ -62,12 +66,17 @@ try
         metadata["sml:" + Path.GetFileName(path).ToLowerInvariant()] = new {
             Hash = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(bytes)),
             Name = ReadDetail(() => mod.Name), Author = ReadDetail(() => mod.Author),
-            Version = ReadDetail(() => mod.Version), Description = ReadDetail(() => mod.Description)
+            Version = ReadDetail(() => mod.Version), Description = ReadDetail(() => mod.Description), Runtime = enhanced ? "MSLE" : "MSL"
         };
     }
     LogUtils.InjectLog();
     Console.WriteLine("MSL: Applying mod patches...");
-    ModLoader.PatchMods();
+    if (enhanced) StoneForge.MslHost.EnhancedSupport.CheckConflicts(modList);
+    if (enhanced && failures.Count > 0) throw new InvalidOperationException("MSL Enhanced dependency/resource checks reported errors. See the preceding log.");
+    if (enhanced) StoneForge.MslHost.EnhancedSupport.PatchMods(modList, output, failures);
+    else ModLoader.PatchMods();
+    if (enhanced && failures.Count > 0)
+        throw new InvalidOperationException("MSL Enhanced reported patch/resource errors. See the preceding log; game files were not replaced.");
     Console.WriteLine("MSL: Finalizing loot and script ordering...");
     LootUtils.InjectLootScripts();
     StoneForge.MslHost.CodeOrdering.Normalize(DataLoader.data.Code);

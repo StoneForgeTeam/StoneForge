@@ -3,7 +3,8 @@ namespace StoneForge.Patcher;
 /// <summary>Script hooks for C# mods: the scripts mods declare ([assembly: HookScript("...")] in their source -
 /// <see cref="ModSources.DeclaredHooks"/>) and the loader's own get a small block at the top of their body.
 /// For script &lt;name&gt;:
-///     if (variable_global_exists("__smh_&lt;name&gt;") &amp;&amp; global.__smh_&lt;name&gt;)
+///     if (variable_global_exists("__smh_&lt;name&gt;"))
+///     if (global.__smh_&lt;name&gt;)
 ///     {
 ///         (its arguments into an array)
 ///         var __smr = string_concat("__stonemod_script__", "&lt;name&gt;", &lt;the array&gt;)
@@ -58,7 +59,9 @@ internal static class ScriptHooks
     }
 
     private static string Stub(string name) =>
-        "    if (variable_global_exists(\"__smh_" + name + "\") && global.__smh_" + name + ")\n" +
+        // Modded data can compile boolean operators without short-circuiting. Never read an unset hook flag.
+        "    if (variable_global_exists(\"__smh_" + name + "\"))\n" +
+        "    if (global.__smh_" + name + ")\n" +
         "    {\n" +
         "        var __sma = array_create(argument_count)\n" +
         "        for (var __smi = 0; __smi < argument_count; __smi++)\n" +

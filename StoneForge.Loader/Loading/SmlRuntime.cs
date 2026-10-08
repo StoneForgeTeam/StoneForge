@@ -29,7 +29,7 @@ internal static class SmlRuntime
                 if (prepared?.Metadata?.TryGetValue(package.Id, out var cached) == true && cached.Hash == package.Hash)
                     detail = cached;
                 ModRegistry.All.Add(new ModInfo(package.Id,
-                    (string.IsNullOrWhiteSpace(detail?.Name) ? package.Name : detail.Name) + " [MSL]",
+                    (string.IsNullOrWhiteSpace(detail?.Name) ? package.Name : detail.Name) + (detail?.Runtime == "MSLE" ? " [MSLE]" : " [MSL]"),
                     detail?.Description ?? "", detail?.Author ?? "", detail?.Version ?? "",
                     applied, package.Path, Error: error, IsSml: true));
                 Game.Log(package.Name + ": " + SmlCatalog.Warning);

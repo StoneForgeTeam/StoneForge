@@ -5,9 +5,14 @@ namespace StoneForge.Patcher;
 /// <summary>Stoneshard's folder, and where StoneForge keeps its things in it.</summary>
 internal sealed class GameFolder
 {
-    public GameFolder(string dir) => Dir = Path.GetFullPath(dir);
+    public GameFolder(string dir, string? userDataDirectory = null)
+    {
+        Dir = Path.GetFullPath(dir);
+        UserData = Path.GetFullPath(userDataDirectory ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "StoneShard"));
+    }
 
     public string Dir { get; }
+    public string UserData { get; }
     public string Exe => Path.Combine(Dir, "StoneShard.exe");
     /// <summary>The game's own exe, kept when it's patched.</summary>
     public string ExeBackup => Exe + ".vanilla";

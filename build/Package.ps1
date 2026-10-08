@@ -8,6 +8,7 @@
 #       aurie\StoneForge.Bridge.dll   the native bridge
 #       dotnet\                       StoneForge.Loader, StoneForge.API (+ docs), Roslyn, the splash art
 #       dotnet\patcher\               StoneForge.Patcher (+ GML, UndertaleModLib), AuriePatcher.exe
+#       dotnet\msle\                  pinned MSL Enhanced runtime (lib\MSLE)
 #
 # usage: powershell -ExecutionPolicy Bypass -File build\Package.ps1 [-Configuration Release] [-NoBuild]
 param(
@@ -65,6 +66,23 @@ Get-ChildItem $patcher -Recurse -File | Where-Object Extension -ne ".pdb" | ForE
     Put $_.FullName (Join-Path "$files\dotnet\patcher" $_.FullName.Substring($patcher.Length + 1))
 }
 
+# Enhanced stays separate from both the standard helper and the patcher's own UndertaleModLib.
+$enhanced = Join-Path $lib 'MSLE'
+$enhancedHashes = @{
+    'ModShardLauncher.dll' = '26168221007AD5F0ADEF8B9474D8D8263FA477FD50F3622AB543560FDBCA1D4E'
+    'UndertaleModLib.dll' = 'EBFC4AC77ABABE4BAB27FCB717DA6DBC23D246F8E0FD7A08CC63AF13D53604A8'
+    'UndertaleModTool.dll' = '3E90401CCFBE4257F193ECA65315F29A5765B953F66A31991721A773F6BBF745'
+}
+foreach ($entry in $enhancedHashes.GetEnumerator()) {
+    $dependency = Join-Path $enhanced $entry.Key
+    if (-not (Test-Path -LiteralPath $dependency) -or (Get-FileHash -LiteralPath $dependency -Algorithm SHA256).Hash -ne $entry.Value) {
+        throw "Missing or unsupported Enhanced dependency: $dependency"
+    }
+}
+Get-ChildItem -LiteralPath $enhanced -Recurse -File -Filter '*.dll' | ForEach-Object {
+    Put $_.FullName (Join-Path "$files\dotnet\msle" $_.FullName.Substring($enhanced.Length + 1))
+}
+
 # The release's own files (Windows line endings for the .cmd files), the version in the README, the licences.
 if (-not (Test-Path "$files\dotnet\patcher\msl\StoneForge.MslHost.exe")) {
     throw "MSL helper missing from patcher output. Rebuild the patcher before packaging."
@@ -88,6 +106,8 @@ Put "$lib\UndertaleModLib\Underanalyzer-LICENSE.txt" "$out\LICENSES\Underanalyze
 Put "$lib\UndertaleModLib\README.md" "$out\LICENSES\UndertaleModLib-SOURCE.md"
 Put "$root\StoneForge.MslHost\LICENSE" "$out\LICENSES\MSL-GPL-3.0.txt"
 Put "$lib\MSL\README.md" "$out\LICENSES\MSL-SOURCE.md"
+Put "$lib\MSLE\LICENSE.txt" "$out\LICENSES\MSLE-GPL-3.0.txt"
+Put "$lib\MSLE\README.md" "$out\LICENSES\MSLE-SOURCE.md"
 
 $zip = Join-Path $root "artifacts\StoneForge-$version.zip"
 if (Test-Path $zip) { Remove-Item $zip -Force }
