@@ -51,6 +51,12 @@ Put "$lib\Aurie\AuriePatcher.exe" "$files\dotnet\patcher\AuriePatcher.exe"
 # StoneForge.
 Put "$root\StoneForge.Bridge\bin\x64\$Configuration\StoneForge.Bridge.dll" "$files\aurie\StoneForge.Bridge.dll"
 $loader = "$root\StoneForge.Loader\bin\$Configuration\net10.0"
+# These unique assembly metadata keys also make switching between CI and real data invalidate the build.
+# Read the PE string heap without loading a net10 assembly into Windows PowerShell's older runtime.
+$apiMetadata = [Text.Encoding]::UTF8.GetString([IO.File]::ReadAllBytes("$loader\StoneForge.API.dll"))
+if ($apiMetadata.Contains('StoneForge.StubGameData') -or -not $apiMetadata.Contains('StoneForge.RealGameData')) {
+    throw 'The API is a stub or unverified game-data build. Rebuild StoneForge.Loader with real game data before packaging.'
+}
 foreach ($f in "StoneForge.Loader.dll", "StoneForge.Loader.deps.json", "StoneForge.Loader.runtimeconfig.json",
                "StoneForge.API.dll", "StoneForge.API.xml", "StoneForge.GmlGenerator.dll", "Microsoft.CodeAnalysis.dll", "Microsoft.CodeAnalysis.CSharp.dll") {
     Put "$loader\$f" "$files\dotnet\$f"

@@ -28,6 +28,11 @@ public sealed class ModContext
     /// <summary>The mod's mod.json.</summary>
     public ModManifest Manifest { get; }
 
+    /// <summary>Whether the current Steam account is listed in this mod's Contributors.
+    /// False for an absent or empty list, or unavailable Steam identity. Read on the game thread;
+    /// this reports eligibility for dev tools, independently of the dialogue editor's Dev toggle.</summary>
+    public bool IsContributor => Manifest.IsContributor(Steam.AccountId);
+
     /// <summary>The mod's permanent ID (<see cref="ModManifest.Id"/>): what everything it registers is known by.</summary>
     public string Id { get; }
 

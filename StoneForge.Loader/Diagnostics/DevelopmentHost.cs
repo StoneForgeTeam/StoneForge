@@ -116,6 +116,9 @@ internal static class DevelopmentHost
         Game.EnsureGameThread();
         switch (request.GetProperty("cmd").GetString())
         {
+            case "contributors": return new { accountId = Steam.AccountId, devMod = DialogueEditor.DevMod,
+                mods = ModRegistry.All.Where(m => !m.IsSml).Select(m => new { id = m.Id,
+                    isContributor = DialogueEditor.IsContributor(m.Id), canEnableDev = DialogueEditor.CanEnable(m.Id) }).ToArray() };
             case "status": return new { version = LoaderVersion.Text, mods = ModRegistry.All,
                 activeSprites = ModContent.ActiveSprites, retiredSprites = ModContent.RetiredSprites };
             case "mod.reload":
@@ -179,7 +182,7 @@ internal static class DevelopmentHost
                     throw new InvalidOperationException("Bridge value round-trip failed.");
                 return new { numericRoundTrip = true, stringRoundTrip = true, room = Value(Game.Global["room"]) };
             }
-            default: throw new ArgumentException("Unknown command. Use status, inspect, globals, objects, builtin, trace.watch/read/clear/stop, smoke.");
+            default: throw new ArgumentException("Unknown command. Use status, contributors, inspect, globals, objects, builtin, trace.watch/read/clear/stop, smoke.");
         }
     }
 

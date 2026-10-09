@@ -33,6 +33,12 @@
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\StoneForge.Generators\StoneForge.Generators.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+    <!-- Changing data mode must invalidate incremental compilation, even when the TSVs are older than the DLL. -->
+    <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">
+      <_Parameter1 Condition="'$(StoneForgeStubGameData)' == 'true'">StoneForge.StubGameData</_Parameter1>
+      <_Parameter1 Condition="'$(StoneForgeStubGameData)' != 'true'">StoneForge.RealGameData</_Parameter1>
+      <_Parameter2>true</_Parameter2>
+    </AssemblyAttribute>
     <!-- (Built first, run by StoneForgeGameData below.) -->
     <ProjectReference Include="..\StoneForge.DataDump\StoneForge.DataDump.csproj" ReferenceOutputAssembly="false" Private="false" />
   </ItemGroup>

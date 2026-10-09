@@ -5,9 +5,9 @@ namespace StoneForge.Loader;
 internal static class DialogueEditor
 {
     private static readonly Dictionary<string, NpcDialogueEditor> Tools = new();
-    private static readonly Dictionary<string, ModManifest> Manifests = new();
+    private static readonly Dictionary<string, ModContext> Contexts = new();
     internal static string? DevMod { get; private set; }
-    internal static bool IsContributor(string id) => Manifests.TryGetValue(id, out var manifest) && manifest.IsContributor(Steam.AccountId);
+    internal static bool IsContributor(string id) => Contexts.TryGetValue(id, out var context) && context.IsContributor;
     internal static bool CanEnable(string id) => Tools.ContainsKey(id) && IsContributor(id) && (DevMod == null || DevMod == id);
     internal static bool IsEditing(string id)
     {
@@ -20,7 +20,7 @@ internal static class DialogueEditor
     {
         if (context.OptionalFiles == null) return;
         Remove(context.Id);
-        Manifests[context.Id] = context.Manifest;
+        Contexts[context.Id] = context;
         Tools[context.Id] = NpcDialogueEditor.Install(context, () => IsEditing(context.Id));
     }
     internal static void Toggle(string id)
@@ -31,7 +31,7 @@ internal static class DialogueEditor
     internal static void Remove(string id)
     {
         if (Tools.Remove(id, out var tool)) tool.Close();
-        Manifests.Remove(id);
+        Contexts.Remove(id);
         if (DevMod == id) DevMod = null;
     }
     internal static string Encode(string text) => text.Replace("\\", "\\\\").Replace("\r", "\\r").Replace("\n", "\\n");

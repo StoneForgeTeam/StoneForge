@@ -216,6 +216,18 @@ lists, or unavailable Steam identity, hide Dev controls and prevent enabling the
 editor. The `author` field does not grant access. Reload the mod after updating
 its contributor list. Saved dialogue changes still load for all players.
 
+Mods can use `context.IsContributor` to gate their own dev tools using the same
+check. It reports eligibility independently of the dialogue editor's Dev toggle:
+
+```csharp
+if (context.IsContributor)
+    AddMyDevTools(context);
+```
+
+Read it on the game thread (for example, in `Load`, UI callbacks, or `Tick`). For
+tools that change game data, recheck it in the action callback as well as when
+showing the control.
+
 Only one mod can have dev enabled: the other eligible mods' dev buttons
 are disabled until you click **Disable dev**. Dev mode is a session toggle and starts
 off when you launch the game.

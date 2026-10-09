@@ -327,6 +327,35 @@ static int ApiCallBuiltin(const char* Name, void* Self, void* Other, const NValu
 	if (!RequireGameThread()) return 0;
 	if (!IsBuiltinFunction(Name))
 	{
+		// Current Stoneshard uses the Steamworks extension. Its identity getters are
+		// not runner built-ins; dispatch only these verified, zero-argument exports.
+		// Their ABI is the runner's TRoutine on both VM and YYC builds. Never load or
+		// initialise Steam here: use only the extension the game already loaded.
+		const char* symbol = nullptr;
+		if (ArgCount == 0)
+		{
+			if (strcmp(Name, "steam_initialised") == 0)
+				symbol = "?steam_initialised@@YAXAEAURValue@@PEAVCInstance@@1HPEAU1@@Z";
+			else if (strcmp(Name, "steam_get_user_account_id") == 0)
+				symbol = "?steam_get_user_account_id@@YAXAEAURValue@@PEAVCInstance@@1HPEAU1@@Z";
+			else if (strcmp(Name, "steam_get_persona_name") == 0)
+				symbol = "?steam_get_persona_name@@YAXAEAURValue@@PEAVCInstance@@1HPEAU1@@Z";
+		}
+		if (symbol)
+		{
+			HMODULE steam = GetModuleHandleW(L"Steamworks_x64.dll");
+			FARPROC address = steam ? GetProcAddress(steam, Name) : nullptr;
+			if (!address && steam) address = GetProcAddress(steam, symbol);
+			if (address)
+			{
+				RValue value;
+				CInstance* self = Self ? static_cast<CInstance*>(Self) : GlobalInstance();
+				CInstance* other = Other ? static_cast<CInstance*>(Other) : self;
+				reinterpret_cast<TRoutine>(address)(value, self, other, 0, nullptr);
+				FromRValue(value, *Result);
+				return 1;
+			}
+		}
 		t_LastError = std::string("no built-in function named ") + Name + " (a script's name? Game.CallScript)";
 		return 0;
 	}
