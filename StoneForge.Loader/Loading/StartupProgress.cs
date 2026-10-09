@@ -27,6 +27,10 @@ internal sealed class StartupProgress
     public void Begin(int total)
     {
         Total = total;
+        Done = Failed = Loaded = CurrentIndex = 0;
+        Current = null;
+        Finished = false;
+        _sinceFinished.Reset();
         _clock.Restart();
     }
 

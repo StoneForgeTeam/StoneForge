@@ -60,6 +60,8 @@ internal static class ModManager
 
     /// <summary>How start-up loading is going (the loading screen shows it).</summary>
     internal static StartupProgress Startup { get; } = new();
+    private static RuntimeLoadBatch? _enabling;
+    internal static void RuntimeLoadingDrawn() => _enabling?.Drawn();
 
     /// <summary>How many mods are loaded now.</summary>
     internal static int LoadedCount => Mods.Count + ModRegistry.All.Count(m => m.IsSml && m.Enabled);
@@ -116,6 +118,26 @@ internal static class ModManager
         if (!Startup.Finished)
         {
             LoadCompiled();
+            return;
+        }
+        if (_enabling != null)
+        {
+            if (!_enabling.Progress.Finished)
+            {
+                LoadingScreen.EnsureRuntimeVisible();
+                _enabling.Step((id, on) => { if (on) SwitchOn(id); else SwitchOff(id); },
+                    id => Mods.Any(m => m.Id == id),
+                    (id, e) => Game.Log($"Switching {id} failed: {e}"));
+                return;
+            }
+            if (LoadingScreen.RuntimeVisible) return;
+            _enabling = null;
+        }
+        if (Requests.Any(r => r.On))
+        {
+            _enabling = new RuntimeLoadBatch(Requests.ToArray(), NameOf);
+            Requests.Clear();
+            LoadingScreen.ShowRuntime(_enabling.Progress);
             return;
         }
         while (Requests.Count > 0)

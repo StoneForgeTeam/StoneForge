@@ -44,6 +44,7 @@
   "conflicts.shared_call": "    {0}  (with {1})",
   "conflicts.more": "\n... and {0} more",
   "loading.current": "Loading mods: {0} ({1}/{2})",
+  "loading.enabling": "Enabling {0} ({1}/{2})",
   "loading.none": "No mods loaded",
   "loading.loaded_one": "{0} mod loaded",
   "loading.loaded_many": "{0} mods loaded",

@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Show the loading screen when enabling or reloading C# mods from the Mods window, including Enable all. Present each mod before loading it, report batch progress and failures, and return to the existing Mods window afterward.
+
 ## 0.9.0 — Dialogue editing, localization, quests and contracts
 
 - Support MSL Enhanced packages using a bundled, separate runtime alongside standard MSL support.

@@ -17,6 +17,46 @@ internal sealed class LoadingScreen : UIElement
     private static readonly int ErrorColour = Draw.Rgb(214, 96, 77);
 
     private double _shown = -1;
+    private readonly StartupProgress? _runtime;
+    private StartupProgress Progress => _runtime ?? ModManager.Startup;
+    private bool Showing => _runtime == null ? HoldsGame : !_runtime.Finished ||
+        _runtime.SecondsSinceFinished < ResultSeconds + FadeSeconds;
+    private double DisplayResultTime => _runtime?.SecondsSinceFinished ?? ResultTime;
+    private static ModContext? _loader;
+    private static RuntimeWindow? _runtimeWindow;
+    internal static bool RuntimeVisible => _runtimeWindow?.IsOpen == true;
+
+    internal static void ShowRuntime(StartupProgress progress)
+    {
+        if (_loader == null) throw new InvalidOperationException("Loading screen is not installed.");
+        _splash = -2;
+        _runtimeWindow = _loader.UI.Always.Add(new RuntimeWindow(progress));
+        _runtimeWindow.Open();
+    }
+
+    internal static void EnsureRuntimeVisible()
+    {
+        if (_runtimeWindow is { IsOpen: false }) _runtimeWindow.Open();
+    }
+
+    private sealed class RuntimeWindow : UIWindow
+    {
+        private readonly LoadingScreen _screen;
+        internal RuntimeWindow(StartupProgress progress)
+        {
+            DimBackground = false;
+            Frame.Visible = false;
+            _screen = new LoadingScreen(progress);
+            Closed += _ => { if (progress.Finished) Parent?.Remove(this); };
+        }
+        protected override void OnUpdate(double deltaTime)
+        {
+            base.OnUpdate(deltaTime);
+            _screen.RunUpdate(deltaTime);
+            if (!_screen.Visible) Close();
+        }
+        protected override void OnDraw(double x, double y) => _screen.RunDraw();
+    }
     // Since it was first shown (once the game's window is ready: Ready).
     private static readonly System.Diagnostics.Stopwatch SinceShown = new();
 
@@ -53,8 +93,9 @@ internal sealed class LoadingScreen : UIElement
     // has reset, scr_cursorDataUpdate) - and put back as the game sets it once the screen has gone.
     public static void Install(ModContext loader)
     {
+        _loader = loader;
         loader.OnCode("gml_Object_o_gameLoader_Step_2", before: (_, _) => HoldsGame);
-        loader.OnCode("gml_Object_o_cursorController_Draw_64", before: (_, _) => HoldsGame);
+        loader.OnCode("gml_Object_o_cursorController_Draw_64", before: (_, _) => HoldsGame || RuntimeVisible);
         loader.Frame += KeepCursorHidden;
     }
 
@@ -66,7 +107,7 @@ internal sealed class LoadingScreen : UIElement
         // (Only once the screen is up: in the runner's first frames the game can't be called.)
         if (_frames == 0)
             return;
-        if (HoldsGame)
+        if (HoldsGame || RuntimeVisible)
         {
             Game.CallBuiltin("window_set_cursor", CursorNone);
             _cursorHidden = true;
@@ -81,8 +122,10 @@ internal sealed class LoadingScreen : UIElement
             Game.CallScript("scr_cursorDataUpdate", camera.Instance, camera.Instance.Get("displayMode"));
     }
 
-    public LoadingScreen()
+    public LoadingScreen() : this(null) { }
+    private LoadingScreen(StartupProgress? runtime)
     {
+        _runtime = runtime;
         // (Over everything, taking the mouse: nothing under it is for clicking yet.)
         Width = 1;
         Height = 1;
@@ -90,7 +133,7 @@ internal sealed class LoadingScreen : UIElement
 
     protected override void OnUpdate(double deltaTime)
     {
-        if (!HoldsGame)
+        if (!Showing)
         {
             Visible = false;
             // (The splash art's texture freed: it's not shown again.)
@@ -101,9 +144,10 @@ internal sealed class LoadingScreen : UIElement
         }
         Width = Draw.Width;
         Height = Draw.Height;
-        var startup = ModManager.Startup;
+        var startup = Progress;
         double target = startup.Total == 0 ? 1 : (double)startup.Done / startup.Total;
         _shown = _shown < 0 ? target : _shown + (target - _shown) * Math.Min(1, Math.Min(deltaTime, 0.25) * 8);
+        if (_runtime != null) return;
         _frames++;
         var camera = Instances.First<GameInstance>(GameObjectId.o_cameraController);
         _cameraResetting = camera == null || camera.Instance.Get("reset").AsBool;
@@ -124,10 +168,10 @@ internal sealed class LoadingScreen : UIElement
 
     protected override void OnDraw(double x, double y)
     {
-        if (!SinceShown.IsRunning)
+        if (_runtime == null && !SinceShown.IsRunning)
             return;
-        var startup = ModManager.Startup;
-        double alpha = startup.Finished ? Math.Clamp(1 - (ResultTime - ResultSeconds) / FadeSeconds, 0, 1) : 1;
+        var startup = Progress;
+        double alpha = startup.Finished ? Math.Clamp(1 - (DisplayResultTime - ResultSeconds) / FadeSeconds, 0, 1) : 1;
         double cx = Width / 2, cy = Height / 2;
 
         Draw.Rectangle(0, 0, Width, Height, Background, alpha);
@@ -161,7 +205,7 @@ internal sealed class LoadingScreen : UIElement
 
         string status;
         if (!startup.Finished)
-            status = Localization.Get("loading.current", startup.Current, startup.CurrentIndex + 1, startup.Total);
+            status = Localization.Get(_runtime == null ? "loading.current" : "loading.enabling", startup.Current, startup.CurrentIndex + 1, startup.Total);
         else if (startup.Loaded == 0)
             status = Localization.Get("loading.none");
         else
@@ -169,6 +213,7 @@ internal sealed class LoadingScreen : UIElement
         Draw.Text(cx, barY + 12, status, Draw.Muted, Draw.AlignCenter, alpha: alpha);
         if (startup.Failed > 0)
             Draw.Text(cx, barY + 28, Localization.Get("loading.failed", startup.Failed), ErrorColour, Draw.AlignCenter, alpha: alpha);
+        if (_runtime != null) ModManager.RuntimeLoadingDrawn();
     }
 
     // The splash art: dotnet\StoneForge.Splash.png (branding\splash.png, 1920x1080) as a sprite, loaded the first
