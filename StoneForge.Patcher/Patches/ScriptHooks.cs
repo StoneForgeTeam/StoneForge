@@ -33,6 +33,9 @@ internal static class ScriptHooks
         "scr_slotLoad", "scr_slotSaveUpdate",
         // (Quests: started, a step on, done, failed.)
         "scr_quest_start", "scr_quest_set_progress", "scr_quest_set_complete", "scr_quest_set_failed",
+        // Custom quest definitions, journal text and native contract lifecycle.
+        "questText", "scr_quest_definitions_create", "scr_contractsMapInit", "scr_contract_find_text",
+        "scr_contract_add", "scr_contract_target_number_change", "scr_contract_finish",
         // Native mod dialogue topics and response callbacks.
         "scr_dialogue_advance", "dialogue_create_option_buttons",
         // NPC-attached editor: presentation only, after the game's option sorting/text resolution.

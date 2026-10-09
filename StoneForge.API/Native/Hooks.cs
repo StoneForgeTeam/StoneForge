@@ -256,6 +256,8 @@ internal static unsafe class Hooks
         Dialogues.RemoveMod(mod);
         DialogOptions.RemoveMod(mod);
         DialogConditions.RemoveMod(mod);
+        Quests.RemoveMod(mod);
+        Contracts.RemoveMod(mod);
         ModLocalization.RemoveMod(mod);
         FrameHandlers.RemoveAll(h => h.Mod == mod);
         DrawGuiHandlers.RemoveAll(h => h.Mod == mod);

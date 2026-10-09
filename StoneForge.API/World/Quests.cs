@@ -7,7 +7,7 @@ namespace StoneForge;
 /// <example><code>
 /// Quests.OnCompleted(context, quest => context.Log($"Done: {quest}"));
 /// </code></example>
-public static class Quests
+public static partial class Quests
 {
     /// <summary>A quest's data (live, the game's); null if there's no quest by that id.</summary>
     public static DsMap? Get(string quest) => Game.Global["questsDataMap"].AsDsMap?.GetMap(quest);

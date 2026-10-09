@@ -14,6 +14,8 @@ public sealed class ModContext
         Buffs = new ModBuffs(this);
         Skills = new ModSkills(this);
         Objects = new GameObjects(this);
+        Quests = new ModQuests(this);
+        Contracts = new ModContracts(this);
         Dialogues = new ModDialogues(this);
     }
 
@@ -51,6 +53,10 @@ public sealed class ModContext
     /// <summary>The mod's own game objects (<see cref="GameObject"/>).</summary>
     public GameObjects Objects { get; }
 
+    /// <summary>Custom saved quests owned by this mod.</summary>
+    public ModQuests Quests { get; }
+    /// <summary>Custom contracts owned by this mod.</summary>
+    public ModContracts Contracts { get; }
     /// <summary>Branching NPC conversations owned by this mod.</summary>
     public ModDialogues Dialogues { get; }
 

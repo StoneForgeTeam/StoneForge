@@ -1,7 +1,7 @@
 namespace StoneForge;
 
 /// <summary>The game's contracts (the notice boards' jobs), as its own scripts handle them.</summary>
-public static class Contracts
+public static partial class Contracts
 {
     /// <summary>Takes a contract away as the game does when it's over (scr_contract_delete, run by its time controller:
     /// unlisted, and failed if it wasn't done).</summary>

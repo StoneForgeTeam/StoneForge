@@ -65,6 +65,8 @@ public static unsafe class Bridge
             Items.Install(loader);
             Containers.Install(loader);
             LootTables.Install(loader);
+            Quests.Install(loader);
+            Contracts.Install(loader);
             Consumables.Install(loader);
             Skills.Install(loader);
             GameObjects.Install(loader);
