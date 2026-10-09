@@ -37,6 +37,13 @@ public class UIWindow : UIElement
     private static readonly Dictionary<int, UIWindow> ByModal = new();
 
     private Instance _modal;
+    private (double Width, double Height, double Left, double Top, double OffsetX, double OffsetY, double Scale, string Resolution) _fit;
+
+    private (double, double, double, double, double, double, double, string) FitState() =>
+        (Game.Global["cameraWidth"].AsReal, Game.Global["cameraHeight"].AsReal,
+         Game.Global["gameframe_offset_left"].AsReal, Game.Global["gameframe_offset_top"].AsReal,
+         Game.Global["window_offset_x"].AsReal, Game.Global["window_offset_y"].AsReal, Draw.Scale,
+         Game.Global["resolution"].AsString);
 
     public UIWindow(string title = "")
     {
@@ -125,18 +132,25 @@ public class UIWindow : UIElement
     // Made anew for each opening: the frame fitted to the resolution, the content emptied and sized.
     private void Build()
     {
+        FitLayout();
+        Content.Clear();
+        try { OnBuild(); }
+        catch (Exception e) { Game.Log($"{GetType().Name}.OnBuild threw: {e}"); }
+    }
+
+    // Refit existing controls after a resolution change, preserving page contents and scroll position.
+    private void FitLayout()
+    {
         var frame = (WindowFrame)Frame;
         frame.Fit();
         try { OnFit(); }
         catch (Exception e) { Game.Log($"{GetType().Name}.OnFit threw: {e}"); }
         var insets = ContentInsets;
-        Content.Clear();
         Content.X = insets.Left;
         Content.Y = insets.Top;
         Content.Width = Math.Max(0, Frame.Width - insets.Left - insets.Right);
         Content.Height = Math.Max(0, Frame.Height - insets.Top - insets.Bottom);
-        try { OnBuild(); }
-        catch (Exception e) { Game.Log($"{GetType().Name}.OnBuild threw: {e}"); }
+        _fit = FitState();
     }
 
     protected override void OnUpdate(double deltaTime)
@@ -144,6 +158,8 @@ public class UIWindow : UIElement
         // (Over the whole screen: the dimming, and nothing under it clicked.)
         Width = Draw.Width;
         Height = Draw.Height;
+        if (IsOpen && _fit != FitState())
+            FitLayout();
         // The main menu kept waiting - its list may have been made since it opened (the main menu's room comes
         // a few seconds before its list).
         if (IsOpen && Gm.InstanceExists(GameObjectId.o_mainMenuNavContainer))

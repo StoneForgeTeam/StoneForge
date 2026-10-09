@@ -57,7 +57,7 @@ internal static class InputBlock
     }
 
     // The game's GUI space: the window's pixels over window_ratio * cameraScale, shifted (x and y from
-    // -5000). Ours maps the window to display_get_gui_width/height. Anchored at the mouse - where both know
+    // -5000). Ours maps the full client window. Anchored at the mouse - where both know
     // it is - so the shifts cancel out.
     private static void Place((double X1, double Y1, double X2, double Y2) area, double mx, double my)
     {

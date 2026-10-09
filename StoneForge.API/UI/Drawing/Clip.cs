@@ -39,36 +39,63 @@ internal static class Clip
             entry.Surface = Game.CallBuiltinTrusted("surface_create", default, default, width, height).AsInt;
             entry.Width = width;
             entry.Height = height;
-            if (entry.Surface < 0)
+            if (entry.Surface < 0 || !Exists(entry.Surface))
+            {
+                entry.Surface = -1;
                 return false;
+            }
         }
         entry.LastFrame = _frame;
         // (Whole pixels, so what's drawn isn't blurred moving the surface back.)
         double x = Math.Floor(area.X * scale), y = Math.Floor(area.Y * scale);
         entry.X = x / scale;
         entry.Y = y / scale;
-        Matrices.Push(new[] { Builtin("matrix_get", 0), Builtin("matrix_get", 1), Builtin("matrix_get", 2) });
-        Builtin("surface_set_target", entry.Surface);
-        // (Cleared: c_black, transparent.)
-        Builtin("draw_clear_alpha", 0, 0);
-        using (GmArray? world = Builtin("matrix_build", -x, -y, 0, 0, 0, 0, scale, scale, 1).AsArray)
-            Builtin("matrix_set", 2, world);
-        return true;
+        var matrices = new[] { Builtin("matrix_get", 0), Builtin("matrix_get", 1), Builtin("matrix_get", 2) };
+        bool targeted;
+        try { targeted = Builtin("surface_set_target", entry.Surface).AsBool; }
+        catch
+        {
+            foreach (var matrix in matrices) matrix.AsArray?.Dispose();
+            throw;
+        }
+        if (!targeted)
+        {
+            foreach (var matrix in matrices) matrix.AsArray?.Dispose();
+            return false;
+        }
+        Matrices.Push(matrices);
+        try
+        {
+            // (Cleared: c_black, transparent.)
+            Builtin("draw_clear_alpha", 0, 0);
+            using (GmArray? world = Builtin("matrix_build", -x, -y, 0, 0, 0, 0, scale, scale, 1).AsArray)
+                Builtin("matrix_set", 2, world);
+            return true;
+        }
+        catch { RestoreTarget(); throw; }
     }
 
     internal static void End(UIElement element)
     {
         var entry = Surfaces[element];
-        Builtin("surface_reset_target");
-        if (Matrices.TryPop(out var matrices))
-            for (int i = 0; i < 3; i++)
-            {
-                Builtin("matrix_set", i, matrices[i]);
-                matrices[i].AsArray?.Dispose();
-            }
+        RestoreTarget();
         // (Back at the pass's scale, which it's drawn under: shrunk by it. 16777215: c_white.)
         double scale = Draw.Scale;
-        Builtin("draw_surface_ext", entry.Surface, entry.X, entry.Y, 1 / scale, 1 / scale, 0, 16777215, 1);
+        if (Exists(entry.Surface))
+            Builtin("draw_surface_ext", entry.Surface, entry.X, entry.Y, 1 / scale, 1 / scale, 0, 16777215, 1);
+    }
+
+    private static void RestoreTarget()
+    {
+        Matrices.TryPop(out var matrices);
+        try
+        {
+            Builtin("surface_reset_target");
+            if (matrices != null)
+            for (int i = 0; i < 3; i++)
+                Builtin("matrix_set", i, matrices[i]);
+        }
+        finally { if (matrices != null) foreach (var matrix in matrices) matrix.AsArray?.Dispose(); }
     }
 
     private static GmValue Builtin(string name, params GmValue[] args) => Game.CallBuiltinTrusted(name, default, default, args);

@@ -383,12 +383,18 @@ internal static unsafe class Hooks
             Game.Log($"Draw GUI pass running ({DrawGuiHandlers.Count} handler(s)), GUI {Game.CallBuiltin("display_get_gui_width")}x{Game.CallBuiltin("display_get_gui_height")}");
         }
         // (At the game's UI scale - Draw.Scale - and back to none after, for the game's cursor drawn next.)
+        // Avoid creating render targets while the window is minimised or losing its graphics device.
+        if (!Mouse.HasFocus || Game.CallBuiltinTrusted("window_get_width", default, default).AsReal <= 0 ||
+            Game.CallBuiltinTrusted("window_get_height", default, default).AsReal <= 0)
+        {
+            InputBlock.Flush();
+            return;
+        }
         Draw.UpdateScale();
-        bool scaled = Draw.Scale != 1;
-        if (scaled)
-            WorldMatrix(Draw.Scale);
+        var saved = Draw.BeginGui();
         try
         {
+            WorldMatrix(Draw.Scale);
             for (int i = 0; i < DrawGuiHandlers.Count; i++)
             {
                 var (mod, handler) = DrawGuiHandlers[i];
@@ -406,8 +412,7 @@ internal static unsafe class Hooks
         }
         finally
         {
-            if (scaled)
-                WorldMatrix(1);
+            Draw.EndGui(saved);
         }
         // (Every screen has said what it covers: the game's input kept off it.)
         InputBlock.Flush();

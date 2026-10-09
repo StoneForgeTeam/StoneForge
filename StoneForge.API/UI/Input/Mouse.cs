@@ -14,8 +14,8 @@ public static class Mouse
     // ---- on the screen ----
 
     /// <summary>Where it is on the screen, in GUI coordinates (as <see cref="Draw"/> and mods' UI).</summary>
-    public static double X => Game.CallBuiltin("device_mouse_x_to_gui", 0).AsReal / Draw.Scale;
-    public static double Y => Game.CallBuiltin("device_mouse_y_to_gui", 0).AsReal / Draw.Scale;
+    public static double X => Game.CallBuiltinTrusted("window_mouse_get_x", default, default).AsReal / Draw.Scale;
+    public static double Y => Game.CallBuiltinTrusted("window_mouse_get_y", default, default).AsReal / Draw.Scale;
     /// <summary>Both at once: where it is on the screen, in GUI coordinates.</summary>
     public static Point Position => new(X, Y);
     /// <summary>Pressed this frame.</summary>

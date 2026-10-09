@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+## 0.9.0 — Dialogue editing, localization, quests and contracts
+
+- Support MSL Enhanced packages using a bundled, separate runtime alongside standard MSL support.
+- Add mod localization catalogs with live file refresh, language-change notifications, and localized Escape-menu controls.
+- Add native NPC dialogue APIs and an in-game editor. Enable development for a mod from its Mods tab, then right-click NPC text or responses to edit text in place, add or remove responses, reorder options, restore original dialogue, and assign code triggers or conditions. Edits are saved per NPC in that mod's Dialogue folder.
+- Preview localization for the whole dialogue window from its language dropdown. Keep edited templates and their dynamic text arguments live, and expose the active conversation to mods.
+- Register static dialogue actions with `[DialogOption]` and conditions with `[DialogCondition]`. Conditions return `Hidden`, `Visible`, or `Enabled`; use these instead of `VisibleWhen` and `EnabledWhen`.
+- Add custom saved quests, native dungeon contracts, and NPC dialogue integration for accepting jobs, handing over supplies, and claiming rewards.
+- Restrict Dev controls to Steam accounts listed in a mod's `Contributors` array. Expose the same eligibility check as `ModContext.IsContributor`, and support the game's Steamworks extension when reading account identity.
+- Fix borderless fullscreen UI scaling and mouse alignment. Refit open windows after resolution changes without rebuilding their controls, and check clipping render targets and lost surfaces.
+- Reject release packaging with CI stub game data and rebuild the generated API when switching between stub and real game data.
+
 - Align HUD drawing with full-window mouse coordinates so party-frame toggles and other HUD controls have matching hitboxes with frame margins and window offsets.
 
 - Remove the redundant System.Drawing.Common package reference and its unused bundled notices, avoid copying the MSL helper twice during packaging, and document MSL's default metadata placeholder.

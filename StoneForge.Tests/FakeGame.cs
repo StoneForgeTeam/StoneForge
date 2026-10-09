@@ -575,6 +575,7 @@ public abstract unsafe class FakeGame : IDisposable
     {
         public const int GuiObject = 7001, BlockerObject = 7002, ControllerObject = 7003, Controller = 7100, Grid = 7200, List = 7300;
         public bool Pressed, Focused = true;
+        public double WindowWidth = 1280, WindowHeight = 720, MouseX, MouseY;
         public readonly HashSet<int> PressedKeys = new();
         public readonly HashSet<int> HeldKeys = new();
         public string Clipboard = "";
@@ -608,6 +609,10 @@ public abstract unsafe class FakeGame : IDisposable
                 case "clipboard_get_text": ClipboardReads++; *result = Game.ToNative(Clipboard, new List<IntPtr>()); return true;
                 case "clipboard_set_text": Clipboard = Arg(0).AsString; return true;
                 case "window_has_focus": Bool(Focused); return true;
+                case "window_get_width": Real(WindowWidth); return true;
+                case "window_get_height": Real(WindowHeight); return true;
+                case "window_mouse_get_x": Real(MouseX); return true;
+                case "window_mouse_get_y": Real(MouseY); return true;
                 case "ds_list_create": Real(List); return true;
                 case "ds_list_destroy": return true;
                 case "instance_position_list": Real(GuiUnderMouse.Count); return true;

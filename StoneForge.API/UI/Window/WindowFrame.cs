@@ -33,6 +33,8 @@ internal sealed class WindowFrame : UIElement
         // In the middle of the game's view (the window's frame - the game's own caption bar - aside).
         double left = Game.Global["gameframe_offset_left"].AsReal, top = Game.Global["gameframe_offset_top"].AsReal;
         double viewWidth = Game.Global["cameraWidth"].AsReal, viewHeight = Game.Global["cameraHeight"].AsReal;
+        left += Game.Global["window_offset_x"].AsReal / Draw.Scale;
+        top += Game.Global["window_offset_y"].AsReal / Draw.Scale;
         if (viewWidth <= 0 || viewHeight <= 0)
             (left, top, viewWidth, viewHeight) = (0, 0, Draw.Width, Draw.Height);
         X = Math.Floor(left + (viewWidth - Width) / 2);

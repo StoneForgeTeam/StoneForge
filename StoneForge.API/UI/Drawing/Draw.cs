@@ -24,8 +24,41 @@ public static class Draw
     public static double Scale { get; private set; } = 1;
 
     /// <summary>The screen's size, in the UI's units (<see cref="Scale"/>).</summary>
-    public static double Width => Game.CallBuiltin("display_get_gui_width").AsReal / Scale;
-    public static double Height => Game.CallBuiltin("display_get_gui_height").AsReal / Scale;
+    public static double Width => Game.CallBuiltinTrusted("window_get_width", default, default).AsReal / Scale;
+    public static double Height => Game.CallBuiltinTrusted("window_get_height", default, default).AsReal / Scale;
+
+    private static int _guiCamera = -1;
+    private static double _cameraWidth, _cameraHeight;
+
+    // The game's gameframe extension can leave the reported GUI size different from its projection.
+    // Use a pixel-sized camera for our pass, without changing the game's GUI configuration.
+    internal static GmValue[] BeginGui()
+    {
+        var saved = new[] { Game.CallBuiltinTrusted("matrix_get", default, default, 0),
+            Game.CallBuiltinTrusted("matrix_get", default, default, 1), Game.CallBuiltinTrusted("matrix_get", default, default, 2) };
+        try
+        {
+            double width = Width * Scale, height = Height * Scale;
+            if (_guiCamera < 0)
+                _guiCamera = Game.CallBuiltinTrusted("camera_create_view", default, default, 0, 0, width, height).AsInt;
+            else if (width != _cameraWidth || height != _cameraHeight)
+                Game.CallBuiltinTrusted("camera_set_view_size", default, default, _guiCamera, width, height);
+            _cameraWidth = width; _cameraHeight = height;
+            Game.CallBuiltinTrusted("camera_apply", default, default, _guiCamera);
+            return saved;
+        }
+        catch { EndGui(saved); throw; }
+    }
+
+    internal static void EndGui(GmValue[] saved)
+    {
+        try
+        {
+            for (int i = 0; i < saved.Length; i++)
+                Game.CallBuiltinTrusted("matrix_set", default, default, i, saved[i]);
+        }
+        finally { foreach (var value in saved) value.AsArray?.Dispose(); }
+    }
 
     // Full-window (0,0), expressed in the game's world-pass GUI coordinates.
     internal static Point HudScreenOrigin(double unit, double frameLeft, double frameTop, double windowX, double windowY)
@@ -35,14 +68,12 @@ public static class Draw
         return new Point(-5000 - frameLeft - windowX / unit, -5000 - frameTop - windowY / unit);
     }
 
-    // Each Draw GUI pass: the game's UI unit (window_ratio * cameraScale window pixels, as its own GUI) in GUI
-    // pixels. (1 until the game's camera is set up.)
+    // Our camera uses window pixels, so one UI unit is window_ratio * cameraScale pixels.
+    // Do not divide by display_get_gui_width: gameframe's reported GUI and active projection can disagree.
     internal static void UpdateScale()
     {
         double unit = Game.Global["window_ratio"].AsReal * Game.Global["cameraScale"].AsReal;
-        double guiWidth = Game.CallBuiltin("display_get_gui_width").AsReal;
-        double windowWidth = Game.CallBuiltinTrusted("window_get_width", default, default).AsReal;
-        double scale = windowWidth > 0 ? unit * guiWidth / windowWidth : 0;
+        double scale = unit;
         scale = double.IsFinite(scale) && scale > 0 ? scale : 1;
         if (scale != Scale)
             Game.Log($"UI scale: {scale} (the game's: window_ratio {Game.Global["window_ratio"]}, cameraScale {Game.Global["cameraScale"]})");
