@@ -23,6 +23,9 @@ object	21	o_enemy
 object	22	o_inventory
 object	23	o_container_parent
 object	24	o_cursorController
+object	25	o_cutscene_controller
+object	26	o_exit_confirm_panel
+object	27	o_contract_button
 sprite	0	s_checkbox
 sprite	1	s_gui_arrow_down
 sprite	2	s_gui_arrow_up
