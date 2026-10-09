@@ -82,15 +82,15 @@ The example builds against an installed StoneForge SDK and has its own release h
 
 ## Custom quests and contracts
 
-C# mods can register saved quests with `context.Quests.Add` and dungeon contracts with `context.Contracts.Add`. Definitions support named objectives, localized journal text, rewards and deadlines. Contracts build on a native template to retain settlement and dungeon generation, acceptance and turn-in. See [quests and contracts](docs/Quests-and-contracts.md) for examples and lifecycle rules.
+C# mods can register saved quests with `context.Quests.Add` and dungeon contracts with `context.Contracts.Add`. Definitions support named objectives, localized journal text, rewards and deadlines. Contracts build on a native template to retain settlement and dungeon generation, acceptance and turn-in. See [quests and contracts](https://github.com/StoneForgeTeam/StoneForgeDocs/blob/main/docs/world/quests-and-contracts.md) for examples and lifecycle rules.
 
 ## Dialogues
 
-`context.Dialogues.Add` registers branching NPC conversations with localized lines, portraits, conditional player responses and callbacks. A registered dialogue can open directly or add a topic to an NPC's normal Talk conversation. See [dialogues](docs/Dialogues.md). Conversations use Stoneshard's native dialogue window and return to the NPC's original topics when finished. Before entering the game, open **Mods**, select your mod and toggle **Enable dev**. Right-click NPC text or a response and choose **Edit text** to edit in place; **Enter** saves and **Escape** cancels. Response menus also offer **Move up/down**. Edits live in that mod's `Dialogue/npc_<id>.json` and load with the mod. Only one mod can have dev enabled. **Ctrl+F8** opens the full editor for adding topics and resetting edits.
+`context.Dialogues.Add` registers branching NPC conversations with localized lines, portraits, conditional player responses and callbacks. A registered dialogue can open directly or add a topic to an NPC's normal Talk conversation. See [dialogues](https://github.com/StoneForgeTeam/StoneForgeDocs/blob/main/docs/ui/npc-dialogues.md). Conversations use Stoneshard's native dialogue window and return to the NPC's original topics when finished. Before entering the game, open **Mods**, select your mod and toggle **Enable dev**. Right-click NPC text or a response and choose **Edit text** to edit in place; **Enter** saves and **Escape** cancels. Response menus also offer **Move up/down**. Edits live in that mod's `Dialogue/npc_<id>.json` and load with the mod. Only one mod can have dev enabled. **Ctrl+F8** opens the full editor for adding topics and resetting edits.
 
 ## Localization
 
-StoneForge's interface uses a built-in US English (`en-US`) catalog and follows the game's selected language with English fallback. C# mods can provide `Localization/<language>.json` files and use `context.Localization.Get("key", arguments)` and `TranslationsChanged` or UI bindings to refresh their UI. See [localization documentation](docs/Localization.md) for formatting, fallback and examples. Only US English is included in this release.
+StoneForge's interface uses a built-in US English (`en-US`) catalog and follows the game's selected language with English fallback. C# mods can provide `Localization/<language>.json` files and use `context.Localization.Get("key", arguments)` and `TranslationsChanged` or UI bindings to refresh their UI. See [localization documentation](https://github.com/StoneForgeTeam/StoneForgeDocs/blob/main/docs/core/localization.md) for formatting, fallback and examples. Only US English is included in this release.
 
 ## License
 
