@@ -46,7 +46,10 @@ public static class EscMenu
     private sealed record RemoveOp(string Mod, string Name) : Op(Mod);
     private sealed record ClearOp(string Mod) : Op(Mod);
 
-    internal sealed record Button(int Id, string Mod, string Text, Action OnClick);
+    internal sealed record Button(int Id, string Mod, string Text, Action OnClick)
+    {
+        internal Func<string>? TextProvider { get; init; }
+    }
     internal readonly record struct Entry(EscButton? Vanilla, Button? Mod);
 
     private static readonly List<Op> Ops = new();
@@ -60,6 +63,33 @@ public static class EscMenu
     /// <summary>Adds a button above the exit (Save and Exit, or Exit), or last if there's none; <paramref name="onClick"/>
     /// runs when it's clicked.</summary>
     public static void AddButton(ModContext context, string text, Action onClick) => Add(context, text, onClick, null, after: false, waits: false);
+
+    /// <summary>Adds a button whose text refreshes with the mod's translations.</summary>
+    public static void AddButton(ModContext context, Func<string> text, Action onClick)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        _ = context.Localization;
+        Add(context, text(), onClick, null, false, false);
+        var op = (AddOp)Ops[^1];
+        var button = op.Button with { TextProvider = text };
+        Ops[^1] = op with { Button = button };
+        ById[button.Id] = button;
+    }
+    internal static void RefreshLocalizedButtons(string owner)
+    {
+        bool changed = false;
+        for (int i = 0; i < Ops.Count; i++)
+            if (Ops[i] is AddOp op && op.Mod == owner && op.Button.TextProvider is { } provider)
+            {
+                string text = provider();
+                if (text == op.Button.Text) continue;
+                var button = op.Button with { Text = text };
+                Ops[i] = op with { Button = button };
+                ById[button.Id] = button;
+                changed = true;
+            }
+        if (changed) Changed();
+    }
 
     /// <summary>Adds a button just above <paramref name="anchor"/> (a game button's name, or a button's text).</summary>
     public static void AddBefore(ModContext context, string anchor, string text, Action onClick) => Add(context, text, onClick, anchor, after: false);

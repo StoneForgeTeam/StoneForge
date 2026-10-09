@@ -12,6 +12,17 @@ public class EscMenuTests : IDisposable
     private static void Nothing() { }
 
     [Fact]
+    public void A_localized_button_refresh_preserves_order_and_other_mods()
+    {
+        string text = "Start quest";
+        EscMenu.AddButton(A, () => text, Nothing);
+        EscMenu.AddButton(B, "Start quest", Nothing);
+        text = "Start bounty";
+        EscMenu.RefreshLocalizedButtons(A.Id);
+        Assert.Equal(new[] { "Resume", "LoadGame", "MessageLog", "Settings", "Start bounty", "Start quest", "SaveAndExit" }, EscMenu.Describe());
+    }
+
+    [Fact]
     public void Untouched_it_is_the_games()
         => Assert.Equal(new[] { "Resume", "LoadGame", "MessageLog", "Settings", "SaveAndExit" }, EscMenu.Describe());
 

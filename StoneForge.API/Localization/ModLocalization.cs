@@ -127,6 +127,7 @@ public sealed class ModLocalization
         _lastLanguage = Localization.Language;
         _bindings.RemoveAll(refresh => !refresh());
         MainMenu.RefreshLocalizedButtons(_context.Id);
+        EscMenu.RefreshLocalizedButtons(_context.Id);
         if (languageChanged) LanguageChanged?.Invoke();
         TranslationsChanged?.Invoke();
     }
