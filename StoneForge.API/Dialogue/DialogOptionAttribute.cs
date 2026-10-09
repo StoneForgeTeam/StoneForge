@@ -21,5 +21,8 @@ public sealed class DialogOptionContext
     public Instance Panel { get; }
     public Instance Player => StoneForge.Player.Instance;
     /// <summary>Opens a registered conversation in this NPC's existing dialogue window.</summary>
-    public DialogueConversation? Open(RegisteredDialogue dialogue) => dialogue.StartOnPanel(Speaker, Panel);
+    public DialogueConversation? Open(RegisteredDialogue dialogue, string? node = null) => dialogue.StartOnPanel(Speaker, Panel, node);
+    /// <summary>The active conversation owned by this mod in this NPC's window, if any.</summary>
+    public DialogueConversation? Conversation => Dialogues.Active is { } active && active.Dialogue.Context == Mod &&
+        active.Speaker.Equals(Speaker) && active.Native is { OwnsPanel: true } native && native.Panel.Equals(Panel) ? active : null;
 }

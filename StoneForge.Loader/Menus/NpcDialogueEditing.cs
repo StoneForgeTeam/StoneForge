@@ -156,20 +156,24 @@ internal sealed partial class NpcDialogueEditing
         return edit?.Text.GetValueOrDefault(Language) ?? (edit?.Localized == true ? edit.Text.GetValueOrDefault(Localization.DefaultLanguage) : null);
     }
     private static string TranslationField(View view, Option? option) => option == null ? "line/" + LineKey(view) : "option/" + StableKey(view, option.Key);
-    internal bool IsLocalized(View view, Option? option) => Find(view, TranslationField(view, option))?.Localized == true;
+    private static string? ChoiceKey(View view, Option? option) => option == null ? null : ActiveFor(view)?.Responses.FirstOrDefault(c => ActiveFor(view)!.Native!.Choice(c.Key) == option.Key)?.Key;
+    private static string? Template(View view, Option? option) => ActiveFor(view)?.EditableTemplate(ChoiceKey(view, option));
+    internal string EditableText(View view, Option? option) => Translation(view, option, Language);
+    internal bool IsLocalized(View view, Option? option) => Template(view, option) != null || Find(view, TranslationField(view, option))?.Localized == true;
     internal string Translation(View view, Option? option, string locale) =>
         option != null && Authored(view, option.Key) is { } topic ? topic.Label.GetValueOrDefault(locale) ?? option.Label :
-        Find(view, TranslationField(view, option))?.Text.GetValueOrDefault(locale) ?? option?.Label ?? view.Panel.Get("full_text").AsString;
+        Find(view, TranslationField(view, option))?.Text.GetValueOrDefault(locale) ?? Template(view, option) ?? option?.Label ?? view.Panel.Get("full_text").AsString;
     internal void SetTranslation(View view, Option? option, string locale, string text)
     {
         locale = CultureInfo.GetCultureInfo(locale).Name;
         if (string.IsNullOrEmpty(locale)) throw new ArgumentException("Choose a language.");
         ValidateText(text);
+        ActiveFor(view)?.FormatTemplate(ChoiceKey(view, option), text, validate: true);
         if (option != null && Authored(view, option.Key) is { } topic) { topic.Label[locale] = text; return; }
         string field = TranslationField(view, option);
         var edit = Find(view, field);
         if (edit == null) _document.Edits.Add(edit = new() { Npc = view.Npc, Root = view.Root, Field = field });
-        if (!edit.Text.ContainsKey(Localization.Language)) edit.Text[Localization.Language] = option?.OriginalLabel ?? view.OriginalLine;
+        if (!edit.Text.ContainsKey(Localization.Language)) edit.Text[Localization.Language] = Template(view, option) ?? option?.OriginalLabel ?? view.OriginalLine;
         edit.Localized = true; edit.Text[locale] = text;
     }
     internal void RefreshLanguage(View view)
@@ -179,6 +183,9 @@ internal sealed partial class NpcDialogueEditing
             DisplayLine(view.Panel, (IsLocalized(view, null) ? Text(view, "line/" + LineKey(view)) ?? view.OriginalLine :
                 Text(view, VariantField("line", LineKey(view), view.OriginalLine)) ?? Text(view, "line/" + LineKey(view)) ?? VanillaPreviewText(view, null, view.OriginalLine)));
         Refresh(view);
+        // The native graph may reuse its current fragment when only an editor override changed.
+        if (ActiveFor(view) is { } active && Text(view, "line/" + LineKey(view)) is { } template)
+            DisplayLine(view.Panel, active.FormatTemplate(null, template));
     }
     internal void Set(View view, string field, string text, int? position)
     {
@@ -398,6 +405,8 @@ internal sealed partial class NpcDialogueEditing
                 string field = "option/" + StableKey(view, key);
                 call.Args[0] = (Find(view, field)?.Localized == true ? Text(view, field) : Text(view, VariantField("option", StableKey(view, key), original)) ?? Text(view, field)) ??
                     VanillaPreviewText(view, new(key, original, default, original), original);
+                if (ActiveFor(view) is { } active)
+                    call.Args[0] = active.FormatTemplate(ChoiceKey(view, new(key, original, default, original)), call.Args[0].AsString);
             }
             return false;
         }, after: call =>
@@ -413,7 +422,7 @@ internal sealed partial class NpcDialogueEditing
             view.OriginalLine = call.Self.Get("full_text").AsString;
             string field = "line/" + LineKey(view);
             string? text = (Find(view, field)?.Localized == true ? Text(view, field) : Text(view, VariantField("line", LineKey(view), view.OriginalLine)) ?? Text(view, field));
-            if (text != null) DisplayLine(call.Self, text);
+            if (text != null) DisplayLine(call.Self, ActiveFor(view)?.FormatTemplate(null, text) ?? text);
             else if (PreviewLanguage != null) DisplayLine(call.Self, VanillaPreviewText(view, null, view.OriginalLine));
         });
         _owner.OnScript("scr_dialogue_advance", call =>
@@ -520,7 +529,7 @@ internal sealed partial class NpcDialogueEditing
         return choice == null ? Normalize(key) : "mod/" + active!.Id + "/" + active.NodeKey + "/choice/" + choice.Key;
     }
     private static DialogueConversation? ActiveFor(View view) => Dialogues.Active is { } active && active.Native is { OwnsPanel: true } &&
-        view.Root == active.Native.Root ? active : null;
+        view.Root == active.Native.Root && active.Native.Panel.Equals(view.Panel) ? active : null;
     internal static void DisplayLine(Instance panel, string text)
     {
         panel.Set("full_text", text);

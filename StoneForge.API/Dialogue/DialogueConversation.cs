@@ -11,6 +11,18 @@ public sealed class DialogueConversation
     private string _text = "", _speakerName = "";
     internal string SourceText { get; private set; } = "";
     internal Dictionary<string, string> SourceResponses { get; } = new();
+    private readonly Dictionary<string, (string Template, object?[] Arguments)> _templates = new();
+    internal string? EditableTemplate(string? choice) => _templates.GetValueOrDefault(choice ?? "").Template;
+    internal string FormatTemplate(string? choice, string template, bool validate = false)
+    {
+        if (!_templates.TryGetValue(choice ?? "", out var value)) return template;
+        try { return string.Format(System.Globalization.CultureInfo.GetCultureInfo(PreviewLanguage ?? Localization.Language), template, value.Arguments); }
+        catch (FormatException)
+        {
+            if (validate) throw new ArgumentException("Keep valid placeholders such as {0} and {1}; only use values provided by this line.");
+            return string.Format(System.Globalization.CultureInfo.GetCultureInfo(PreviewLanguage ?? Localization.Language), value.Template, value.Arguments);
+        }
+    }
     private DialogueResponse[] _responses = Array.Empty<DialogueResponse>();
     internal DialogueConversation(RegisteredDialogue dialogue, Instance speaker, string node)
     { Dialogue = dialogue; Speaker = speaker; NodeKey = node; _room = Gm.Room; }
@@ -86,11 +98,17 @@ public sealed class DialogueConversation
         if (!success) Close(DialogueCloseReason.CallbackFailed);
         return success;
     }
-    private string Resolve(string text, string? key, Func<DialogueConversation, string>? provider)
+    private string Resolve(string text, string? key, Func<DialogueConversation, string>? provider, Func<DialogueConversation, object?[]>? arguments, string slot)
     {
         string result = text;
         if (provider != null) Run(() => result = provider(this) ?? "", "text");
-        else if (key != null) result = Dialogue.Context.Localization.Get(key);
+        else if (key != null) result = arguments == null ? Dialogue.Context.Localization.Get(key) : Dialogue.Context.Localization.GetTemplate(key);
+        if (arguments != null)
+        {
+            object?[] values = Array.Empty<object?>();
+            Run(() => values = arguments(this) ?? Array.Empty<object?>(), "text arguments");
+            _templates[slot] = (result, values);
+        }
         return result;
     }
     /// <summary>Re-evaluates text and conditions without re-entering the node or running choice actions.</summary>
@@ -105,8 +123,10 @@ public sealed class DialogueConversation
     private void RefreshCore()
     {
         var node = Dialogue.Nodes[NodeKey];
+        _templates.Clear();
         string field = "node/" + NodeKey;
-        SourceText = Dialogue.Edits.Text(field) ?? Resolve(node.Node.Text, node.Node.TextKey, node.Node.TextProvider);
+        string template = Resolve(node.Node.Text, node.Node.TextKey, node.Node.TextProvider, node.Node.TextArguments, "");
+        SourceText = FormatTemplate(null, Dialogue.Edits.Text(field) ?? template);
         string text = Dialogue.Edits.Text(DialogueEdits.VariantField(field, SourceText)) ?? SourceText;
         SourceResponses.Clear();
         var responses = new List<DialogueResponse>();
@@ -115,7 +135,8 @@ public sealed class DialogueConversation
             if (!IsOpen) return;
             if (!Condition(choice.VisibleWhen)) continue;
             string choiceField = "choice/" + NodeKey + "/" + choice.Key;
-            string original = Dialogue.Edits.Text(choiceField) ?? Resolve(choice.Text, choice.TextKey, choice.TextProvider);
+            string choiceTemplate = Resolve(choice.Text, choice.TextKey, choice.TextProvider, choice.TextArguments, choice.Key);
+            string original = FormatTemplate(choice.Key, Dialogue.Edits.Text(choiceField) ?? choiceTemplate);
             SourceResponses[choice.Key] = original;
             string label = Dialogue.Edits.Text(DialogueEdits.VariantField(choiceField, original)) ?? original;
             bool enabled = Condition(choice.EnabledWhen);

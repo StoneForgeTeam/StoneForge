@@ -169,7 +169,7 @@ internal sealed partial class NpcDialogueEditor : UIGroup
         if (option != null) option = view.Buttons.FirstOrDefault(o => o.Key == option.Key);
         var input = new NativeTextInput(this, view, option, locale) { MaxLength = 8192,
             Tooltip = locale == null ? L("inline_hint") : L("inline_language_hint", locale) };
-        input.Text = locale == null ? option?.Label ?? view.Panel.Get("full_text").AsString : _editing.Translation(view, option, locale);
+        input.Text = locale == null ? _editing.EditableText(view, option) : _editing.Translation(view, option, locale);
         input.Place();
         InlineInput = input; _editing.EditingPanel = view.Panel; Screen?.ShowOverlay(input, this);
         input.Focus();
@@ -410,7 +410,7 @@ internal sealed partial class NpcDialogueEditor : UIGroup
         }
         page.AddText(L(_adding ? "new_label" : "text_hint"));
         _text = page.Add(new UITextBox(0, 0, page.ContentWidth - 6) { MaxLength = 16384 });
-        _text.Text = _adding ? "" : DialogueEditor.Encode(_option?.Label ?? view.Panel.Get("full_text").AsString);
+        _text.Text = _adding ? "" : DialogueEditor.Encode(_editing.EditableText(view, _option));
         _text.TextChanged += _ => { _dirty = true; Status(L("draft")); };
         if (_adding || _option != null)
         {

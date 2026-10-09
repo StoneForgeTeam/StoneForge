@@ -54,6 +54,8 @@ public sealed class DialogueNode
     public string? TextKey { get; init; }
     /// <summary>Optional dynamic text; takes precedence over TextKey and Text.</summary>
     public Func<DialogueConversation, string>? TextProvider { get; init; }
+    /// <summary>Live values for {0}, {1}, etc. in the text template, including edited translations.</summary>
+    public Func<DialogueConversation, object?[]>? TextArguments { get; init; }
     public List<DialogueChoice> Choices { get; } = new();
     /// <summary>Runs once per visit to this node, not on localization or condition refresh.</summary>
     public Action<DialogueConversation>? OnEnter { get; init; }
@@ -72,6 +74,8 @@ public sealed class DialogueChoice
     public string Text { get; }
     public string? TextKey { get; init; }
     public Func<DialogueConversation, string>? TextProvider { get; init; }
+    /// <summary>Live values for placeholders in the response template.</summary>
+    public Func<DialogueConversation, object?[]>? TextArguments { get; init; }
     public string? NextNode { get; }
     public Func<DialogueConversation, bool>? VisibleWhen { get; init; }
     public Func<DialogueConversation, bool>? EnabledWhen { get; init; }

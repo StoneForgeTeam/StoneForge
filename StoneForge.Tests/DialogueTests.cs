@@ -36,6 +36,37 @@ public sealed class DialogueTests : FakeGame
         },
     };
     [Theory]
+    [InlineData(1)]
+    [InlineData(4)]
+    public void Edited_templates_keep_live_progress_and_reject_unknown_arguments(int progress)
+    {
+        var tree = new DialogueDefinition("templates", "report") { Nodes = {
+            new DialogueNode("report", "Delivered {0}/{1}") { TextArguments = _ => new object?[] { progress, 5 }, Choices = {
+                new DialogueChoice("back", "Return {0}") { TextArguments = _ => new object?[] { progress } } } } } };
+        var dialogue = _context.Dialogues.Add(tree); var session = dialogue.Start(Speaker)!;
+        Assert.Equal("Delivered {0}/{1}", session.EditableTemplate(null));
+        dialogue.Edits.SetText("node/report", "Supplies: {0} of {1}");
+        dialogue.Edits.SetText("choice/report/back", "Back ({0})");
+        Assert.Equal($"Supplies: {progress} of 5", session.Text);
+        Assert.Equal($"Back ({progress})", session.Responses.Single().Text);
+        progress++; session.Refresh();
+        Assert.Equal($"Supplies: {progress} of 5", session.Text);
+        Assert.Throws<ArgumentException>(() => session.FormatTemplate(null, "Bad {9}", validate: true));
+        dialogue.Edits.SetText("node/report", "Bad {9}");
+        Assert.Equal($"Delivered {progress}/5", session.Text);
+    }
+    [Fact]
+    public void Action_context_only_exposes_its_own_active_window_and_can_open_a_specific_node()
+    {
+        var dialogue = _context.Dialogues.Add(Tree()); var session = dialogue.Start(Speaker)!;
+        var panel = session.Native!.Panel;
+        Assert.Same(session, new DialogOptionContext(_context, "test", Speaker, panel).Conversation);
+        Assert.Null(new DialogOptionContext(_other, "test", Speaker, panel).Conversation);
+        Assert.Null(new DialogOptionContext(_context, "test", Speaker, default).Conversation);
+        session.Close();
+        Assert.Equal("thanks", dialogue.Start(Speaker, "thanks")!.NodeKey);
+    }
+    [Theory]
     [InlineData(1, 0)]
     [InlineData(2, 1)]
     [InlineData(3, 2)]

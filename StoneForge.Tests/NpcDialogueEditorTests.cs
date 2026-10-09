@@ -57,6 +57,31 @@ public sealed class NpcDialogueEditorTests : FakeGame
     { Hooks.RemoveMod(_context.Id); Dialogues.ResetForTests(); base.Dispose(); }
     private static int _codeCalls;
     [Fact]
+    public void Inline_template_edits_update_live_counts_and_restore_original_without_freezing_values()
+    {
+        int count = 1;
+        var definition = new DialogueDefinition("supplies", "report") { Nodes = {
+            new DialogueNode("report", "Delivered {0}") { TextArguments = _ => new object?[] { count }, Choices = {
+                new DialogueChoice("leave", "Back ({0})") { TextArguments = _ => new object?[] { count } } } } } };
+        var conversation = _context.Dialogues.Add(definition).StartOnPanel(Instance.FromId(100002), _panel)!;
+        var view = _editing.Current!;
+        Assert.Equal("Delivered {0}", _editing.EditableText(view, null));
+        var option = view.Buttons.Single();
+        Assert.Equal("Back ({0})", _editing.EditableText(view, option));
+        _editing.SetTranslation(view, option, "en-US", "Return ({0})");
+        Assert.Throws<ArgumentException>(() => _editing.SetTranslation(view, null, "en-US", "Bad {3}"));
+        _editing.SetTranslation(view, null, "en-US", "Supplies handed over: {0}");
+        _editing.RefreshLanguage(view);
+        Assert.Equal("Supplies handed over: 1", _panel.Get("full_text").AsString);
+        Assert.Equal("Return (1)", view.Buttons.Single().Label);
+        count = 2; conversation.Refresh();
+        Assert.Equal("Supplies handed over: 2", _panel.Get("full_text").AsString);
+        Assert.Equal("Return (2)", view.Buttons.Single().Label);
+        Assert.Equal("Supplies handed over: {0}", _editing.EditableText(view, null));
+        _editing.RestoreOriginal(view, null);
+        Assert.Equal("Delivered 2", _panel.Get("full_text").AsString);
+    }
+    [Fact]
     public void Legacy_document_splits_by_NPC_and_restored_entries_stay_cleared_after_reload()
     {
         string folder = Path.Combine(ModFiles.GameFolder, "npc-split-" + Guid.NewGuid().ToString("N"));

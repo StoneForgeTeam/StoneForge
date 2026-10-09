@@ -49,6 +49,12 @@ internal sealed class TextCatalog(Func<string, string?> read, Action<string> log
         }
     }
 
+    internal string Template(string language, string key)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(key);
+        return Find(language, key) ?? Find(Localization.DefaultLanguage, key) ?? key;
+    }
+
     private string? Find(string language, string key)
     {
         var culture = CultureInfo.GetCultureInfo(language);

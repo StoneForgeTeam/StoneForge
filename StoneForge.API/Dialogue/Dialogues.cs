@@ -55,7 +55,7 @@ public sealed class RegisteredDialogue
     { Context = context; Definition = definition; Nodes = nodes; Id = id; Edits = new(this); Edits.Load(); }
     public string Id { get; }
     public DialogueConversation? Start(Instance speaker, string? node = null) => StartCore(speaker, node, default);
-    internal DialogueConversation? StartOnPanel(Instance speaker, Instance panel) => StartCore(speaker, null, panel);
+    internal DialogueConversation? StartOnPanel(Instance speaker, Instance panel, string? node = null) => StartCore(speaker, node, panel);
     private DialogueConversation? StartCore(Instance speaker, string? node, Instance panel)
     {
         if (!Dialogues.IsRegistered(this)) throw new InvalidOperationException("This dialogue's mod has been unloaded.");

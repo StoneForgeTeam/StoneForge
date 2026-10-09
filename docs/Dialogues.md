@@ -305,15 +305,26 @@ and condition providers free of side effects; they cannot navigate or select
 responses. Use choice callbacks for quest progress, item hand-ins and rewards.
 
 `TextKey` uses the registering mod's localization catalog. `TextProvider` overrides
-both the key and literal text, and can format current values:
+both the key and literal text. For text that should remain editable with live
+progress values, use `TextArguments` on a node or choice:
 
 ```csharp
 new DialogueNode("report", "How is the job going?")
 {
-    TextProvider = conversation => context.Localization.Get("smith.progress",
-        saved["help_progress"].AsInt)
+    TextKey = "smith.progress", // e.g. "Delivered {0}/{1} supplies."
+    TextArguments = conversation => new object?[] { saved["help_progress"].AsInt, 3 }
 };
 ```
+
+The in-game editor shows the template, including `{0}` and `{1}`, and applies
+current values after edits and language changes. Keep placeholders for values
+you want to stay live. Unknown argument indices and malformed placeholders are
+rejected before saving. `context.Localization.GetTemplate(key)` returns an
+unformatted localized template when a dynamic template provider is needed.
+
+Within a `[DialogOption]`, `dialogue.Conversation` exposes the active conversation
+owned by that mod in that NPC's window. `dialogue.Open(registered, "report")`
+opens a particular node when starting a registered conversation from native Talk.
 
 Text and response conditions refresh periodically while open, immediately after
 language/catalog changes, or on `conversation.Refresh()`. Long text and responses

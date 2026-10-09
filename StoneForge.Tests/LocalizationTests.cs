@@ -32,6 +32,8 @@ public sealed class LocalizationTests
         };
         var catalog = new TextCatalog(locale => files.GetValueOrDefault(locale), _ => { });
         Assert.Equal("Bonjour Sam", catalog.Get("fr-CA", "greeting", "Sam"));
+        Assert.Equal("Bonjour {0}", catalog.Template("fr-CA", "greeting"));
+        Assert.Equal("Hello {0}", catalog.Template("de-DE", "greeting"));
         Assert.Equal("English", catalog.Get("fr-CA", "onlyEnglish"));
         Assert.Equal("Hello Sam", catalog.Get("de-DE", "greeting", "Sam"));
         Assert.Equal("missing", catalog.Get("fr-CA", "missing"));

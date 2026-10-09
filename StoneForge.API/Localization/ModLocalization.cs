@@ -173,4 +173,6 @@ public sealed class ModLocalization
     /// <summary>Gets the mod's text, with English fallback and culture-aware placeholder formatting.
     /// File notifications refresh loaded translations after a short debounce; a slower check covers missed events.</summary>
     public string Get(string key, params object?[] arguments) => _catalog.Get(Language, key, arguments);
+    /// <summary>Gets a localized template with its placeholders intact for later formatting.</summary>
+    public string GetTemplate(string key) => _catalog.Template(Language, key);
 }
