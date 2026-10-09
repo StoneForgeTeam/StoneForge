@@ -8,7 +8,16 @@ public static class Localization
     /// <summary>The default language for StoneForge and mod translations.</summary>
     public const string DefaultLanguage = "en-US";
     /// <summary>The current game language as a culture name, such as en-US or ru-RU.</summary>
-    public static string Language { get; private set; } = DefaultLanguage;
+    private static string _language = DefaultLanguage;
+    [ThreadStatic] private static string? _previewLanguage;
+    public static string Language => _previewLanguage ?? _language;
+    internal static IDisposable Preview(string? language)
+    {
+        string? previous = _previewLanguage; _previewLanguage = language;
+        return new PreviewScope(previous);
+    }
+    private sealed class PreviewScope(string? previous) : IDisposable
+    { public void Dispose() => _previewLanguage = previous; }
     internal static int Revision { get; private set; }
     private static readonly TextCatalog Catalog = new(locale =>
     {
@@ -38,8 +47,8 @@ public static class Localization
     internal static void SetLanguage(string language)
     {
         language = CultureInfo.GetCultureInfo(language).Name;
-        if (Language == language) return;
-        Language = language;
+        if (_language == language) return;
+        _language = language;
         Revision++;
     }
 }

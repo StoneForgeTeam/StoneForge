@@ -108,6 +108,12 @@ public abstract unsafe class FakeGame : IDisposable
                         _arrays[id].Add(Keep(A(i)));
                     *result = new NValue { Kind = 5 };
                     return true;
+                case "array_insert":
+                    for (int i = 2; i < count; i++) _arrays[id].Insert((int)args[1].Real + i - 2, Keep(A(i)));
+                    *result = new NValue { Kind = 5 }; return true;
+                case "array_delete":
+                    _arrays[id].RemoveRange((int)args[1].Real, (int)args[2].Real);
+                    *result = new NValue { Kind = 5 }; return true;
                 case "json_parse" when Marshal.PtrToStringUTF8(args[0].Str) == "{}":
                     int strukt = NewStruct();
                     *result = new NValue { Kind = 8, Real = strukt, Ptr = strukt };
@@ -153,6 +159,7 @@ public abstract unsafe class FakeGame : IDisposable
         // Instances' variables (variable_instance_get/set on an active one), and the user events run (instance, event).
         public readonly Dictionary<int, Dictionary<string, GmValue>> Vars = new();
         public readonly List<(int Instance, int Event)> UserEvents = new();
+        public Action<int, int, int>? OnEventPerform;
         // Objects and rooms known by name (asset_get_index, object_exists, room_exists, object_get_name).
         public readonly Dictionary<string, int> Assets = new();
 
@@ -229,6 +236,9 @@ public abstract unsafe class FakeGame : IDisposable
                     return true;
                 case "event_user":
                     UserEvents.Add(((int)((long)self - PointerBase), arg));
+                    return true;
+                case "event_perform":
+                    OnEventPerform?.Invoke((int)((long)self - PointerBase), arg, (int)A(1));
                     return true;
                 // (Made: the next id, active, with no variables yet.)
                 case "instance_create_depth":
@@ -562,6 +572,11 @@ public abstract unsafe class FakeGame : IDisposable
     {
         public const int GuiObject = 7001, BlockerObject = 7002, ControllerObject = 7003, Controller = 7100, Grid = 7200, List = 7300;
         public bool Pressed, Focused = true;
+        public readonly HashSet<int> PressedKeys = new();
+        public readonly HashSet<int> HeldKeys = new();
+        public string Clipboard = "";
+        public int ClipboardReads;
+        public bool KeyboardOnly;
         // The game's GUI elements under the mouse: their id, object, whether shown, depth.
         public readonly List<(int Id, int Object, bool Visible, double Depth)> GuiUnderMouse = new();
         // The controller's position grid (who stands on each cell: an instance id, or -4), and the units that exist.
@@ -570,6 +585,7 @@ public abstract unsafe class FakeGame : IDisposable
 
         internal bool Answer(string function, NValue* args, int count, NValue* result)
         {
+            if (KeyboardOnly && function is not ("keyboard_check_pressed" or "keyboard_check" or "clipboard_get_text" or "clipboard_set_text")) return false;
             GmValue Arg(int i) => i < count ? Game.FromNative(args[i]) : GmValue.Undefined;
             void Real(double value) { result->Kind = 0; result->Real = value; }
             void Bool(bool value) { result->Kind = 13; result->Real = value ? 1 : 0; }
@@ -584,6 +600,10 @@ public abstract unsafe class FakeGame : IDisposable
                     }
                     return false;
                 case "mouse_check_button_pressed": Bool(Pressed); return true;
+                case "keyboard_check_pressed": Bool(PressedKeys.Contains(Arg(0).AsInt)); return true;
+                case "keyboard_check": Bool(HeldKeys.Contains(Arg(0).AsInt)); return true;
+                case "clipboard_get_text": ClipboardReads++; *result = Game.ToNative(Clipboard, new List<IntPtr>()); return true;
+                case "clipboard_set_text": Clipboard = Arg(0).AsString; return true;
                 case "window_has_focus": Bool(Focused); return true;
                 case "ds_list_create": Real(List); return true;
                 case "ds_list_destroy": return true;
@@ -688,6 +708,63 @@ public abstract unsafe class FakeGame : IDisposable
     {
         delegate* unmanaged<void> frame = &Hooks.OnFrame;
         frame();
+    }
+
+    // Native dialogue entry points: fake the engine boundary while using the real C# conversation and hooks.
+    protected static void InstallNativeDialogue(FakeWorld world, FakeScripts scripts)
+    {
+        Refs = new FakeRefs();
+        scripts.Add("scr_dialog_create", args =>
+        {
+            int id = world.Objects.Keys.Max() + 1; world.Add(id, (int)GameObjectId.o_dialogue);
+            world.Vars[id] = new() { ["owner"] = args[0], ["render"] = id };
+            return id;
+        });
+        scripts.Add("scr_player_answer", _ => "Leave");
+        scripts.Add("scr_npc_dialogue_name_tag", _ => "villager");
+        scripts.Add("scr_dialogue_context_set", _ => GmValue.Undefined);
+        scripts.Add("scr_dialogue_set_option_lock", _ => GmValue.Undefined);
+        scripts.Add("scr_guiContainerChildrenDestroy", _ => GmValue.Undefined);
+        scripts.Add("scr_dialogue_set_text", args =>
+        {
+            var panel = Instance.FromId((int)((long)scripts.LastSelf - FakeWorld.PointerBase));
+            using var ctx = panel.Get("dialog_id").AsStruct!;
+            using var strings = ctx["Strings"].AsStruct!;
+            panel.Set("full_text", strings[args[0].AsString]);
+            panel.Set("text_fragment", args[0]);
+            return GmValue.Undefined;
+        });
+        scripts.Add("dialogue_create_option_buttons", _ => GmValue.Undefined);
+        scripts.Add("scr_dialogue_advance", args =>
+        {
+            var panel = Instance.FromId((int)((long)scripts.LastSelf - FakeWorld.PointerBase));
+            using var ctx = panel.Get("dialog_id").AsStruct!;
+            using var fragments = ctx["Fragments"].AsStruct;
+            if (fragments == null || fragments[args[0].AsString].Kind != GmKind.String) return GmValue.Undefined;
+            string line = fragments[args[0].AsString].AsString;
+            using var options = fragments[line].AsArray!;
+            panel.Set("topic", args[0]);
+            if (panel.Get("text_fragment").AsString != line) Game.CallScript("scr_dialogue_set_text", panel, line);
+            Game.CallScript("dialogue_create_option_buttons", panel, options, false, false);
+            return GmValue.Undefined;
+        });
+        scripts.Add("scr_dialogue_get_root_name", _ =>
+        {
+            var panel = Instance.FromId((int)((long)scripts.LastSelf - FakeWorld.PointerBase));
+            using var ctx = panel.Get("dialog_id").AsStruct!; return ctx["RootFragment"];
+        });
+        scripts.Add("scr_dialogue_change_context", args =>
+        {
+            var panel = Instance.FromId((int)((long)scripts.LastSelf - FakeWorld.PointerBase));
+            panel.Set("test_parent_context", panel.Get("dialog_id")); panel.Set("dialog_id", args[0]);
+            Game.CallScript("scr_dialogue_advance", panel, args[1]); return GmValue.Undefined;
+        });
+        scripts.Add("scr_dialogue_exit_context", _ =>
+        {
+            var panel = Instance.FromId((int)((long)scripts.LastSelf - FakeWorld.PointerBase));
+            if (panel.Get("test_parent_context").Kind != GmKind.Struct) return false;
+            panel.Set("dialog_id", panel.Get("test_parent_context")); return true;
+        });
     }
 
     protected FakeGame()

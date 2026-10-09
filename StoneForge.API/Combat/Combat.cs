@@ -57,7 +57,9 @@ public static partial class Combat
             dealt += DealTyped(target.Instance, from, typed, options.ArmorPiercing, options.Log, name, labels);
         double pure = hits.Where(h => h.Type.GameName == null).Sum(h => h.Amount);
         if (pure > 0 && target.Instance.Exists)
-            dealt += (int)Game.CallScript("scr_pure_damage", default, from, target.Instance, pure, options.Log,
+            // scr_simple_damage reads the calling instance's position. A global
+            // scope has no x/y and is unsafe when damage is triggered from UI.
+            dealt += (int)Game.CallScript("scr_pure_damage", source?.Instance.Exists == true ? source.Instance : target.Instance, from, target.Instance, pure, options.Log,
                 name.Length > 0 ? name : "N/A").AsReal;
         foreach (var hit in hits)
         {

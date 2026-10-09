@@ -102,7 +102,11 @@ public class PatcherIntegrationTests : IClassFixture<PatchedGameData>
     {
         RequireData();
         foreach (string hook in ScriptHooks.LoaderHooks)
-            Assert.True(_game.Read.ReadGml("gml_GlobalScript_" + hook).Contains("__stonemod_script__"), hook);
+        {
+            string source = _game.Read.ReadGml(_game.Read.ScriptFile(hook));
+            Assert.Contains("__stonemod_script__", source);
+            Assert.True(source.Contains("__smh_" + hook), hook + ": its own hook flag survives in its containing script");
+        }
     }
 
     [SkippableFact]

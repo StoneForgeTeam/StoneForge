@@ -5,6 +5,18 @@ using StoneForge.GameDamageTypes;
 public class CombatTests : FakeGame
 {
     private static GameInstance Unit => GameInstance.Wrap<GameInstance>(Instance.FromId(123));
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void Pure_damage_runs_as_a_room_instance_with_positions(bool sourced)
+    {
+        var world = DealerWorld(); world.Add(124, 300); world.Vars[124] = new();
+        var scripts = new FakeScripts(); GameScripts = scripts;
+        scripts.Add("scr_pure_damage", args => args[2]);
+        var source = GameInstance.Wrap<GameInstance>(Instance.FromId(124));
+        Assert.Equal(5, Combat.Damage(Unit, DamageType.Pure, 5, sourced ? source : null));
+        Assert.Equal((IntPtr)(FakeWorld.PointerBase + (sourced ? 124 : 123)), scripts.LastSelf);
+    }
 
     [Fact]
     public void Damage_goes_through_the_games_damage_dealer()

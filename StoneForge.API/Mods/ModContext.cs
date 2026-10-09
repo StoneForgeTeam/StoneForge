@@ -14,6 +14,7 @@ public sealed class ModContext
         Buffs = new ModBuffs(this);
         Skills = new ModSkills(this);
         Objects = new GameObjects(this);
+        Dialogues = new ModDialogues(this);
     }
 
     private readonly ModFiles? _files;
@@ -50,12 +51,16 @@ public sealed class ModContext
     /// <summary>The mod's own game objects (<see cref="GameObject"/>).</summary>
     public GameObjects Objects { get; }
 
+    /// <summary>Branching NPC conversations owned by this mod.</summary>
+    public ModDialogues Dialogues { get; }
+
     /// <summary>The other mods running now, to find one by its ID and use what it offers (<see cref="ModList"/>; its
     /// mod.json's <c>"requires"</c> lets a mod use another's types).</summary>
     public ModList Mods { get; } = new();
 
     /// <summary>The mod's files: its own folder, the game's and Stoneshard's data folder (see <see cref="ModFiles"/>).</summary>
     public ModFiles Files => _files ?? throw new InvalidOperationException("No mod folder");
+    internal ModFiles? OptionalFiles => _files;
 
     /// <summary>An image in the mod's Assets folder (a .png, by path relative to it: "icon.png",
     /// "items/sword.png") as a game sprite, for drawing or giving to the game's objects - a strip of

@@ -17,7 +17,8 @@ public sealed class ScriptCall
     public Instance Self { get; }
     /// <summary>Its "other" instance.</summary>
     public Instance Other { get; }
-    /// <summary>Its arguments.</summary>
+    /// <summary>Its arguments, shared with other handlers for this call. Do not dispose array/struct handles
+    /// obtained from these values; the caller owns them.</summary>
     public GmValue[] Args { get; }
     /// <summary>What the script returns: set by a before handler that replaces the call; in an after handler, what it
     /// returned - change it to change what the caller gets.</summary>

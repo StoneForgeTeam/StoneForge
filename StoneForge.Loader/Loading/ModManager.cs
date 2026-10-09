@@ -396,6 +396,7 @@ internal static class ModManager
         string name = id;
         // One failing cleanup must not strand every later resource or prevent the load context unloading.
         Action[] cleanup = {
+            () => DialogueEditor.Remove(name),
             () => GameObjects.RemoveMod(name), () => GmlScripts.RemoveMod(name),
             () => Hooks.RemoveMod(name), () => ModList.RemoveMod(name), () => MainMenu.RemoveMod(name), () => EscMenu.RemoveMod(name), () => GameDialogs.RemoveMod(name), () => Items.RemoveMod(name),
             () => Consumables.RemoveMod(name), () => LootTables.RemoveMod(name), () => Skills.RemoveMod(name), () => Buffs.RemoveMod(name),
@@ -428,6 +429,9 @@ internal static class ModManager
                 EscMenu.EndLoad();
             }
             Hooks.Mods.Add((id, mod));
+            DialogOptions.Register(modContext, loaded.Assembly);
+            DialogConditions.Register(modContext, loaded.Assembly);
+            DialogueEditor.Install(modContext);
             ModList.Add(manifest, mod);
             // (Running again: no longer waiting to come back with what it requires.)
             OffBecause.Remove(id);

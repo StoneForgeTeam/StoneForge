@@ -100,6 +100,14 @@ internal sealed class ModsWindow : UISettingsWindow
         }
         _enabled = Page.AddCheckbox(Localization.Get("mods.enabled"), IsEnabled(mod), mod.IsSml ? Localization.Get("mods.sml_tooltip") : EnabledTooltip);
         _enabled.Changed += on => SetEnabled(mod, on);
+        if (!mod.IsSml)
+        {
+            bool dev = DialogueEditor.DevMod == mod.Id;
+            Page.Add(new UIButton(Localization.Get(dev ? "mods.disable_dev" : "mods.enable_dev"), 5, 0,
+                width: 150, onClick: () => { DialogueEditor.Toggle(mod.Id); tab.Open(); })
+                { Enabled = DialogueEditor.CanEnable(mod.Id) });
+            Page.AddText(Localization.Get("mods.dev_hint"), Draw.Muted);
+        }
         if (mod.IsSml || mod.Trusted || mod.ContainsGml)
         {
             Page.AddHeader(Localization.Get("mods.warnings"));

@@ -33,6 +33,10 @@ internal static class ScriptHooks
         "scr_slotLoad", "scr_slotSaveUpdate",
         // (Quests: started, a step on, done, failed.)
         "scr_quest_start", "scr_quest_set_progress", "scr_quest_set_complete", "scr_quest_set_failed",
+        // Native mod dialogue topics and response callbacks.
+        "scr_dialogue_advance", "dialogue_create_option_buttons",
+        // NPC-attached editor: presentation only, after the game's option sorting/text resolution.
+        "scr_create_contract_button", "scr_dialogue_sort_options", "scr_dialogue_set_text",
         // (LootTables: a table's slots beyond the game's nine, rolled after its own roll.)
         "scr_loot_from_tables",
     };

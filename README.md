@@ -80,6 +80,10 @@ The documentation lives in the [StoneForgeDocs](https://github.com/StoneForgeTea
 
 The example builds against an installed StoneForge SDK and has its own release history. See [repository layout](https://github.com/StoneForgeTeam/StoneForgeDocs/blob/main/docs/development/repositories.md) for the organization and repository boundaries.
 
+## Dialogues
+
+`context.Dialogues.Add` registers branching NPC conversations with localized lines, portraits, conditional player responses and callbacks. A registered dialogue can open directly or add a topic to an NPC's normal Talk conversation. See [dialogues](docs/Dialogues.md). Conversations use Stoneshard's native dialogue window and return to the NPC's original topics when finished. Before entering the game, open **Mods**, select your mod and toggle **Enable dev**. Right-click NPC text or a response and choose **Edit text** to edit in place; **Enter** saves and **Escape** cancels. Response menus also offer **Move up/down**. Edits live in that mod's `Dialogue/npc_<id>.json` and load with the mod. Only one mod can have dev enabled. **Ctrl+F8** opens the full editor for adding topics and resetting edits.
+
 ## Localization
 
 StoneForge's interface uses a built-in US English (`en-US`) catalog and follows the game's selected language with English fallback. C# mods can provide `Localization/<language>.json` files and use `context.Localization.Get("key", arguments)` and `TranslationsChanged` or UI bindings to refresh their UI. See [localization documentation](docs/Localization.md) for formatting, fallback and examples. Only US English is included in this release.
