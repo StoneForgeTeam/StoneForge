@@ -5,13 +5,23 @@ namespace StoneForge.Loader;
 internal static class DialogueEditor
 {
     private static readonly Dictionary<string, NpcDialogueEditor> Tools = new();
+    private static readonly Dictionary<string, ModManifest> Manifests = new();
     internal static string? DevMod { get; private set; }
-    internal static bool CanEnable(string id) => Tools.ContainsKey(id) && (DevMod == null || DevMod == id);
+    internal static bool IsContributor(string id) => Manifests.TryGetValue(id, out var manifest) && manifest.IsContributor(Steam.AccountId);
+    internal static bool CanEnable(string id) => Tools.ContainsKey(id) && IsContributor(id) && (DevMod == null || DevMod == id);
+    internal static bool IsEditing(string id)
+    {
+        if (DevMod != id) return false;
+        if (IsContributor(id)) return true;
+        Tools[id].Close(); DevMod = null;
+        return false;
+    }
     internal static void Install(ModContext context)
     {
         if (context.OptionalFiles == null) return;
         Remove(context.Id);
-        Tools[context.Id] = NpcDialogueEditor.Install(context, () => DevMod == context.Id);
+        Manifests[context.Id] = context.Manifest;
+        Tools[context.Id] = NpcDialogueEditor.Install(context, () => IsEditing(context.Id));
     }
     internal static void Toggle(string id)
     {
@@ -21,6 +31,7 @@ internal static class DialogueEditor
     internal static void Remove(string id)
     {
         if (Tools.Remove(id, out var tool)) tool.Close();
+        Manifests.Remove(id);
         if (DevMod == id) DevMod = null;
     }
     internal static string Encode(string text) => text.Replace("\\", "\\\\").Replace("\r", "\\r").Replace("\n", "\\n");

@@ -6,7 +6,7 @@ namespace StoneForge;
 /// <summary>A mod's mod.json, as read (shared by the loader's API and the patcher). Requires and After: the mods it needs,
 /// and the ones it loads after if they're there, by ID (null: none given).</summary>
 internal sealed record ManifestData(string Id, string Name, string Version, string Author, string Description, string? StoneForge, bool Trusted = false,
-    IReadOnlyList<string>? Requires = null, IReadOnlyList<string>? After = null);
+    IReadOnlyList<string>? Requires = null, IReadOnlyList<string>? After = null, IReadOnlyList<string>? Contributors = null);
 
 /// <summary>Who a mod is - its mod.json - and how its content is named: content keyed "key" in the mod "examplemod"
 /// is "examplemod:key" to mods, and "examplemod__key" in the game's data (objects, tables, saves). A mod ID has no
@@ -17,7 +17,7 @@ internal static class ModIdentity
 
     // Lowercase letters and digits, single underscores between them: "examplemod", "failmelon_examplemod".
     private static readonly Regex IdPattern = new("^[a-z][a-z0-9]*(_[a-z0-9]+)*$", RegexOptions.CultureInvariant);
-    private static readonly string[] Keys = { "id", "name", "version", "author", "description", "stoneforge", "trusted", "requires", "after" };
+    private static readonly string[] Keys = { "id", "name", "version", "author", "description", "stoneforge", "trusted", "requires", "after", "contributors", "Contributors" };
 
     public static bool IsValidId(string id) => id.Length <= 64 && IdPattern.IsMatch(id);
 
@@ -65,11 +65,18 @@ internal static class ModIdentity
                 throw new InvalidDataException($"{ManifestFile} must be a JSON object");
             var values = new Dictionary<string, string>(StringComparer.Ordinal);
             bool trusted = false;
+            IReadOnlyList<string>? contributors = null;
             var lists = new Dictionary<string, IReadOnlyList<string>>(StringComparer.Ordinal);
             foreach (var property in root.EnumerateObject())
             {
                 if (!Keys.Contains(property.Name))
                     throw new InvalidDataException($"{ManifestFile}: unknown key \"{property.Name}\" (it has {string.Join(", ", Keys)})");
+                if (property.Name is "contributors" or "Contributors")
+                {
+                    if (contributors != null) throw new InvalidDataException($"{ManifestFile}: contributors is listed more than once");
+                    contributors = ContributorIds(property);
+                    continue;
+                }
                 // (Full access - its own DLLs, no sandbox: see ModManifest.Trusted.)
                 if (property.Name == "trusted")
                 {
@@ -104,8 +111,37 @@ internal static class ModIdentity
                 if (ids.Contains(id))
                     throw new InvalidDataException($"{ManifestFile}: \"{key}\" names the mod itself (\"{id}\")");
             return new ManifestData(id, Required("name"), Required("version"), values.GetValueOrDefault("author") ?? "",
-                values.GetValueOrDefault("description") ?? "", stoneForge, trusted, lists.GetValueOrDefault("requires"), lists.GetValueOrDefault("after"));
+                values.GetValueOrDefault("description") ?? "", stoneForge, trusted, lists.GetValueOrDefault("requires"), lists.GetValueOrDefault("after"), contributors);
         }
+    }
+
+    private static IReadOnlyList<string> ContributorIds(JsonProperty property)
+    {
+        if (property.Value.ValueKind != JsonValueKind.Array)
+            throw new InvalidDataException($"{ManifestFile}: contributors must be an array of Steam IDs as strings");
+        var ids = new List<string>();
+        foreach (var item in property.Value.EnumerateArray())
+        {
+            string? id = item.ValueKind == JsonValueKind.String ? item.GetString()!.Trim() : null;
+            if (!TryContributorAccount(id, out _))
+                throw new InvalidDataException($"{ManifestFile}: contributors entries must be positive Steam account IDs or individual SteamID64 values, as strings");
+            string normalized = ulong.Parse(id!, System.Globalization.CultureInfo.InvariantCulture).ToString(System.Globalization.CultureInfo.InvariantCulture);
+            if (!ids.Contains(normalized)) ids.Add(normalized);
+        }
+        return ids.AsReadOnly();
+    }
+
+    // Public-universe individual SteamID64 values have the 32-bit account ID in their low bits.
+    internal static bool TryContributorAccount(string? id, out uint account)
+    {
+        account = 0;
+        if (string.IsNullOrEmpty(id) || !id.All(char.IsAsciiDigit) ||
+            !ulong.TryParse(id, out ulong value)) return false;
+        const ulong individual = 76561197960265728;
+        if (value > individual && value <= individual + uint.MaxValue) value -= individual;
+        if (value is 0 or > uint.MaxValue) return false;
+        account = (uint)value;
+        return true;
     }
 
     // "requires" / "after": a list of mod IDs (each once).

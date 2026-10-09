@@ -24,6 +24,9 @@ public abstract unsafe class FakeGame : IDisposable
     protected static FakeSprites? Sprites;
     // The game's scripts, for the script hook tests (null: not modelled).
     protected static FakeScripts? GameScripts;
+    protected static bool SteamInitialized;
+    protected static GmValue SteamAccount;
+    protected static int SteamAccountReads;
     // What's on screen, for the busy / cutscene tests (null: not modelled).
     protected static FakeScene? Scene;
     // The game's arrays and structs, for the game value JSON tests (null: not modelled).
@@ -789,6 +792,7 @@ public abstract unsafe class FakeGame : IDisposable
         Rng = null;
         Sprites = null;
         GameScripts = null;
+        SteamInitialized = false; SteamAccount = GmValue.Undefined; SteamAccountReads = 0;
         Scene = null;
         Refs = null;
         Input = null;
@@ -860,6 +864,8 @@ public abstract unsafe class FakeGame : IDisposable
         string function = Marshal.PtrToStringUTF8((IntPtr)name)!;
         Calls.Add(function);
         *result = new NValue { Kind = 0 };
+        if (function == "steam_initialised") { *result = Game.ToNative(SteamInitialized, new List<IntPtr>()); return 1; }
+        if (function == "steam_get_user_account_id") { SteamAccountReads++; *result = Game.ToNative(SteamAccount, new List<IntPtr>()); return 1; }
         if (GameScripts is { } scripts && scripts.Answer(function, self, other, args, count, result))
             return 1;
         if (Input is { } input && input.Answer(function, args, count, result))

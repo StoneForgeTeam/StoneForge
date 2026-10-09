@@ -201,7 +201,22 @@ order; multiple mods requesting the same slot are applied in hook/load order.
 ### NPC-attached dialogue editor
 
 Before entering the game, open **Mods**, select the mod you are developing, and
-click **Enable dev**. Only one mod can have dev enabled: the other mods' dev buttons
+click **Enable dev**. Dev controls appear only when the current Steam account is
+listed in that mod's `mod.json`:
+
+```json
+"contributors": ["76561197960278073", "12345"]
+```
+
+Use your team's real Steam IDs in place of these example values. Entries must be
+strings: either a 32-bit Steam account ID or an individual SteamID64 from a numeric
+Steam profile URL. `Contributors` is also accepted; do not use both spellings.
+`Steam.AccountId` exposes the current account ID to mod code. Missing or empty
+lists, or unavailable Steam identity, hide Dev controls and prevent enabling the
+editor. The `author` field does not grant access. Reload the mod after updating
+its contributor list. Saved dialogue changes still load for all players.
+
+Only one mod can have dev enabled: the other eligible mods' dev buttons
 are disabled until you click **Disable dev**. Dev mode is a session toggle and starts
 off when you launch the game.
 

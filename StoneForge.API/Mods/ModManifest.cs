@@ -7,6 +7,7 @@ namespace StoneForge;
 ///   "name": "Example Mod",
 ///   "version": "0.1.0",
 ///   "author": "you",
+///   "contributors": ["76561197960278073"],
 ///   "description": "What it does, in a sentence or two.",
 ///   "stoneforge": "0.1.0",
 ///   "requires": ["othermod"],
@@ -30,6 +31,7 @@ public sealed class ModManifest
         Trusted = data.Trusted;
         Requires = data.Requires ?? Array.Empty<string>();
         After = data.After ?? Array.Empty<string>();
+        Contributors = Array.AsReadOnly(data.Contributors?.ToArray() ?? Array.Empty<string>());
     }
 
     /// <summary>The mod's permanent ID: lowercase letters and digits, single underscores between them.</summary>
@@ -60,6 +62,11 @@ public sealed class ModManifest
     /// <summary>The mods it loads after if they're there (<c>"after": ["othermod"]</c>), by ID - each is optional: one
     /// that isn't there is skipped. (Only <see cref="Requires"/> lets it use another mod's types.)</summary>
     public IReadOnlyList<string> After { get; }
+    /// <summary>Steam account IDs or SteamID64 strings allowed to use this mod's development editor.
+    /// An absent or empty contributors array grants no editor access.</summary>
+    public IReadOnlyList<string> Contributors { get; }
+    internal bool IsContributor(uint accountId) => accountId != 0 && Contributors.Any(id =>
+        ModIdentity.TryContributorAccount(id, out uint contributor) && contributor == accountId);
 
     /// <summary>A mod's folder's mod.json (throws InvalidDataException saying what's wrong).</summary>
     internal static ModManifest Read(string folder) => new(ModIdentity.ReadManifest(folder));

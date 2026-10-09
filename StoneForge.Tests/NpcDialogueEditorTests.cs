@@ -769,8 +769,11 @@ public sealed class NpcDialogueEditorTests : FakeGame
     public void Dev_mode_is_exclusive_toggleable_and_removed_with_its_mod()
     {
         string folder = Path.Combine(ModFiles.GameFolder, "dev-tests-" + Guid.NewGuid().ToString("N"));
-        var first = new ModContext("dev_first", Path.Combine(folder, "first"));
-        var second = new ModContext("dev_second", Path.Combine(folder, "second"));
+        SteamInitialized = true; SteamAccount = 12345;
+        var first = new ModContext(new ModManifest(new ManifestData("dev_first", "First", "1", "", "", null,
+            Contributors: new[] { "12345" })), Path.Combine(folder, "first"));
+        var second = new ModContext(new ModManifest(new ManifestData("dev_second", "Second", "1", "", "", null,
+            Contributors: new[] { "76561197960278073" })), Path.Combine(folder, "second"));
         try
         {
             DialogueEditor.Install(first); DialogueEditor.Install(second);
@@ -784,6 +787,31 @@ public sealed class NpcDialogueEditorTests : FakeGame
             Assert.Null(DialogueEditor.DevMod); Assert.False(DialogueEditor.CanEnable(second.Id));
         }
         finally { DialogueEditor.Remove(first.Id); DialogueEditor.Remove(second.Id); Hooks.RemoveMod(first.Id); Hooks.RemoveMod(second.Id); }
+    }
+    [Fact]
+    public void Dev_controls_and_editing_require_a_listed_Steam_account()
+    {
+        string folder = Path.Combine(ModFiles.GameFolder, "dev-access-" + Guid.NewGuid().ToString("N"));
+        SteamInitialized = true; SteamAccount = 12345;
+        var contributor = new ModContext(new ModManifest(new ManifestData("dev_allowed", "Allowed", "1", "", "", null,
+            Contributors: new[] { "12345" })), folder);
+        var unlisted = new ModContext("dev_unlisted", folder);
+        try
+        {
+            DialogueEditor.Install(contributor); DialogueEditor.Install(unlisted);
+            Assert.True(DialogueEditor.IsContributor(contributor.Id));
+            Assert.False(DialogueEditor.IsContributor(unlisted.Id));
+            Assert.False(DialogueEditor.CanEnable(unlisted.Id));
+            DialogueEditor.Toggle(unlisted.Id); Assert.Null(DialogueEditor.DevMod);
+            DialogueEditor.Toggle(contributor.Id); Assert.True(DialogueEditor.IsEditing(contributor.Id));
+            SteamAccount = 999;
+            Assert.False(DialogueEditor.CanEnable(contributor.Id));
+            Assert.False(DialogueEditor.IsEditing(contributor.Id)); Assert.Null(DialogueEditor.DevMod);
+            DialogueEditor.Toggle(contributor.Id); Assert.Null(DialogueEditor.DevMod);
+            SteamAccount = 12345; SteamInitialized = false;
+            Assert.False(DialogueEditor.IsContributor(contributor.Id));
+        }
+        finally { DialogueEditor.Remove(contributor.Id); DialogueEditor.Remove(unlisted.Id); Hooks.RemoveMod(contributor.Id); Hooks.RemoveMod(unlisted.Id); }
     }
     [Fact]
     public void NPC_edits_load_only_with_the_owning_mod_and_never_write_to_another_mod()

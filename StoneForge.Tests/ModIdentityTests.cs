@@ -33,6 +33,32 @@ public class ModIdentityTests
     }
 
     [Theory]
+    [InlineData("contributors")]
+    [InlineData("Contributors")]
+    public void Contributor_arrays_accept_account_IDs_and_SteamID64_without_losing_precision(string key)
+    {
+        var manifest = new ModManifest(ModIdentity.ParseManifest($$"""{ "id": "m", "name": "M", "version": "1", "{{key}}": [" 12345 ", "76561197960278073", "12345"] }"""));
+        Assert.Equal(new[] { "12345", "76561197960278073" }, manifest.Contributors);
+        Assert.True(manifest.IsContributor(12345)); Assert.False(manifest.IsContributor(12346)); Assert.False(manifest.IsContributor(0));
+        Assert.Empty(new ModManifest(ModIdentity.ParseManifest(Valid)).Contributors);
+        Assert.False(new ModManifest(ModIdentity.ParseManifest(Valid)).IsContributor(12345));
+    }
+    [Theory]
+    [InlineData("null")]
+    [InlineData("\"12345\"")]
+    [InlineData("[12345]")]
+    [InlineData("[\"\"]")]
+    [InlineData("[\"0\"]")]
+    [InlineData("[\"76561197960265728\"]")]
+    [InlineData("[\"name\"]")]
+    [InlineData("[\"-1\"]")]
+    [InlineData("[\"18446744073709551616\"]")]
+    public void Invalid_contributor_arrays_are_rejected(string entries) => Assert.Throws<InvalidDataException>(() =>
+        ModIdentity.ParseManifest($$"""{ "id": "m", "name": "M", "version": "1", "contributors": {{entries}} }"""));
+    [Fact]
+    public void Contributor_aliases_cannot_silently_override_each_other() => Assert.Throws<InvalidDataException>(() =>
+        ModIdentity.ParseManifest("""{ "id": "m", "name": "M", "version": "1", "contributors": [], "Contributors": ["12345"] }"""));
+    [Theory]
     [InlineData("""{ "name": "M", "version": "1" }""")] // no id
     [InlineData("""{ "id": "m", "version": "1" }""")] // no name
     [InlineData("""{ "id": "m", "name": "M" }""")] // no version

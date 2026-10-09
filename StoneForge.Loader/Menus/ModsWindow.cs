@@ -100,7 +100,7 @@ internal sealed class ModsWindow : UISettingsWindow
         }
         _enabled = Page.AddCheckbox(Localization.Get("mods.enabled"), IsEnabled(mod), mod.IsSml ? Localization.Get("mods.sml_tooltip") : EnabledTooltip);
         _enabled.Changed += on => SetEnabled(mod, on);
-        if (!mod.IsSml)
+        if (!mod.IsSml && DialogueEditor.IsContributor(mod.Id))
         {
             bool dev = DialogueEditor.DevMod == mod.Id;
             Page.Add(new UIButton(Localization.Get(dev ? "mods.disable_dev" : "mods.enable_dev"), 5, 0,
