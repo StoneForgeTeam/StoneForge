@@ -19,6 +19,8 @@
   "mods.enabled_next_start": "Enabled for the next start. Not applied to this run.",
   "mods.not_applied": "Not applied to this run.",
   "mods.restart_required": "Changes to Enabled take effect after restarting.",
+  "mods.sml_load_order": "Loads {0} of {1}: mods loaded later win when they change the same thing.",
+  "mods.sml_load_order_tooltip": "MSL packages are applied in filename order (or as dotnet/msl-runtime.json's PackageOrder lists them). Where two change the same sprite, sound or code, the one applied later is used. Rename the .sml files to change the order.",
   "mods.enabled": "Enabled",
   "mods.enabled_tooltip": "Switched on or off straight away. Switched off, its items are taken out of the game - load a save from before to get them back once it's on again.",
   "mods.sml_tooltip": "Applied on the next start; cannot be hot-reloaded.",

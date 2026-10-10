@@ -58,12 +58,16 @@ internal static class EnhancedSupport
             if (warnings.Any(w => w.Contains("REQUIRED", StringComparison.Ordinal) || w.Contains("LOAD ORDER ERROR", StringComparison.Ordinal)))
                 throw new InvalidDataException("MSL Enhanced dependencies for " + mod.Name + ":\n" + string.Join("\n", warnings));
         }
-        // The supplied fork's PatchMods shows a modal dialog for these conflicts. Fail before entering it.
+        // Resource conflicts - two mods replacing the same sprite, sound or code - are what MSL Enhanced's own dialog
+        // reports and lets you continue past with OK: later mods overwrite earlier ones. So here: reported, and patched
+        // on, the later mod winning. (Our PatchMods replaces the fork's, which would show that dialog.)
         var analyzer = typeof(Main).Assembly.GetType("ModShardLauncher.ConflictAnalyzer", true)!;
         var conflicts = (IList)analyzer.GetMethod("AnalyzeConflicts")!.Invoke(null, new object[] { mods.Mods })!;
         if (conflicts.Count == 0) return;
         string report = (string)analyzer.GetMethod("GenerateConflictReport")!.Invoke(null, new object[] { conflicts, mods.Mods })!;
-        throw new InvalidDataException("MSL Enhanced resource conflicts must be resolved before patching:\n" + report);
+        Serilog.Log.Warning("MSL Enhanced resource conflicts (later mods overwrite earlier ones):\n{Report}", report);
+        Console.WriteLine($"MSL: {conflicts.Count} resource conflict(s) between mods - mods loaded later win, as in MSL Enhanced. "
+            + "Rename the .sml files to change which loads last (the Mods window shows each one's place). Details in dotnet/msl-patch.log.");
     }
 
     // Mirrors the pinned fork's VM patch sequence, replacing the two AppData writers with staged imports.

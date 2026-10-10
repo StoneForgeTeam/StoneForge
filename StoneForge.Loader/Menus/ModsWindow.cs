@@ -97,6 +97,10 @@ internal sealed class ModsWindow : UISettingsWindow
         {
             Page.AddText(Localization.Get(mod.Enabled ? "mods.applied" : IsEnabled(mod) ? "mods.enabled_next_start" : "mods.not_applied"));
             Page.AddText(Localization.Get("mods.restart_required"), Draw.Muted);
+            // (Where it comes in the patching: where two change the same thing, the later one's is used.)
+            if (IsEnabled(mod) && SmlLoadOrder() is { } order && order.IndexOf(mod.Id) is var position and >= 0)
+                Page.AddText(Localization.Get("mods.sml_load_order", Ordinal(position + 1), order.Count), Draw.Muted).Tooltip =
+                    Localization.Get("mods.sml_load_order_tooltip");
         }
         _enabled = Page.AddCheckbox(Localization.Get("mods.enabled"), IsEnabled(mod), mod.IsSml ? Localization.Get("mods.sml_tooltip") : EnabledTooltip);
         _enabled.Changed += on => SetEnabled(mod, on);
@@ -124,6 +128,34 @@ internal sealed class ModsWindow : UISettingsWindow
         SettingsPage.Add(Page, mod.Id, () => tab.Open());
         Conflicts(mod.Id, () => tab.Open());
     }
+
+    // The enabled MSL packages in the order they're applied, by id: dotnet/msl-runtime.json's PackageOrder first, then by
+    // filename - as the patcher orders them (SmlRuntimeSelection.OrderPackages).
+    private List<string>? SmlLoadOrder()
+    {
+        var packages = ModRegistry.All.Where(m => m.IsSml && IsEnabled(m)).ToList();
+        if (packages.Count == 0)
+            return null;
+        var listed = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        try
+        {
+            string config = Path.Combine(Path.GetDirectoryName(typeof(Bridge).Assembly.Location)!, "msl-runtime.json");
+            if (File.Exists(config))
+            {
+                using var json = System.Text.Json.JsonDocument.Parse(File.ReadAllText(config));
+                foreach (var property in json.RootElement.EnumerateObject())
+                    if (property.NameEquals("PackageOrder") || property.Name.Equals("packageOrder", StringComparison.OrdinalIgnoreCase))
+                        foreach (var name in property.Value.EnumerateArray())
+                            if (name.GetString() is { } file)
+                                listed.TryAdd(file, listed.Count);
+            }
+        }
+        catch (Exception e) when (e is IOException or System.Text.Json.JsonException or InvalidOperationException) { }
+        return packages.OrderBy(m => listed.GetValueOrDefault(Path.GetFileName(m.Folder), int.MaxValue))
+            .ThenBy(m => m.Folder, StringComparer.OrdinalIgnoreCase).Select(m => m.Id).ToList();
+    }
+
+    private static string Ordinal(int n) => n + (n % 100 is 11 or 12 or 13 ? "th" : (n % 10) switch { 1 => "st", 2 => "nd", 3 => "rd", _ => "th" });
 
     // Possible Conflicts, at the bottom, out of the way (only when there are any): a line for each other mod - the calls
     // themselves in its tooltip. Calls both mods' hooks replaced (a conflict that happened: whose result the game got),

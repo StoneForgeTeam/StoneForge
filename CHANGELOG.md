@@ -1,5 +1,13 @@
 # StoneForge changes
 
+## Unreleased
+
+- MSL Enhanced packages that replace the same resource no longer stop patching. As MSL Enhanced's own conflict dialog
+  lets you continue with OK, the later package's version is used (packages load in filename order); the conflicts are
+  listed in the patch console and `dotnet/msl-patch.log`. Missing required packages and load-order errors still stop it.
+- An MSL package's page in the Mods window shows where it comes in the load order - "Loads 2nd of 3: mods loaded later
+  win" - with how to change it in its tooltip.
+
 ## 0.9.1 — Bug reports, mod loading progress and unfocused UI
 
 - Keep StoneForge UI visible when tabbed out, matching the game's UI. Release pending clicks and text input on focus loss, and retain empty-viewport and invalid-surface safeguards.
