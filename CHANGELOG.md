@@ -1,6 +1,6 @@
 # StoneForge changes
 
-## Unreleased
+## 0.9.2 — MSL Enhanced conflicts no longer block patching
 
 - MSL Enhanced packages that replace the same resource no longer stop patching. As MSL Enhanced's own conflict dialog
   lets you continue with OK, the later package's version is used (packages load in filename order); the conflicts are

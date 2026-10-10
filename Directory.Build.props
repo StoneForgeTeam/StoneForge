@@ -3,7 +3,7 @@
   <!-- Shared by every StoneForge project: its version (the loader logs it, the release is named by it) and
        who makes it. Bump Version for each release. -->
   <PropertyGroup>
-    <Version>0.9.1</Version>
+    <Version>0.9.2</Version>
     <Product>StoneForge</Product>
     <Authors>failmelon</Authors>
   </PropertyGroup>
