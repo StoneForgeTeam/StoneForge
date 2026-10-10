@@ -7,6 +7,7 @@ namespace StoneForge;
 ///   "name": "Example Mod",
 ///   "version": "0.1.0",
 ///   "author": "you",
+///   "github": "YourAccount/YourMod",
 ///   "contributors": ["76561197960278073"],
 ///   "description": "What it does, in a sentence or two.",
 ///   "stoneforge": "0.1.0",
@@ -32,6 +33,7 @@ public sealed class ModManifest
         Requires = data.Requires ?? Array.Empty<string>();
         After = data.After ?? Array.Empty<string>();
         Contributors = Array.AsReadOnly(data.Contributors?.ToArray() ?? Array.Empty<string>());
+        Github = data.Github;
     }
 
     /// <summary>The mod's permanent ID: lowercase letters and digits, single underscores between them.</summary>
@@ -42,6 +44,9 @@ public sealed class ModManifest
     public string Version { get; }
     /// <summary>Who made it ("" if not given).</summary>
     public string Author { get; }
+    /// <summary>Optional GitHub repository (owner/repo), used by the Escape-menu bug reporter.
+    /// mod.json accepts owner/repo or an HTTPS GitHub repository URL. The repository must accept BugDrop reports.</summary>
+    public string? Github { get; }
     /// <summary>What it does ("" if not given).</summary>
     public string Description { get; }
     /// <summary>The StoneForge version it needs, at least (null if not given) - or "latest": a mod in development, built

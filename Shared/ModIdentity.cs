@@ -6,7 +6,7 @@ namespace StoneForge;
 /// <summary>A mod's mod.json, as read (shared by the loader's API and the patcher). Requires and After: the mods it needs,
 /// and the ones it loads after if they're there, by ID (null: none given).</summary>
 internal sealed record ManifestData(string Id, string Name, string Version, string Author, string Description, string? StoneForge, bool Trusted = false,
-    IReadOnlyList<string>? Requires = null, IReadOnlyList<string>? After = null, IReadOnlyList<string>? Contributors = null);
+    IReadOnlyList<string>? Requires = null, IReadOnlyList<string>? After = null, IReadOnlyList<string>? Contributors = null, string? Github = null);
 
 /// <summary>Who a mod is - its mod.json - and how its content is named: content keyed "key" in the mod "examplemod"
 /// is "examplemod:key" to mods, and "examplemod__key" in the game's data (objects, tables, saves). A mod ID has no
@@ -17,7 +17,7 @@ internal static class ModIdentity
 
     // Lowercase letters and digits, single underscores between them: "examplemod", "failmelon_examplemod".
     private static readonly Regex IdPattern = new("^[a-z][a-z0-9]*(_[a-z0-9]+)*$", RegexOptions.CultureInvariant);
-    private static readonly string[] Keys = { "id", "name", "version", "author", "description", "stoneforge", "trusted", "requires", "after", "contributors", "Contributors" };
+    private static readonly string[] Keys = { "id", "name", "version", "author", "description", "stoneforge", "trusted", "requires", "after", "contributors", "Contributors", "github" };
 
     public static bool IsValidId(string id) => id.Length <= 64 && IdPattern.IsMatch(id);
 
@@ -110,9 +110,32 @@ internal static class ModIdentity
             foreach (var (key, ids) in lists)
                 if (ids.Contains(id))
                     throw new InvalidDataException($"{ManifestFile}: \"{key}\" names the mod itself (\"{id}\")");
+            string? github = values.GetValueOrDefault("github");
+            if (github != null && !TryGithubRepository(github, out github))
+                throw new InvalidDataException($"{ManifestFile}: github must be owner/repo or https://github.com/owner/repo");
             return new ManifestData(id, Required("name"), Required("version"), values.GetValueOrDefault("author") ?? "",
-                values.GetValueOrDefault("description") ?? "", stoneForge, trusted, lists.GetValueOrDefault("requires"), lists.GetValueOrDefault("after"), contributors);
+                values.GetValueOrDefault("description") ?? "", stoneForge, trusted, lists.GetValueOrDefault("requires"), lists.GetValueOrDefault("after"), contributors, github);
         }
+    }
+
+    // Syntax validation only: submission may still fail for a missing/private repository or BugDrop configuration.
+    internal static bool TryGithubRepository(string? value, out string? repository)
+    {
+        repository = null;
+        if (string.IsNullOrWhiteSpace(value)) return false;
+        value = value.Trim();
+        if (value.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+        {
+            if (!Uri.TryCreate(value, UriKind.Absolute, out var uri) || uri.Host != "github.com" ||
+                !uri.IsDefaultPort || uri.UserInfo.Length != 0 || uri.Query.Length != 0 || uri.Fragment.Length != 0)
+                return false;
+            value = uri.AbsolutePath.Trim('/');
+        }
+        if (!Regex.IsMatch(value, @"\A[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,38})/[a-zA-Z0-9_.-]{1,100}\z", RegexOptions.CultureInvariant)) return false;
+        string name = value.Split('/')[1];
+        if (name is "." or "..") return false;
+        repository = value;
+        return true;
     }
 
     private static IReadOnlyList<string> ContributorIds(JsonProperty property)

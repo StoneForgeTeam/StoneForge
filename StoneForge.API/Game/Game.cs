@@ -168,6 +168,7 @@ public static unsafe partial class Game
     /// <summary>Writes a line to the loader's log (dotnet\bridge.log - a second game running at once: bridge-2.log...).</summary>
     public static void Log(string text)
     {
+        ReportLogs.Add(text);
         if (Api == null) return;
         byte* p = Utf8(text);
         try { Api->Log(p); }

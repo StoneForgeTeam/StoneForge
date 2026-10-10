@@ -436,5 +436,9 @@ public static class EscMenu
         Ops.Clear();
         ById.Clear();
         _shown.Clear();
+        _rebuild = false;
+        _pressed = default;
+        _loading = 0;
+        _nextId = 0;
     }
 }

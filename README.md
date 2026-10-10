@@ -16,6 +16,20 @@ Download `StoneForge-<version>.zip` from [Releases](https://github.com/StoneForg
 
 Mod folders go in `<Stoneshard>/mods`. Open the in-game Mods window to enable or disable them. GML mods carry a warning: their scripts execute directly in GameMaker, outside the C# source restrictions, and need a game restart after edits.
 
+## Bug reports
+
+Mods can opt into the Escape menu's **Report a bug** form by adding a GitHub repository to `mod.json`:
+
+```json
+"github": "YourAccount/YourMod"
+```
+
+An HTTPS repository URL such as `https://github.com/YourAccount/YourMod` also works. The selector includes running, enabled C# mods with this field, plus StoneForge itself. Repository syntax is checked locally; the repository must exist and be configured to receive reports through BugDrop for submission to succeed.
+
+Reports use `https://bugdrop.neonwatty.workers.dev/api/feedback` and its supplied metadata shape: `appVersion`, `url`, `timestamp`, `browser`, `os`, `viewport`, `devicePixelRatio`, `domNodeCount`, `elementSelector`, `fullElementSelector`, `fullPageDisabled`, `language`, and `userAgent`. Versions, OS, language and physical window size are filled from the current run; timestamps use UTC with a trailing Z. Users can include up to 50 recent managed StoneForge console messages (512 characters each), bounded to 8 KiB of serialized JSON. Screenshots and attachments are empty. Description input supports multiple lines, clipboard paste, cursor movement, selection and mouse-wheel scrolling.
+
+Local spam prevention allows one pending request, a 10-minute interval, 3 attempts per rolling hour and 10 per rolling day. Identical repository/title/description combinations are blocked for 24 hours, ignoring case and whitespace. Definite HTTP rejections (400, 401, 403, 404, 413, 422, 429) release the duplicate block so the corrected draft can be retried after the cooldown; the attempt still counts. Attempts, including failures and timeouts, are saved as hashes and timestamps in `dotnet/report-limits.json`; report text is not saved there. There are no automatic retries. HTTP status, service error code and bounded error text are recorded in bridge.log, without logging the report text. These client checks need corresponding BugDrop server protections to prevent bypass by other clients.
+
 ## Build and test
 
 From a Visual Studio developer PowerShell:

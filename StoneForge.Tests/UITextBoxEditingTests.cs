@@ -12,6 +12,28 @@ public sealed class UITextBoxEditingTests : FakeGame
     public override void Dispose() { UITextBox.ReleaseFocus(); Hooks.RemoveMod(_context.Id); base.Dispose(); }
     private void Key(int key) { Input!.PressedKeys.Add(key); _text.RunUpdate(0.1); Input.PressedKeys.Clear(); }
     [Fact]
+    public void Multiline_enter_and_paste_keep_newlines_and_focus()
+    {
+        _text.Multiline = true;
+        Key(Keyboard.Enter); Assert.Equal("abcd\n", _text.Text); Assert.True(_text.IsFocused);
+        Input!.HeldKeys.Add(Keyboard.Control); Input.Clipboard = "two\r\nthree"; Key('V');
+        Assert.Equal("abcd\ntwo\nthree", _text.Text);
+        Input.HeldKeys.Clear(); Key(36); Assert.Equal(9, _text.CaretPosition);
+        Key(Keyboard.ArrowUp); Assert.Equal(5, _text.CaretPosition);
+    }
+    [Theory]
+    [InlineData("", 2, "")]
+    [InlineData("ab\ncd", 2, "ab|cd")]
+    [InlineData("abcd", 2, "ab|cd")]
+    [InlineData("a\n", 2, "a|")]
+    [InlineData("a\n\nb", 2, "a||b")]
+    [InlineData("😀X", 1, "😀|X")]
+    public void Multiline_wrap_preserves_all_text_and_unicode(string text, int width, string expected)
+    {
+        var lines = UITextBox.WrapLines(text, width, value => value.Length);
+        Assert.Equal(expected, string.Join("|", lines.Select(line => text[line.Start..line.End])));
+    }
+    [Fact]
     public void Space_inserts_text_without_submitting_and_enter_submits()
     {
         int submissions = 0; _text.Submitted += _ => submissions++;

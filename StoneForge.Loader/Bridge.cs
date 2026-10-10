@@ -55,6 +55,7 @@ public static unsafe class Bridge
             EscMenu.Install(loader);
             GameDialogs.Install(loader);
             UIWindow.Install(loader);
+            ReportWindow.Install(loader);
             // (Mods' changed settings saved each frame.)
             loader.Frame += ModSettings.SaveChanged;
             // (The loader's own buttons - Mods - are the menu as it starts, as mods' made while they load are: a mod's
