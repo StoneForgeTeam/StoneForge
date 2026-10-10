@@ -1,6 +1,6 @@
 # StoneForge changes
 
-## Unreleased
+## 0.9.1 — Bug reports, mod loading progress and unfocused UI
 
 - Keep StoneForge UI visible when tabbed out, matching the game's UI. Release pending clicks and text input on focus loss, and retain empty-viewport and invalid-surface safeguards.
 
