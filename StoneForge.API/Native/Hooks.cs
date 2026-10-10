@@ -383,8 +383,9 @@ internal static unsafe class Hooks
             Game.Log($"Draw GUI pass running ({DrawGuiHandlers.Count} handler(s)), GUI {Game.CallBuiltin("display_get_gui_width")}x{Game.CallBuiltin("display_get_gui_height")}");
         }
         // (At the game's UI scale - Draw.Scale - and back to none after, for the game's cursor drawn next.)
-        // Avoid creating render targets while the window is minimised or losing its graphics device.
-        if (!Mouse.HasFocus || Game.CallBuiltinTrusted("window_get_width", default, default).AsReal <= 0 ||
+        // Focus loss is not device loss: the game still draws while another window is active.
+        // Skip empty viewports; Clip validates its render targets separately.
+        if (Game.CallBuiltinTrusted("window_get_width", default, default).AsReal <= 0 ||
             Game.CallBuiltinTrusted("window_get_height", default, default).AsReal <= 0)
         {
             InputBlock.Flush();

@@ -574,7 +574,7 @@ public abstract unsafe class FakeGame : IDisposable
     protected sealed class FakeInput
     {
         public const int GuiObject = 7001, BlockerObject = 7002, ControllerObject = 7003, Controller = 7100, Grid = 7200, List = 7300;
-        public bool Pressed, Focused = true;
+        public bool Pressed, Down, Focused = true;
         public double WindowWidth = 1280, WindowHeight = 720, MouseX, MouseY;
         public readonly HashSet<int> PressedKeys = new();
         public readonly HashSet<int> HeldKeys = new();
@@ -604,6 +604,7 @@ public abstract unsafe class FakeGame : IDisposable
                     }
                     return false;
                 case "mouse_check_button_pressed": Bool(Pressed); return true;
+                case "mouse_check_button": Bool(Down); return true;
                 case "keyboard_check_pressed": Bool(PressedKeys.Contains(Arg(0).AsInt)); return true;
                 case "keyboard_check": Bool(HeldKeys.Contains(Arg(0).AsInt)); return true;
                 case "clipboard_get_text": ClipboardReads++; *result = Game.ToNative(Clipboard, new List<IntPtr>()); return true;

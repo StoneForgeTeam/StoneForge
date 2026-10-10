@@ -78,6 +78,15 @@ public sealed class UIScreen : UIElement
         Width = Draw.Width;
         Height = Draw.Height;
 
+        if (!Mouse.HasFocus)
+        {
+            // Keep the last UI visible, without treating an alt-tab release as a click
+            // or consuming typing/scrolling intended for the other application.
+            ReleaseInput();
+            DrawContents();
+            return;
+        }
+
         double mx = Mouse.X, my = Mouse.Y;
         UIElement? hovered = null;
         // (A window open - on any mod's screen - takes the mouse: only the one on top, and what's in it.)
@@ -131,6 +140,13 @@ public sealed class UIScreen : UIElement
         RunUpdate(delta);
         foreach (var overlay in _overlays.ToArray())
             overlay.RunUpdate(delta);
+        DrawContents();
+        if (_pressed == null && _hoverTime >= TooltipDelay && (_hovered == null || !InOpenWindow(_hovered)))
+            DrawTooltip(mx, my);
+    }
+
+    private void DrawContents()
+    {
         // (Open windows - and what of theirs is over them - are drawn after every screen: DrawWindows.)
         foreach (var child in Children.ToArray())
             if (child is not UIWindow { IsOpen: true })
@@ -138,8 +154,6 @@ public sealed class UIScreen : UIElement
         foreach (var overlay in _overlays.ToArray())
             if (!InOpenWindow(overlay))
                 overlay.RunDraw();
-        if (_pressed == null && _hoverTime >= TooltipDelay && (_hovered == null || !InOpenWindow(_hovered)))
-            DrawTooltip(mx, my);
     }
 
     // After every screen has drawn: the open windows, over everything (in the order they opened), each with
@@ -188,6 +202,12 @@ public sealed class UIScreen : UIElement
             else
                 HideOverlay(overlay);
         }
+        ReleaseInput();
+        UIWindow.ShutOn(this);
+    }
+
+    private void ReleaseInput()
+    {
         _hovered?.SetHovered(false);
         _hovered = null;
         if (_pressed != null)
@@ -195,7 +215,6 @@ public sealed class UIScreen : UIElement
         _pressed = null;
         _hoverTime = 0;
         UITextBox.ReleaseFocusIn(this);
-        UIWindow.ShutOn(this);
     }
 
     private static void Raise(Action? handlers)

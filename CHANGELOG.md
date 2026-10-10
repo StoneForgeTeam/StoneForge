@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Keep StoneForge UI visible when tabbed out, matching the game's UI. Release pending clicks and text input on focus loss, and retain empty-viewport and invalid-surface safeguards.
+
 - Add an Escape-menu bug reporter for StoneForge and enabled C# mods with a `github` repository in mod.json. Submit titles, multiline descriptions, optional recent managed console logs, versions, OS and display details through BugDrop. Preserve drafts on errors and add persistent cooldown, duplicate and hourly/daily submission limits.
 
 - Show the loading screen when enabling or reloading C# mods from the Mods window, including Enable all. Present each mod before loading it, report batch progress and failures, and return to the existing Mods window afterward.
