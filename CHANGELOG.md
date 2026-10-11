@@ -1,5 +1,13 @@
 # StoneForge changes
 
+## Unreleased
+
+- MSL patching no longer gives up after five minutes. Large packages can take an hour, so it now runs as long as the
+  MSL helper keeps working (writing output or using CPU) and stops only if it makes no progress for five minutes. The
+  patch console shows the elapsed and CPU time while it works quietly.
+- The MSL helper now ends with the patcher: closing the patch console (or the patcher ending any other way) no longer
+  leaves it running in the background.
+
 ## 0.9.2 — MSL Enhanced conflicts no longer block patching
 
 - MSL Enhanced packages that replace the same resource no longer stop patching. As MSL Enhanced's own conflict dialog

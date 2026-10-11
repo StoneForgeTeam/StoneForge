@@ -7,6 +7,26 @@ internal static class SmlPatches
 {
     internal static string HostDirectory => Path.Combine(AppContext.BaseDirectory, "msl");
 
+    /// <summary>How long the MSL helper may go with neither output nor CPU use before it's taken as stuck and
+    /// ended. There's no overall limit: a large package can take an hour while it's still working.</summary>
+    internal static readonly TimeSpan StallLimit = TimeSpan.FromMinutes(5);
+
+    // CPU use over a second that counts as working (a stuck process uses next to none).
+    private static readonly TimeSpan CpuProgress = TimeSpan.FromMilliseconds(100);
+
+    // The helper's CPU time so far (all its threads); zero once it has gone.
+    private static TimeSpan CpuTime(Process process)
+    {
+        try
+        {
+            process.Refresh();
+            return process.TotalProcessorTime;
+        }
+        catch (InvalidOperationException) { return TimeSpan.Zero; }
+    }
+
+    private static string Hms(TimeSpan time) => time.TotalHours >= 1 ? time.ToString(@"h\:mm\:ss") : time.ToString(@"m\:ss");
+
     internal static string HostKey()
     {
         // Version the helper and its dependencies as well as the package input.
@@ -51,12 +71,20 @@ internal static class SmlPatches
                 WorkingDirectory = work, RedirectStandardOutput = true, RedirectStandardError = true };
             start.ArgumentList.Add(request);
             PatcherConsole.Log($"MSL: Using {(runtime.Enhanced ? "MSL Enhanced" : "standard MSL")}. Preparing {copies.Count} package(s). Detailed log: dotnet/msl-patch.log");
+            PatcherConsole.Log("MSL: Large packages can take a long time (up to an hour); the game starts once it's done.");
             var elapsed = Stopwatch.StartNew();
+            // (The helper dies with us, however we end - the console window closed, killed: it never runs on orphaned.)
+            using var job = new KillOnExitJob();
             using var process = Process.Start(start) ?? throw new IOException("Could not start MSL helper.");
+            if (!job.Add(process))
+                PatcherConsole.Log("MSL: (couldn't tie the helper to the patcher - if this window is closed, end StoneForge.MslHost.exe yourself)");
             // Drain both pipes concurrently, keeping live console output and the complete diagnostic log.
             using var log = new StreamWriter(Path.Combine(game.Dotnet, "msl-patch.log"), false) { AutoFlush = true };
             object gate = new();
-            long lastActivity = 0;
+            // Progress: the last time the helper wrote a line or used CPU. No time limit while it makes progress -
+            // patching can take an hour - only a stall (neither, for StallLimit) ends it.
+            long lastProgress = 0, lastHeartbeat = 0;
+            var lastCpu = TimeSpan.Zero;
             Task Pump(StreamReader reader) => Task.Run(async () =>
             {
                 while (await reader.ReadLineAsync() is { } line)
@@ -64,26 +92,36 @@ internal static class SmlPatches
                     {
                         log.WriteLine(line);
                         PatcherConsole.Log(line);
-                        lastActivity = elapsed.ElapsedMilliseconds;
+                        lastProgress = elapsed.ElapsedMilliseconds;
                     }
             });
             var stdout = Pump(process.StandardOutput);
             var stderr = Pump(process.StandardError);
             while (!process.WaitForExit(1000))
             {
-                if (elapsed.ElapsedMilliseconds >= 300_000)
-                {
-                    process.Kill(entireProcessTree: true);
-                    process.WaitForExit();
-                    Task.WaitAll(stdout, stderr);
-                    throw new TimeoutException("MSL patching exceeded five minutes. See dotnet/msl-patch.log.");
-                }
+                var cpu = CpuTime(process);
                 lock (gate)
-                    if (elapsed.ElapsedMilliseconds - lastActivity >= 10_000)
+                {
+                    long now = elapsed.ElapsedMilliseconds;
+                    // (More than a stalled process's idle trickle: it's working, if quietly.)
+                    if (cpu - lastCpu >= CpuProgress)
                     {
-                        PatcherConsole.Log($"MSL: Still working ({elapsed.Elapsed.TotalSeconds:0}s elapsed)...");
-                        lastActivity = elapsed.ElapsedMilliseconds;
+                        lastCpu = cpu;
+                        lastProgress = now;
                     }
+                    if (now - lastProgress >= StallLimit.TotalMilliseconds)
+                    {
+                        process.Kill(entireProcessTree: true);
+                        process.WaitForExit();
+                        Task.WaitAll(stdout, stderr);
+                        throw new TimeoutException($"MSL stopped making progress (no output and no CPU use for {StallLimit.TotalMinutes:0} minutes, after {Hms(elapsed.Elapsed)}). Game data was not replaced. See dotnet/msl-patch.log.");
+                    }
+                    if (now - lastHeartbeat >= 10_000 && now - lastProgress >= 10_000)
+                    {
+                        PatcherConsole.Log($"MSL: Still working ({Hms(elapsed.Elapsed)} elapsed, {cpu.TotalSeconds:0}s CPU)...");
+                        lastHeartbeat = now;
+                    }
+                }
             }
             Task.WaitAll(stdout, stderr);
             if (process.ExitCode != 0) throw new InvalidOperationException("MSL patching failed. Game data was not replaced. See dotnet/msl-patch.log.");
