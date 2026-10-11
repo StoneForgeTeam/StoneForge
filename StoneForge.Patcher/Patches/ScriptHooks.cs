@@ -29,8 +29,8 @@ internal static class ScriptHooks
         "scr_create_context_menu",
         // (Turns.OnTurn: the world's turn.)
         "scr_global_turn",
-        // (SaveData.OnLoaded / OnSaving: a save read, or about to be written.)
-        "scr_slotLoad", "scr_slotSaveUpdate",
+        // (SaveData.OnLoaded / OnSaving: a save read, or about to be written. SaveBackups: one written over or deleted.)
+        "scr_slotLoad", "scr_slotSaveUpdate", "scr_slotSaveDelete",
         // (Quests: started, a step on, done, failed.)
         "scr_quest_start", "scr_quest_set_progress", "scr_quest_set_complete", "scr_quest_set_failed",
         // Custom quest definitions, journal text and native contract lifecycle.

@@ -50,6 +50,16 @@ Enhanced build provenance and licence are in LICENSES\MSLE-SOURCE.md and LICENSE
 Writing mods: https://github.com/StoneForgeTeam/StoneForgeDocs
 
 
+Save backups
+------------
+Before the game writes a save over an older one, or deletes one, StoneForge copies it to
+%LOCALAPPDATA%\StoneShard\StoneForge\save-backups\<character>\<time>_<save> (the newest 20 per character). Your saves are in
+%LOCALAPPDATA%\StoneShard\characters_v1\<character>\<save>. To restore a backup, close the game and copy its folder into
+its character's folder there, renamed to the save's own name (autosave_1), replacing the one that went wrong.
+After a mod's error, StoneForge also keeps the save being played (before-error_..., never deleted) and asks whether
+to leave to the main menu without saving.
+
+
 Steam updates
 -------------
 Game updates and Steam's "Verify integrity of game files" put the game's own StoneShard.exe back, which turns

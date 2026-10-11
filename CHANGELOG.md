@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- **Save backups, for every game.** Before the game writes a save over an older one, or deletes one (its oldest, making
+  room; one deleted in the save menu), that save is copied to `%LOCALAPPDATA%\StoneShard\StoneForge\save-backups\<character>\<time>_<save>`
+  - the newest 20 per character, outside the game's own save folder so neither its save menu nor Steam Cloud sees
+  them. A mod's bug or a crash mid-save can no longer take the last good save with it. A backup that fails is only
+  logged. `SaveBackups.Keep` keeps a copy that is never deleted.
+
+- **After a mod's error, the save comes first.** The first time any mod's handler throws in a game, the save being
+  played (the last one made before it) is kept as a `before-error` backup, and the game asks whether to leave to the
+  main menu without saving - the game may be off now, and a save would keep it. Once a game.
+
 - `ModContext.Failed`: a mod is told the first time each of its handlers throws (where, and the exception), after
   StoneForge has logged it and shown its error box - to look after its players' data: warn them, keep a copy of their
   save. A Failed handler that throws is only logged.

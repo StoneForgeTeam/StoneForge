@@ -365,9 +365,13 @@ internal static unsafe class Hooks
         {
             Game.Log($"[{mod}] {where} threw: {e}");
             ErrorWindows.ModFailed(mod, where, e);
-            // (The mod told too: it may look after its data.)
+            // (The mod told too - it may look after its data - and the player's save kept, and them asked: SaveGuard.)
             if (mod != "StoneForge")
+            {
                 ModContext.Find(mod)?.RaiseFailed(where, e);
+                try { SaveGuard.ModFailed(mod); }
+                catch (Exception guard) { Game.Log($"Save guard failed: {guard.Message}"); }
+            }
         }
         if (count != Math.Max(1, FailureThreshold) || mod == "StoneForge") return;
         Suspended.Add(mod);

@@ -54,6 +54,10 @@ public static unsafe class Bridge
             MainMenu.Install(loader);
             EscMenu.Install(loader);
             GameDialogs.Install(loader);
+            // (The player's saves: each backed up before it's written over or deleted; after a mod's error, kept and the
+            // player asked whether to leave without saving.)
+            SaveBackups.Install(loader);
+            SaveGuard.Install(loader);
             UIWindow.Install(loader);
             ReportWindow.Install(loader);
             // (Mods' changed settings saved each frame.)
