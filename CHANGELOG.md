@@ -1,6 +1,6 @@
 # StoneForge changes
 
-## Unreleased
+## 0.9.3 — Long MSL patches are no longer cut off
 
 - MSL patching no longer gives up after five minutes. Large packages can take an hour, so it now runs as long as the
   MSL helper keeps working (writing output or using CPU) and stops only if it makes no progress for five minutes. The
