@@ -1,6 +1,6 @@
 # StoneForge changes
 
-## Unreleased
+## 0.9.4 — Save backups
 
 - **Save backups, for every game.** Before the game writes a save over an older one, or deletes one (its oldest, making
   room; one deleted in the save menu), that save is copied to `%LOCALAPPDATA%\StoneShard\StoneForge\save-backups\<character>\<time>_<save>`
