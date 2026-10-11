@@ -1,5 +1,11 @@
 # StoneForge changes
 
+## Unreleased
+
+- `ModContext.Failed`: a mod is told the first time each of its handlers throws (where, and the exception), after
+  StoneForge has logged it and shown its error box - to look after its players' data: warn them, keep a copy of their
+  save. A Failed handler that throws is only logged.
+
 ## 0.9.3 — Long MSL patches are no longer cut off
 
 - MSL patching no longer gives up after five minutes. Large packages can take an hour, so it now runs as long as the

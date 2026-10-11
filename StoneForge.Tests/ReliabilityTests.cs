@@ -169,6 +169,41 @@ public class ReliabilityTests : FakeGame
     }
 
     [Fact]
+    public void A_mod_is_told_the_first_time_each_of_its_handlers_throws()
+    {
+        var context = new ModContext("told_mod");
+        var told = new List<(string Where, string Message)>();
+        context.Failed += (where, e) => told.Add((where, e.Message));
+        try
+        {
+            Hooks.Invoke("told_mod", "Tick", () => throw new InvalidOperationException("first"));
+            Hooks.Invoke("told_mod", "Tick", () => throw new InvalidOperationException("again"));
+            Hooks.Invoke("told_mod", "Draw", () => throw new InvalidOperationException("elsewhere"));
+            // (Another mod's failures aren't this one's.)
+            Hooks.Invoke("other_mod", "Tick", () => throw new InvalidOperationException("not ours"));
+            Assert.Equal(new[] { ("Tick", "first"), ("Draw", "elsewhere") }, told);
+        }
+        finally
+        {
+            Hooks.ResetFault("told_mod");
+            Hooks.ResetFault("other_mod");
+        }
+    }
+
+    [Fact]
+    public void A_failed_handler_that_throws_is_only_logged()
+    {
+        var context = new ModContext("told_badly");
+        context.Failed += (_, _) => throw new InvalidOperationException("handler of the handler");
+        try
+        {
+            Assert.False(Hooks.Invoke("told_badly", "Tick", () => throw new InvalidOperationException("first")));
+            Assert.True(Hooks.Invoke("told_badly", "Tick", () => true));
+        }
+        finally { Hooks.ResetFault("told_badly"); }
+    }
+
+    [Fact]
     public unsafe void Unmanaged_frame_boundary_contains_loader_exceptions()
     {
         Hooks.BeforeFrame = () => throw new InvalidOperationException("loader failure");

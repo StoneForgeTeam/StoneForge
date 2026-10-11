@@ -17,9 +17,26 @@ public sealed class ModContext
         Quests = new ModQuests(this);
         Contracts = new ModContracts(this);
         Dialogues = new ModDialogues(this);
+        Live[Id] = this;
     }
 
     private readonly ModFiles? _files;
+
+    // Each mod's context by its ID (the latest: a reloaded mod's new one) - for what reaches StoneForge by ID alone.
+    private static readonly Dictionary<string, ModContext> Live = new(StringComparer.OrdinalIgnoreCase);
+    internal static ModContext? Find(string id) => Live.GetValueOrDefault(id);
+
+    /// <summary>Runs when one of this mod's handlers has thrown - the first time each one does (where it was: "Tick",
+    /// "scr_effect_create (script after)"..., and what it threw). StoneForge has logged it and shown its error box
+    /// already; the game goes on without that handler's work. For a mod to look after its players' data: warn them,
+    /// keep a copy of their save. Game thread. A handler of this that throws is only logged.</summary>
+    public event Action<string, Exception>? Failed;
+
+    internal void RaiseFailed(string where, Exception error)
+    {
+        try { Failed?.Invoke(where, error); }
+        catch (Exception e) { Game.Log($"[{Name}] its Failed handler threw: {e}"); }
+    }
 
     // The loader's own parts and tests: known by an ID that isn't a mod's (no mod.json).
     internal ModContext(string id, string? folder = null)
