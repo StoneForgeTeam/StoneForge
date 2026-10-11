@@ -1,113 +1,97 @@
 <p align="center"><img src="branding/banner.png" alt="StoneForge - A Modloader For Stoneshard"></p>
 
-A C# mod loader for Stoneshard on Windows. Mods are source folders with a `mod.json` manifest, C# code and optional assets and GML bindings. StoneForge provides context APIs for items, consumables, buffs, skills, UI and game hooks.
+StoneForge is a mod loader for Stoneshard. Mods are written in C#, dropped into the game's `mods` folder, and switched
+on and off in game from the **Mods** button on the main menu. It also runs MSL (`.sml`) mods.
 
 ## Requirements
 
-- Stoneshard (Steam), works on both main and mod branches!.
-- The **.NET 10 Windows Desktop Runtime, x64** for all mod types, including MSL packages. The base .NET 10 Runtime is sufficient only for ordinary StoneForge mods.
-- To build: .NET 10 SDK and Visual Studio with MSBuild and C++ tools (the current native build uses toolset `v145`).
-
-StoneForge uses UndertaleModLib 0.9.2.0 and Underanalyzer directly to patch game data. Game data is read from your local install; it is not included in this repository.
+- Windows, and Stoneshard on Steam. StoneForge works on both the default branch and the modbranch.
+- The **.NET 10 Windows Desktop Runtime (x64)**. The installer tells you if it's missing.
 
 ## Install
 
-Download `StoneForge-<version>.zip` from [Releases](https://github.com/StoneForgeTeam/StoneForge/releases), or use a package you built under `artifacts/StoneForge-<version>`. Close Stoneshard, extract the release and run `Install StoneForge.cmd`. Launch the game normally afterward. Re-running the installer updates an existing installation; `Uninstall StoneForge.cmd` restores the preserved game files and keeps your mods.
+1. Download `StoneForge-<version>.zip` from [Releases](https://github.com/StoneForgeTeam/StoneForge/releases) and
+   extract it.
+2. Close Stoneshard and run **Install StoneForge.cmd**.
+3. Start the game as usual. The main menu now has a **Mods** button.
 
-Mod folders go in `<Stoneshard>/mods`. Open the in-game Mods window to enable or disable them. GML mods carry a warning: their scripts execute directly in GameMaker, outside the C# source restrictions, and need a game restart after edits.
+To update, install a newer release the same way. **Uninstall StoneForge.cmd** restores the game's own files and keeps
+your mods.
 
-## Bug reports
+Steam updates and "Verify integrity of game files" switch StoneForge off until you install it again. To have it put back
+automatically, set Stoneshard's launch options in Steam (right-click Stoneshard > Properties > General) to:
 
-Mods can opt into the Escape menu's **Report a bug** form by adding a GitHub repository to `mod.json`:
+```
+"<your Stoneshard folder>\dotnet\patcher\StoneForge.Patcher.exe" run %command%
+```
+
+## Mods
+
+Each mod is a folder in `<Stoneshard>\mods`. Open **Mods** on the main menu to enable or disable them. A mod that
+asks for full access (network, its own DLLs) only runs once you've allowed it there.
+Mods that include GML of their own only run on the modbranch.
+
+**MSL mods** (`.sml` files, modbranch only): put them straight into `<Stoneshard>\mods` and start the game. They're
+enabled by default and run unrestricted code, so only use ones you trust. No separate MSL install is needed:
+StoneForge includes MSL 0.13.2 and [MSL Enhanced](https://www.nexusmods.com/stoneshard/mods/103). If one fails to
+apply, the reason is in `<Stoneshard>\dotnet\msl-patch.log`.
+
+## Your saves
+
+Before the game writes over or deletes a save, StoneForge backs it up to
+`%LOCALAPPDATA%\StoneShard\StoneForge\save-backups\<character>\`, keeping the 20 most recent per character. If a mod
+hits an error, StoneForge also keeps a copy of the save you're playing and asks whether to quit to the main menu
+without saving.
+
+To restore a backup, close the game and copy its folder into `%LOCALAPPDATA%\StoneShard\characters_v1\<character>\`,
+renamed to the save's own name (for example `autosave_1`).
+
+## Reporting bugs
+
+Use **Report a bug** in the game's Escape menu: it can attach your recent log. Or open an issue on this repository.
+
+## Writing mods
+
+The documentation is in [StoneForgeDocs](https://github.com/StoneForgeTeam/StoneForgeDocs), and
+[ExampleMod](https://github.com/StoneForgeTeam/ExampleMod) is a complete sample. Mods can add items, consumables,
+buffs and skills; hook the game's scripts and events; build UI; and add
+[quests and contracts](https://github.com/StoneForgeTeam/StoneForgeDocs/blob/main/docs/world/quests-and-contracts.md),
+[NPC dialogues](https://github.com/StoneForgeTeam/StoneForgeDocs/blob/main/docs/ui/npc-dialogues.md) (with an in-game
+editor) and [translations](https://github.com/StoneForgeTeam/StoneForgeDocs/blob/main/docs/core/localization.md).
+
+Start with [writing a mod](https://github.com/StoneForgeTeam/StoneForgeDocs/blob/main/docs/modding/writing-a-mod.md).
+To let players report bugs for your mod from the Escape menu, add your GitHub repository to its `mod.json`:
 
 ```json
 "github": "YourAccount/YourMod"
 ```
 
-An HTTPS repository URL such as `https://github.com/YourAccount/YourMod` also works. The selector includes running, enabled C# mods with this field, plus StoneForge itself. Repository syntax is checked locally; the repository must exist and be configured to receive reports through BugDrop for submission to succeed.
+Reports are delivered through [BugDrop](https://github.com/mean-weasel/bugdrop), so the repository needs BugDrop set up
+to receive them.
 
-Reports use `https://bugdrop.neonwatty.workers.dev/api/feedback` and its supplied metadata shape: `appVersion`, `url`, `timestamp`, `browser`, `os`, `viewport`, `devicePixelRatio`, `domNodeCount`, `elementSelector`, `fullElementSelector`, `fullPageDisabled`, `language`, and `userAgent`. Versions, OS, language and physical window size are filled from the current run; timestamps use UTC with a trailing Z. Users can include up to 50 recent managed StoneForge console messages (512 characters each), bounded to 8 KiB of serialized JSON. Screenshots and attachments are empty. Description input supports multiple lines, clipboard paste, cursor movement, selection and mouse-wheel scrolling.
+## Building from source
 
-Local spam prevention allows one pending request, a 10-minute interval, 3 attempts per rolling hour and 10 per rolling day. Identical repository/title/description combinations are blocked for 24 hours, ignoring case and whitespace. Definite HTTP rejections (400, 401, 403, 404, 413, 422, 429) release the duplicate block so the corrected draft can be retried after the cooldown; the attempt still counts. Attempts, including failures and timeouts, are saved as hashes and timestamps in `dotnet/report-limits.json`; report text is not saved there. There are no automatic retries. HTTP status, service error code and bounded error text are recorded in bridge.log, without logging the report text. These client checks need corresponding BugDrop server protections to prevent bypass by other clients.
-
-## Build and test
-
-From a Visual Studio developer PowerShell:
+You need the .NET 10 SDK, Visual Studio with the C++ tools (toolset `v145`), and Stoneshard installed (the API is
+generated from your copy of the game's data). From a Visual Studio developer PowerShell:
 
 ```powershell
 msbuild StoneForge.slnx -restore -p:Configuration=Release -p:PlatformToolset=v145
 dotnet test StoneForge.Tests -c Release --no-build
-dotnet test StoneForge.Patcher.Tests -c Release --no-build
 powershell -ExecutionPolicy Bypass -File build/Package.ps1 -NoBuild
 ```
 
-The API build discovers Stoneshard through Steam. To choose another install, set `STONESHARD_DIR` or pass `-p:StoneshardDir="C:\path\to\Stoneshard"`. DataDump writes generated game metadata under `StoneForge.API/obj/GameData`. Integration tests use `STONEFORGE_TEST_DATA` or Steam's preserved `dotnet/data_base.win`; they skip when no suitable data is available.
+See [building and testing](https://github.com/StoneForgeTeam/StoneForgeDocs/blob/main/docs/development/building-and-testing.md)
+for the details.
 
-Without Stoneshard, build the API from the small stand-in data in `build/StubGameData` instead. This is what the [Tests workflow](.github/workflows/tests.yml) does on GitHub for every pull request and push to `main`:
+Without the game, the tests can run on small stand-in data, as the [Tests workflow](.github/workflows/tests.yml) does
+for every pull request: `dotnet test StoneForge.Tests -c Release -p:StoneForgeStubGameData=true`. It only holds the game
+names StoneForge itself uses, so if your change uses another one (`GameObjectId.x`, `Scripts.x`...), add it to
+`build/StubGameData`. Never package a build made this way.
 
-```powershell
-dotnet test StoneForge.Tests -c Release -p:StoneForgeStubGameData=true
-dotnet test StoneForge.Patcher.Tests -c Release
-```
-
-The stand-in holds only the game names StoneForge's own code and tests use. If you reference another generated name (`GameObjectId.x`, `Scripts.x`, `Events.x.y`, an object's variable...), add it there, or the Tests workflow fails to build. An API built this way is for testing only: never package it.
-
-Pinned native binaries and their rebuild instructions are under `lib/Aurie`, `lib/YYToolkit` and `build/BuildThirdParty.ps1`. Library provenance and checksums are under `lib/UndertaleModLib`.
-
-Publishing releases is for the StoneForgeTeam maintainers: see [RELEASING.md](RELEASING.md).
-
-## MSL packages (VM modbranch only)
-
-Drop `.sml` files directly into `<Stoneshard>/mods`, then start the game. Packages are enabled by default: only put mods you trust there. The Mods window shows their metadata and an unrestricted-code warning; untick Enabled to switch a package off on the next start. File names identify packages, so renaming a disabled package makes it a new, enabled package. Metadata is collected during patching and cached; disabled packages are not executed merely to display their details.
-
-Enabled packages run in filename order through the bundled MSL 0.13.2.0 compatibility helper, followed by StoneForge's patches. No separate MSL installation is needed. Adding, changing, disabling or removing packages rebuilds from the preserved base on the next start. Changes are not hot-reloaded. The preserved base must be clean modbranch data, not previously MSL-patched data.
-
-MSL mods execute unrestricted C# during preparation. The helper's separate process isolates its older dependencies, not its permissions. Packages depending on MSL's launcher UI or scripting server are unsupported; compatibility with individual mods still depends on the game and MSL API version. Logs are in `dotnet/msl-patch.log`. Failed patching leaves the last game data in place; do not assume a changed mod selection was applied after an error.
-
-### MSL Enhanced
-
-StoneForge includes [MSL Enhanced by Tbonex28b](https://www.nexusmods.com/stoneshard/mods/103?tab=description) in `<Stoneshard>/dotnet/msle`. No separate Enhanced installation is needed. Optional settings in `<Stoneshard>/dotnet/msl-runtime.json` can override the runtime directory and package order:
-
-```json
-{
-  "Mode": "auto",
-  "EnhancedDirectory": "msle",
-  "PackageOrder": ["ShardMaster.sml", "AmbientAnimals.sml"]
-}
-```
-
-All settings are optional. `auto` selects Enhanced when an enabled package uses its extended resource format or references MSL types/members absent from regular MSL; otherwise it uses the bundled regular helper. Set `Mode` to `enhanced` for packages whose requirements are hidden through reflection or overloads sharing existing names. `standard` forces regular MSL and refuses detected Enhanced requirements. `PackageOrder` lists filenames to run first, in that order; unlisted packages follow in filename order. Disabled packages remain disabled. Editing this file takes effect on the next start; the Mods window preserves it.
-
-The bundled Enhanced build is the supplied September 17, 2026 build, corresponding to Nexus 1.15. Its exact dependency hashes are pinned in the adapter and release packaging; see [binary provenance](lib/MSLE/README.md). Both runtimes use StoneForge's .NET 10 Windows Desktop helper; running the Enhanced launcher separately is unnecessary. The selected runtime handles the entire enabled batch in an isolated process, and its dependency hashes and package order participate in rebuild caching. Applied packages display `[MSLE]` when prepared with Enhanced.
-
-Enhanced dependency and load-order errors, resource conflicts, and logged patch/import errors stop preparation with details in `dotnet/msl-patch.log`. Separate `audiogroup*.dat` outputs, fonts and shader exports are staged and replaced with `data.win`; ordinary write failures roll back the changes. Fonts and shader exports go to the game's usual AppData `StoneShard/fonts` and `StoneShard/shaders` folders only during commit. Originals are kept in `dotnet/msl-audio-base` (including `fonts` and `shaders` subfolders) and restored when affected mods are removed or during uninstall. External resource updates become the new base. Keep these preserved files until restoration. This supports the VM modbranch; Enhanced's own YYC features and launcher UI/server features are outside this adapter's scope.
-
-## Write a StoneForge mod
-
-The documentation lives in the [StoneForgeDocs](https://github.com/StoneForgeTeam/StoneForgeDocs) repository and is published with GitBook.
-
-- [Mod manifests and content IDs](https://github.com/StoneForgeTeam/StoneForgeDocs/blob/main/docs/modding/writing-a-mod.md)
-- [GML bindings](https://github.com/StoneForgeTeam/StoneForgeDocs/blob/main/docs/modding/gml-bindings.md)
-- [API lifetime rules](https://github.com/StoneForgeTeam/StoneForgeDocs/blob/main/docs/modding/api-lifetime-rules.md)
-- [Building, testing and the developer host](https://github.com/StoneForgeTeam/StoneForgeDocs/blob/main/docs/development/building-and-testing.md)
-- [Example Mod](https://github.com/StoneForgeTeam/ExampleMod): the separate sample repository for items, buffs, skills, UI and GML.
-
-The example builds against an installed StoneForge SDK and has its own release history. See [repository layout](https://github.com/StoneForgeTeam/StoneForgeDocs/blob/main/docs/development/repositories.md) for the organization and repository boundaries.
-
-## Custom quests and contracts
-
-C# mods can register saved quests with `context.Quests.Add` and dungeon contracts with `context.Contracts.Add`. Definitions support named objectives, localized journal text, rewards and deadlines. Contracts build on a native template to retain settlement and dungeon generation, acceptance and turn-in. See [quests and contracts](https://github.com/StoneForgeTeam/StoneForgeDocs/blob/main/docs/world/quests-and-contracts.md) for examples and lifecycle rules.
-
-## Dialogues
-
-`context.Dialogues.Add` registers branching NPC conversations with localized lines, portraits, conditional player responses and callbacks. A registered dialogue can open directly or add a topic to an NPC's normal Talk conversation. See [dialogues](https://github.com/StoneForgeTeam/StoneForgeDocs/blob/main/docs/ui/npc-dialogues.md). Conversations use Stoneshard's native dialogue window and return to the NPC's original topics when finished. Before entering the game, open **Mods**, select your mod and toggle **Enable dev**. Right-click NPC text or a response and choose **Edit text** to edit in place; **Enter** saves and **Escape** cancels. Response menus also offer **Move up/down**. Edits live in that mod's `Dialogue/npc_<id>.json` and load with the mod. Only one mod can have dev enabled. **Ctrl+F8** opens the full editor for adding topics and resetting edits.
-
-## Localization
-
-StoneForge's interface uses a built-in US English (`en-US`) catalog and follows the game's selected language with English fallback. C# mods can provide `Localization/<language>.json` files and use `context.Localization.Get("key", arguments)` and `TranslationsChanged` or UI bindings to refresh their UI. See [localization documentation](https://github.com/StoneForgeTeam/StoneForgeDocs/blob/main/docs/core/localization.md) for formatting, fallback and examples. Only US English is included in this release.
+Releases are published by the maintainers ([RELEASING.md](RELEASING.md)).
 
 ## License
 
-StoneForge's source license is in [LICENSE](LICENSE). Native components and game-data libraries have their own licenses and provenance in `lib/`; release notices are in [THIRD-PARTY.txt](build/release/LICENSES/THIRD-PARTY.txt). Stoneshard and its game data belong to their respective owners.
-
-See [CHANGELOG.md](CHANGELOG.md) for the development history and compatibility changes.
+StoneForge's license is in [LICENSE](LICENSE). Bundled third-party components have their own licenses, listed in
+[THIRD-PARTY.txt](build/release/LICENSES/THIRD-PARTY.txt). Stoneshard and its game data belong to their respective
+owners. See [CHANGELOG.md](CHANGELOG.md) for what's changed in each version.
