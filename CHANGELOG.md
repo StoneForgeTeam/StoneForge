@@ -1,6 +1,6 @@
 # StoneForge changes
 
-## Unreleased
+## 0.9.5 — Number settings
 
 - **Number settings.** `context.Settings.Number(key, label, default, min, max)` is a whole number typed into a text
   box on the mod's page - digits only, kept between its min and max - for values typed exactly, like a port.
