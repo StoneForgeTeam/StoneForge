@@ -45,6 +45,11 @@ public sealed class ModSettings
     public SliderSetting Slider(string key, string label, double defaultValue, double min = 0, double max = 1, double step = 0, string? tooltip = null)
         => Declare(key, () => new SliderSetting(this, key, label, defaultValue, min, max, step, tooltip));
 
+    /// <summary>A whole number from <paramref name="min"/> to <paramref name="max"/>, typed: a text box that takes digits
+    /// only.</summary>
+    public NumberSetting Number(string key, string label, int defaultValue, int min = 0, int max = int.MaxValue, string? tooltip = null)
+        => Declare(key, () => new NumberSetting(this, key, label, defaultValue, min, max, tooltip));
+
     /// <summary>One of <paramref name="options"/>: a dropdown. Its value is the chosen one's index.</summary>
     public ChoiceSetting Choice(string key, string label, IReadOnlyList<string> options, int defaultIndex = 0, string? tooltip = null)
         => Declare(key, () => new ChoiceSetting(this, key, label, options.ToArray(), defaultIndex, tooltip));

@@ -45,6 +45,33 @@ internal static class SettingsPage
                     control.Changed += index => choice.Value = index;
                     break;
                 }
+                case NumberSetting number:
+                {
+                    // (Digits only - and a minus, if it can be below 0. Typed past its Max, it's its Max; below its Min
+                    // or empty - as one's typed - it's left as it was, and Enter shows what it is.)
+                    var row = Row(page, number);
+                    int digits = Math.Max(number.Min.ToString().Length, number.Max.ToString().Length);
+                    var control = row.Add(new UITextBox(ControlX, 0, ControlWidth, number.Value.ToString())
+                    {
+                        MaxLength = digits,
+                        Accepts = c => char.IsDigit(c) || (c == '-' && number.Min < 0),
+                        Tooltip = number.Tooltip,
+                    });
+                    control.TextChanged += typed =>
+                    {
+                        if (!long.TryParse(typed, out long value))
+                            return;
+                        if (value > number.Max)
+                        {
+                            number.Value = number.Max;
+                            control.Text = number.Max.ToString();
+                        }
+                        else if (value >= number.Min)
+                            number.Value = (int)value;
+                    };
+                    control.Submitted += _ => control.Text = number.Value.ToString();
+                    break;
+                }
                 case TextSetting text:
                 {
                     var row = Row(page, text);

@@ -1,5 +1,11 @@
 # StoneForge changes
 
+## Unreleased
+
+- **Number settings.** `context.Settings.Number(key, label, default, min, max)` is a whole number typed into a text
+  box on the mod's page - digits only, kept between its min and max - for values typed exactly, like a port.
+  `UITextBox.Accepts` lets any text box take only some characters (typed or pasted).
+
 ## 0.9.4 — Save backups
 
 - **Save backups, for every game.** Before the game writes a save over an older one, or deletes one (its oldest, making

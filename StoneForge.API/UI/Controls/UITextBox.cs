@@ -28,6 +28,9 @@ public class UITextBox : UIElement
     /// <summary>Shown (dimmed) while it's empty and not being typed in.</summary>
     public string Placeholder { get; set; } = "";
     public int MaxLength { get; set; } = 64;
+    /// <summary>Which characters can be typed or pasted in (null: any) - <c>char.IsDigit</c> for a number. Others are
+    /// left out as they come.</summary>
+    public Func<char, bool>? Accepts { get; set; }
     /// <summary>Wraps text across multiple lines. Enter inserts a newline; arrow keys move between lines.</summary>
     public bool Multiline { get; set; }
     private int _firstLine;
@@ -127,7 +130,9 @@ public class UITextBox : UIElement
             {
                 string suffix = _text[_caret..];
                 int room = Math.Max(0, MaxLength - suffix.Length);
-                string prefix = typed[..Math.Min(typed.Length, room)];
+                // (What it doesn't accept left out - the keyboard's buffer is set back to what's kept: SyncInput.)
+                string accepted = Accepts is { } accepts ? new string(typed.Where(accepts).ToArray()) : typed;
+                string prefix = accepted[..Math.Min(accepted.Length, room)];
                 Change(prefix + suffix, prefix.Length);
             }
         }
@@ -166,6 +171,7 @@ public class UITextBox : UIElement
     {
         text = text.Replace("\r\n", "\n").Replace('\r', '\n');
         if (!Multiline) text = text.Replace('\n', ' ');
+        if (Accepts is { } accepts) text = new string(text.Where(accepts).ToArray());
         int start = SelectionStart, length = SelectionLength;
         int room = Math.Max(0, MaxLength - (_text.Length - length));
         text = text[..Math.Min(text.Length, room)];
