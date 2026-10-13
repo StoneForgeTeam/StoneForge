@@ -26,6 +26,7 @@ object	24	o_cursorController
 object	25	o_cutscene_controller
 object	26	o_exit_confirm_panel
 object	27	o_contract_button
+object	28	o_skill_passive
 sprite	0	s_checkbox
 sprite	1	s_gui_arrow_down
 sprite	2	s_gui_arrow_up
