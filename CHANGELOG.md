@@ -1,6 +1,6 @@
 # StoneForge changes
 
-## Unreleased
+## 0.9.9 — Removed units take their passive skills
 
 - **Fixed: `Units.Remove` left the unit's passive skills behind.** It skips the unit's Destroy event, which is what
   destroys them; left, each reads its owner every turn, and the game stopped on the one that's gone ("REAL argument
