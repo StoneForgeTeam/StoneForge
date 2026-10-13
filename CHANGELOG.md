@@ -1,6 +1,6 @@
 # StoneForge changes
 
-## Unreleased
+## 0.9.8 — Destroyed nested maps and lists
 
 - **Fixed: `DsMap` / `DsList` read into a nested map or list the game had destroyed under its mark.** The game destroys
   some maps and lists it nests and leaves the key or slot marked as one. `IsMap` / `IsList` / `GetMap` / `GetList` now
