@@ -1,6 +1,6 @@
 # StoneForge changes
 
-## Unreleased
+## 0.9.7 — Start-up without C# mods
 
 - **Fixed: the game crashed on start with no C# mods** - an empty mods folder, or only .sml mods. With no mod folders
   to load, start-up counted as finished at once, and what waits for it (the check on unloaded mods' items, the report
