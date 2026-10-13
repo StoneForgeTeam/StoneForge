@@ -99,8 +99,8 @@ internal static class ModManager
             _compiles[i] = previous.ContinueWith(_ => CompileAtStart(index), TaskScheduler.Default);
             previous = _compiles[i];
         }
-        if (_folders.Count == 0)
-            Startup.Finish(LoadedCount, 0);
+        // (None to load - an empty mods folder, or only .sml files: start-up still finishes in LoadCompiled, past its
+        // first frames. Finished here, the game was touched while the runner was still starting, and crashed.)
     }
 
     /// <summary>Switches a mod (by its ID) on or off from the next frame (and for the next start - ModRegistry).</summary>

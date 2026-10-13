@@ -1,5 +1,12 @@
 # StoneForge changes
 
+## Unreleased
+
+- **Fixed: the game crashed on start with no C# mods** - an empty mods folder, or only .sml mods. With no mod folders
+  to load, start-up counted as finished at once, and what waits for it (the check on unloaded mods' items, the report
+  window) touched the game in its first frames, while the runner was still starting. Start-up now finishes past those
+  frames, as it does with mods to load.
+
 ## 0.9.6 — Lost array references refused
 
 - **A game array or struct the bridge no longer holds is refused, not passed on as undefined.** A mod's `GmArray` /
