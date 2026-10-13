@@ -1,5 +1,16 @@
 # StoneForge changes
 
+## 0.9.6 — Lost array references refused
+
+- **A game array or struct the bridge no longer holds is refused, not passed on as undefined.** A mod's `GmArray` /
+  `GmStruct` goes back to the game by an id the bridge keeps; one it had let go of reached the game as `undefined`, and
+  a built-in given it - `array_get` - raised an error inside the mod's call ("array_get :: Index [1] out of range [0]").
+  That left the game's own error handling broken: the next array access anywhere crashed the game (StoneshardMP's
+  crashes on arriving where another player was). The call now fails with a `GameCallException` naming the lost
+  reference, and the game is never called with it.
+- `dotnet\bridge.log` says when the bridge drops the references it holds (its root, `global.__stoneforge_refs`, gone or
+  replaced) and when a lost one is passed in, to track down why.
+
 ## 0.9.5 — Number settings
 
 - **Number settings.** `context.Settings.Number(key, label, default, min, max)` is a whole number typed into a text

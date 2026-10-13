@@ -139,6 +139,10 @@ static CInstance* GlobalInstance()
 static std::unordered_map<int64_t, RValue> g_Refs;
 static int64_t g_NextRef = 1;
 static RValue g_RefRoot;
+// A reference C# passed in that isn't held here (let go of, or dropped with an old root) - the call it was for is
+// refused: handed to the game as undefined, a built-in raised an error inside our call ("array_get :: Index [1] out of
+// range [0]"), which left the game's own error handling broken - the next array access anywhere crashed it.
+static thread_local int64_t t_LostRef = 0;
 
 static RValue CallGame(const char* Name, std::vector<RValue> Args)
 {
@@ -157,8 +161,11 @@ static bool RefRoot()
 	if (root.m_Kind != VALUE_OBJECT)
 		return false;
 	CallGame("variable_global_set", { RValue(std::string_view("__stoneforge_refs")), root });
+	// (Whatever the old root held went with it - logged: every array or struct C# still holds is lost.)
+	if (g_RefRoot.m_Kind == VALUE_OBJECT || !g_Refs.empty())
+		Log("References: global.__stoneforge_refs " + std::string(current.m_Kind == VALUE_OBJECT ? "was another struct" : "was gone")
+			+ " - a new root made, " + std::to_string(g_Refs.size()) + " array/struct reference(s) C# held dropped");
 	g_RefRoot = root;
-	// (Whatever the old root held went with it.)
 	g_Refs.clear();
 	return true;
 }
@@ -199,7 +206,10 @@ static RValue ToRValue(const NValue& V)
 	case 8:
 	{
 		auto found = g_Refs.find(static_cast<int64_t>(V.Real));
-		return found != g_Refs.end() ? found->second : RValue();
+		if (found != g_Refs.end())
+			return found->second;
+		t_LostRef = static_cast<int64_t>(V.Real);
+		return RValue();
 	}
 	case 13: return RValue(V.Real != 0.0);
 	default: return RValue();
@@ -288,8 +298,24 @@ static void FromRValueKept(const RValue& R, NValue& Out, std::vector<std::string
 	FromRValue(R, Out);
 }
 
+// Whether a reference C# passed in was lost (ToRValue): the call is refused, saying so (Game.CallFailed).
+static bool LostRef(const char* Name)
+{
+	if (t_LostRef == 0)
+		return false;
+	static std::unordered_set<int64_t> logged;
+	if (logged.insert(t_LostRef).second)
+		Log(std::string("References: ") + Name + " was passed array/struct reference " + std::to_string(t_LostRef)
+			+ ", which isn't held any more - refused");
+	t_LastError = std::string(Name) + ": an array or struct passed in (reference " + std::to_string(t_LostRef)
+		+ ") is no longer held - not called";
+	t_LostRef = 0;
+	return true;
+}
+
 static std::vector<RValue> ToArgs(const NValue* Args, int Count)
 {
+	t_LostRef = 0;
 	std::vector<RValue> args;
 	for (int i = 0; i < Count; i++)
 		args.push_back(ToRValue(Args[i]));
@@ -365,7 +391,10 @@ static int ApiCallBuiltin(const char* Name, void* Self, void* Other, const NValu
 	// corrupts the heap.)
 	CInstance* self = Self ? static_cast<CInstance*>(Self) : GlobalInstance();
 	CInstance* other = Other ? static_cast<CInstance*>(Other) : self;
-	AurieStatus st = g_Yytk->CallBuiltinEx(result, Name, self, other, ToArgs(Args, ArgCount));
+	std::vector<RValue> args = ToArgs(Args, ArgCount);
+	if (LostRef(Name))
+		return 0;
+	AurieStatus st = g_Yytk->CallBuiltinEx(result, Name, self, other, std::move(args));
 	FromRValue(result, *Result);
 	return CallStatus(st, Name);
 }
@@ -377,7 +406,10 @@ static int ApiCallScript(const char* Name, void* Self, void* Other, const NValue
 	RValue result;
 	CInstance* self = Self ? static_cast<CInstance*>(Self) : GlobalInstance();
 	CInstance* other = Other ? static_cast<CInstance*>(Other) : self;
-	AurieStatus st = g_Yytk->CallGameScriptEx(result, Name, self, other, ToArgs(Args, ArgCount));
+	std::vector<RValue> args = ToArgs(Args, ArgCount);
+	if (LostRef(Name))
+		return 0;
+	AurieStatus st = g_Yytk->CallGameScriptEx(result, Name, self, other, std::move(args));
 	FromRValue(result, *Result);
 	return CallStatus(st, Name);
 }
@@ -504,7 +536,10 @@ static int ApiSetVar(void* Instance, const char* Name, const NValue* Value)
 	CInstance* inst = Instance ? static_cast<CInstance*>(Instance) : GlobalInstance();
 	if (!inst)
 		return 0;
+	t_LostRef = 0;
 	RValue value = ToRValue(*Value);
+	if (LostRef(Name))
+		return 0;
 	if (IsBuiltin(Name))
 	{
 		if (!Instance && IsInstanceBuiltin(Name))
@@ -543,7 +578,10 @@ static int ApiSetVarAt(void* Instance, const char* Name, int Index, const NValue
 {
 	if (!RequireGameThread() || !Instance || Index < 0 || !IsBuiltin(Name))
 		return 0;
+	t_LostRef = 0;
 	RValue value = ToRValue(*Value);
+	if (LostRef(Name))
+		return 0;
 	return SetBuiltinValue(Name, static_cast<CInstance*>(Instance), Index, value) ? 1 : 0;
 }
 
