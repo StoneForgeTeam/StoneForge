@@ -31,8 +31,9 @@ public readonly struct DsList : IEquatable<DsList>
         get => Game.CallBuiltin("ds_list_find_value", Id, index);
         set
         {
-            // (A nested one's mark goes with its slot: the slot goes, and the value goes in in its place.)
-            if (IsMap(index) || IsList(index))
+            // (A nested one's mark goes with its slot - a mark left over one that's gone too: the slot goes, and the value
+            // goes in in its place.)
+            if (KindAt(index, Count) is DsMap.Type or Type or DsMap.Gone)
             {
                 DestroyAt(index);
                 Put(index, value, 0);
@@ -61,10 +62,10 @@ public readonly struct DsList : IEquatable<DsList>
     }
 
     /// <summary>Whether an element is a nested map (ds_list_is_map: marked as one).</summary>
-    public bool IsMap(int index) => index >= 0 && index < Count && Game.CallBuiltin("ds_list_is_map", Id, index).AsBool;
+    public bool IsMap(int index) => index >= 0 && KindAt(index, Count) == DsMap.Type;
 
     /// <summary>Whether an element is a nested list (ds_list_is_list: marked as one).</summary>
-    public bool IsList(int index) => index >= 0 && index < Count && Game.CallBuiltin("ds_list_is_list", Id, index).AsBool;
+    public bool IsList(int index) => index >= 0 && KindAt(index, Count) == Type;
 
     /// <summary>The nested map at an index, or null if there's none.</summary>
     public DsMap? GetMap(int index) => IsMap(index) ? new DsMap(this[index].AsInt) : null;
@@ -147,9 +148,15 @@ public readonly struct DsList : IEquatable<DsList>
     public void Destroy() => Game.CallBuiltin("ds_list_destroy", Id);
 
     // An element's kind: 0 a value, DsMap.Type a nested map, Type a nested list, -1 past the end.
+    // (Marked as nested, but it's been destroyed: DsMap.Gone - a plain value, never read into, and replaced anew.)
     private int KindAt(int index, int count)
-        => index >= count ? -1 : Game.CallBuiltin("ds_list_is_map", Id, index).AsBool ? DsMap.Type
+    {
+        if (index >= count)
+            return -1;
+        int kind = Game.CallBuiltin("ds_list_is_map", Id, index).AsBool ? DsMap.Type
             : Game.CallBuiltin("ds_list_is_list", Id, index).AsBool ? Type : 0;
+        return kind == 0 || Game.CallBuiltin("ds_exists", this[index], kind).AsBool ? kind : DsMap.Gone;
+    }
 
     // Puts a value in at index (the ones from it on moving down; at Count, at the end), marked as a nested map or list
     // (mark: DsMap.Type / Type; 0 none).

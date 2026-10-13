@@ -1,5 +1,13 @@
 # StoneForge changes
 
+## Unreleased
+
+- **Fixed: `DsMap` / `DsList` read into a nested map or list the game had destroyed under its mark.** The game destroys
+  some maps and lists it nests and leaves the key or slot marked as one. `IsMap` / `IsList` / `GetMap` / `GetList` now
+  say no for those, and `AssignFrom` (and setting the key or slot) replaces them anew instead of copying into them -
+  which was an error in the game inside the call ("Packet receive failed: SEHException ... DsMap.AssignFrom" in
+  StoneshardMP, entering the caravan camp), leaving the game's error handling broken.
+
 ## 0.9.7 — Start-up without C# mods
 
 - **Fixed: the game crashed on start with no C# mods** - an empty mods folder, or only .sml mods. With no mod folders

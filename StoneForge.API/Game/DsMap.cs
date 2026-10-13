@@ -31,7 +31,8 @@ public readonly struct DsMap : IEquatable<DsMap>
         get => Game.CallBuiltin("ds_map_find_value", Id, key);
         set
         {
-            if (IsMap(key) || IsList(key))
+            // (A nested one - or a mark left over a map or list that's gone: the key goes, so its mark does.)
+            if (KindOf(key) != 0)
                 Remove(key);
             Game.CallBuiltin("ds_map_set", Id, key, value);
         }
@@ -47,7 +48,7 @@ public readonly struct DsMap : IEquatable<DsMap>
     /// owned by nothing).</summary>
     public void Remove(GmValue key)
     {
-        int kind = IsMap(key) ? Type : IsList(key) ? DsList.Type : 0;
+        int kind = KindOf(key);
         GmValue value = this[key];
         Game.CallBuiltin("ds_map_delete", Id, key);
         DestroyNested(kind, value);
@@ -73,11 +74,24 @@ public readonly struct DsMap : IEquatable<DsMap>
         }
     }
 
-    /// <summary>Whether a key holds a nested map (ds_map_is_map: marked as one).</summary>
-    public bool IsMap(GmValue key) => Has(key) && Game.CallBuiltin("ds_map_is_map", Id, key).AsBool;
+    /// <summary>Whether a key holds a nested map (ds_map_is_map: marked as one - and the map's still there).</summary>
+    public bool IsMap(GmValue key) => KindOf(key) == Type;
 
-    /// <summary>Whether a key holds a nested list (ds_map_is_list: marked as one).</summary>
-    public bool IsList(GmValue key) => Has(key) && Game.CallBuiltin("ds_map_is_list", Id, key).AsBool;
+    /// <summary>Whether a key holds a nested list (ds_map_is_list: marked as one - and the list's still there).</summary>
+    public bool IsList(GmValue key) => KindOf(key) == DsList.Type;
+
+    // What a key holds: a nested map (Type), a nested list (DsList.Type), neither (0) - or Gone: marked as one, but it's
+    // been destroyed (the game destroys some it nests and leaves the mark). Read into, a gone one is an error in the game,
+    // inside our call, and that leaves the game's own error handling broken.
+    internal const int Gone = -2;
+    private int KindOf(GmValue key)
+    {
+        if (!Has(key))
+            return 0;
+        int kind = Game.CallBuiltin("ds_map_is_map", Id, key).AsBool ? Type
+            : Game.CallBuiltin("ds_map_is_list", Id, key).AsBool ? DsList.Type : 0;
+        return kind == 0 || Game.CallBuiltin("ds_exists", this[key], kind).AsBool ? kind : Gone;
+    }
 
     /// <summary>The nested map in a key, or null if it holds none.</summary>
     public DsMap? GetMap(GmValue key) => IsMap(key) ? new DsMap(this[key].AsInt) : null;

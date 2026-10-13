@@ -187,6 +187,29 @@ public class DsTests : FakeGame
     }
 
     [Fact]
+    public void A_nested_map_or_list_destroyed_under_its_mark_is_a_plain_value_and_replaced()
+    {
+        // (The game destroys some maps and lists it nests and leaves the mark: read into, that's an error in the game.)
+        var target = DsMap.FromJson("""{"camp":{"coop":1},"tents":[{"a":1},[2]]}""")!.Value;
+        target.GetMap("camp")!.Value.Destroy();
+        var tents = target.GetList("tents")!.Value;
+        tents.GetMap(0)!.Value.Destroy();
+        tents.GetList(1)!.Value.Destroy();
+        Assert.False(target.IsMap("camp"));
+        Assert.Null(target.GetMap("camp"));
+        Assert.False(tents.IsMap(0));
+        Assert.False(tents.IsList(1));
+        var source = DsMap.FromJson("""{"camp":{"coop":2},"tents":[{"a":3},[4]]}""")!.Value;
+
+        target.AssignFrom(source);
+
+        Assert.Equal(2, target.GetMap("camp")!.Value["coop"].AsInt);
+        Assert.Equal(3, tents.GetMap(0)!.Value["a"].AsInt);
+        Assert.Equal(4, tents.GetList(1)!.Value[0].AsInt);
+        source.Destroy();
+    }
+
+    [Fact]
     public void AssignFrom_remakes_a_slot_whose_kind_changes()
     {
         var target = DsMap.FromJson("""{"a":{"x":1},"b":[1],"c":5,"d":{"y":1}}""")!.Value;
