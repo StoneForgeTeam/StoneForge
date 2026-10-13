@@ -136,7 +136,7 @@ public static class Units
     }
 
     /// <summary>Takes a unit out of the world quietly: out of the grids, the player's list of units to run each turn and
-    /// its faction's list, the effects on it with it (<see cref="UnitEffects.RemoveAll"/>), then destroyed without its Destroy event - no
+    /// its faction's list, the effects on it and its passive skills with it (<see cref="UnitEffects.RemoveAll"/>), then destroyed without its Destroy event - no
     /// loot, corpse or kill credit. The other units' references to it (their target, who last hit them...) are cleared:
     /// their AI would read a unit that's gone.</summary>
     public static void Remove(Instance unit)
@@ -160,10 +160,16 @@ public static class Units
         // faction look for their enemies there, and would read a unit that's gone.)
         Factions.Leave(unit);
         UnitEffects.RemoveAll(unit);
+        // (Its passive skills - o_enemy's Destroy event, skipped below, destroys them: left, each reads its owner every turn
+        // - a hive's its health - and the game stops on a unit that's gone.)
+        int id = unit.Id;
+        foreach (Instance skill in Instances.All(GameObjectId.o_skill_passive))
+            if (skill.Exists && Instance.Of(skill.Get("owner")) is { IsNone: false } owner && owner.Id == id)
+                skill.Destroy();
         unit.Destroy(runDestroyEvent: false);
         // (The others' references to it go too: a unit's AI reads its target - and who last hit it... - and one left
         // naming a destroyed unit crashes the game.)
-        int gone = unit.Id;
+        int gone = id;
         foreach (Instance other in Instances.All(GameObjectId.o_unit))
             ClearReferences(other, named => named.Id == gone);
     }

@@ -1,5 +1,12 @@
 # StoneForge changes
 
+## Unreleased
+
+- **Fixed: `Units.Remove` left the unit's passive skills behind.** It skips the unit's Destroy event, which is what
+  destroys them; left, each reads its owner every turn, and the game stopped on the one that's gone ("REAL argument
+  incorrect type undefined" in o_enemy_pass_hive - an orchard's beehive, removed from a StoneshardMP follower's game).
+  They're destroyed with it now.
+
 ## 0.9.8 — Destroyed nested maps and lists
 
 - **Fixed: `DsMap` / `DsList` read into a nested map or list the game had destroyed under its mark.** The game destroys
