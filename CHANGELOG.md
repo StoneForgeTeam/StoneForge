@@ -1,6 +1,6 @@
 # StoneForge changes
 
-## Unreleased
+## 0.9.11 — Mixed MSL passes fixed
 
 - **Fixed: mixing standard and MSL Enhanced mods failed in the second pass** ("Cannot add the event Create_0 in
   o_msl_timer since it already exists"). MSL's one-time additions - its log objects, loot scripts, disclaimer room and
