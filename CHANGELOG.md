@@ -1,5 +1,13 @@
 # StoneForge changes
 
+## Unreleased
+
+- **Fixed: a standard MSL mod failed beside one needing MSL Enhanced** ("Could not load type
+  'ModShardLauncher.LocalizationWeaponText'" - katana with an MSLE mod). One package needing MSL Enhanced put every
+  package on it, and MSL Enhanced lacks some of standard MSL's types. The packages now run in passes: those standard
+  MSL can run first, on the game's data, then those needing MSL Enhanced on that output. `msl-runtime.json`'s Mode
+  `enhanced` still puts them all on MSL Enhanced, in one pass.
+
 ## 0.9.9 — Removed units take their passive skills
 
 - **Fixed: `Units.Remove` left the unit's passive skills behind.** It skips the unit's Destroy event, which is what

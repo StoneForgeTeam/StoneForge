@@ -3,7 +3,12 @@ using System.Text.Json;
 
 namespace StoneForge.Patcher;
 
-internal sealed record SmlRuntimeSelection(bool Enhanced, string? Directory, Dictionary<string, string> Files, string[]? PackageOrder = null)
+// Enhanced: an MSL Enhanced pass is needed. NeedsEnhanced: the packages (by path) that can't run on standard MSL - the
+// others run on it first, in their own pass, and these on MSL Enhanced after, on its output (a mix of the two kinds used
+// to put every package on MSL Enhanced, where a standard one's types - LocalizationWeaponText - don't exist). Forced:
+// msl-runtime.json's Mode "enhanced" - every package on it, in one pass.
+internal sealed record SmlRuntimeSelection(bool Enhanced, string? Directory, Dictionary<string, string> Files, string[]? PackageOrder = null,
+    HashSet<string>? NeedsEnhanced = null, bool Forced = false)
 {
     internal const string ConfigFile = "msl-runtime.json";
     private sealed record Settings(string Mode = "auto", string? EnhancedDirectory = null, string[]? PackageOrder = null);
@@ -21,7 +26,9 @@ internal sealed record SmlRuntimeSelection(bool Enhanced, string? Directory, Dic
             order.Distinct(StringComparer.OrdinalIgnoreCase).Count() != order.Length))
             throw new InvalidDataException("msl-runtime.json PackageOrder must contain unique .sml filenames.");
         string baseline = Path.Combine(SmlPatches.HostDirectory, "ModShardLauncher.dll");
-        bool required = enabled.Any(p => SmlPackageInspection.RequiresEnhanced(SmlPackageInspection.Read(p.Path), baseline));
+        var needs = enabled.Where(p => SmlPackageInspection.RequiresEnhanced(SmlPackageInspection.Read(p.Path), baseline))
+            .Select(p => p.Path).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        bool required = needs.Count > 0;
         if (required && mode == "standard") throw new InvalidOperationException("An enabled package requires MSL Enhanced, but msl-runtime.json selects standard MSL.");
         if (!required && mode != "enhanced") return new(false, null, new(), settings.PackageOrder);
         string directory = Path.GetFullPath(settings.EnhancedDirectory ?? "msle", game.Dotnet);
@@ -44,11 +51,29 @@ internal sealed record SmlRuntimeSelection(bool Enhanced, string? Directory, Dic
             .Concat(new[] { "win", "win-x64" }.Select(rid => Path.Combine(directory, "runtimes", rid))
                 .Where(System.IO.Directory.Exists).SelectMany(p => System.IO.Directory.EnumerateFiles(p, "*", SearchOption.AllDirectories)))
             .OrderBy(p => p, StringComparer.Ordinal).ToDictionary(p => Path.GetRelativePath(directory, p), Hash);
-        return new(true, directory, files, settings.PackageOrder);
+        return new(true, directory, files, settings.PackageOrder, needs, Forced: mode == "enhanced");
+    }
+
+    /// <summary>The runs of the MSL helper, in order, each with its runtime and its packages (enabled, in order): standard
+    /// MSL's first, on the game's own data, then MSL Enhanced's on that output. One run if one runtime does for all.</summary>
+    internal List<SmlPass> Passes(IEnumerable<SmlPackage> ordered)
+    {
+        var enabled = ordered.Where(p => p.Enabled).ToList();
+        if (!Enhanced)
+            return new() { new(this, enabled) };
+        if (Forced || NeedsEnhanced == null || enabled.All(p => NeedsEnhanced.Contains(p.Path)))
+            return new() { new(this, enabled) };
+        var standard = this with { Enhanced = false, Directory = null, Files = new() };
+        return new()
+        {
+            new(standard, enabled.Where(p => !NeedsEnhanced.Contains(p.Path)).ToList()),
+            new(this, enabled.Where(p => NeedsEnhanced.Contains(p.Path)).ToList()),
+        };
     }
 
     internal string Key => (Enhanced ? "enhanced|" : "standard|") + string.Join("|", Files.Select(p => p.Key + ":" + p.Value))
-        + "|order:" + string.Join(",", PackageOrder ?? Array.Empty<string>());
+        + "|order:" + string.Join(",", PackageOrder ?? Array.Empty<string>())
+        + (Forced ? "|forced" : "|enhanced-only:" + string.Join(",", (NeedsEnhanced ?? new()).Select(Path.GetFileName).Order(StringComparer.OrdinalIgnoreCase)));
     internal List<SmlPackage> OrderPackages(IEnumerable<SmlPackage> packages)
     {
         var positions = (PackageOrder ?? Array.Empty<string>()).Select((name, index) => (name, index))
