@@ -1,6 +1,6 @@
 # StoneForge changes
 
-## Unreleased
+## 0.9.10 — Standard and Enhanced MSL mods together
 
 - **Fixed: a standard MSL mod failed beside one needing MSL Enhanced** ("Could not load type
   'ModShardLauncher.LocalizationWeaponText'" - katana with an MSLE mod). One package needing MSL Enhanced put every
