@@ -60,7 +60,7 @@ internal static class SmlPatches
                     continue;
                 string passWork = Path.Combine(work, "pass" + i);
                 Directory.CreateDirectory(passWork);
-                input = RunPass(game, passes[i], input, passWork, audio, log, metadata);
+                input = RunPass(game, passes[i], input, passWork, audio, log, metadata, continuation: i > 0);
             }
             PatcherConsole.Log("MSL: Checking patched game data...");
             using var stream = File.OpenRead(input);
@@ -70,8 +70,9 @@ internal static class SmlPatches
     }
 
     // One run of the MSL helper: its packages, on its runtime, applied to input - the patched data's path.
+    // continuation: input was patched by MSL already (an earlier pass) - its one-time additions are there.
     private static string RunPass(GameFolder game, SmlPass pass, string input, string work, SmlAudioFiles audio,
-        StreamWriter log, Dictionary<string, SmlMetadata> metadata)
+        StreamWriter log, Dictionary<string, SmlMetadata> metadata, bool continuation)
     {
         var runtime = pass.Runtime;
         string host = Path.Combine(runtime.Stage(work), "StoneForge.MslHost.exe");
@@ -91,7 +92,7 @@ internal static class SmlPatches
         string output = Path.Combine(work, "patched.win");
         string request = Path.Combine(work, "request.json");
         string details = Path.Combine(work, "metadata.json");
-        File.WriteAllText(request, JsonSerializer.Serialize(new { Input = input, Output = output, Packages = copies, Metadata = details, Enhanced = runtime.Enhanced }));
+        File.WriteAllText(request, JsonSerializer.Serialize(new { Input = input, Output = output, Packages = copies, Metadata = details, Enhanced = runtime.Enhanced, Continuation = continuation }));
         var start = new ProcessStartInfo(host) { UseShellExecute = false, CreateNoWindow = true,
             WorkingDirectory = work, RedirectStandardOutput = true, RedirectStandardError = true };
         start.ArgumentList.Add(request);

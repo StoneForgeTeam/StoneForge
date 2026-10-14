@@ -20,6 +20,10 @@ try
     string input = root.GetProperty("Input").GetString()!;
     string output = root.GetProperty("Output").GetString()!;
     bool enhanced = root.TryGetProperty("Enhanced", out var selected) && selected.GetBoolean();
+    // (A later pass, on data an earlier pass's MSL patched: MSL's one-time additions - its log objects, loot scripts,
+    // disclaimer room and mods menu - are there already; added again, MSL stops: "Cannot add the event Create_0 in
+    // o_msl_timer since it already exists".)
+    bool continuation = root.TryGetProperty("Continuation", out var continued) && continued.GetBoolean();
     StoneForge.MslHost.EnhancedSupport.ResolveDependencies();
     if (Path.GetFullPath(input).Equals(Path.GetFullPath(output), StringComparison.OrdinalIgnoreCase))
         throw new InvalidOperationException("MSL output must be separate from the preserved base.");
@@ -69,16 +73,22 @@ try
             Version = ReadDetail(() => mod.Version), Description = ReadDetail(() => mod.Description), Runtime = enhanced ? "MSLE" : "MSL"
         };
     }
-    LogUtils.InjectLog();
+    if (continuation && DataLoader.data.GameObjects.ByName("o_msl_log") != null)
+        Console.WriteLine("MSL: Log objects already added by the earlier pass.");
+    else
+        LogUtils.InjectLog();
     Console.WriteLine("MSL: Applying mod patches...");
     if (enhanced) StoneForge.MslHost.EnhancedSupport.CheckConflicts(modList);
     if (enhanced && failures.Count > 0) throw new InvalidOperationException("MSL Enhanced dependency/resource checks reported errors. See the preceding log.");
-    if (enhanced) StoneForge.MslHost.EnhancedSupport.PatchMods(modList, output, failures);
+    if (enhanced) StoneForge.MslHost.EnhancedSupport.PatchMods(modList, output, failures, continuation);
     else ModLoader.PatchMods();
     if (enhanced && failures.Count > 0)
         throw new InvalidOperationException("MSL Enhanced reported patch/resource errors. See the preceding log; game files were not replaced.");
     Console.WriteLine("MSL: Finalizing loot and script ordering...");
-    LootUtils.InjectLootScripts();
+    if (continuation && DataLoader.data.Code.ByName("gml_GlobalScript_scr_msl_resolve_items") != null)
+        Console.WriteLine("MSL: Loot scripts already added by the earlier pass - this pass's loot tables aren't added again.");
+    else
+        LootUtils.InjectLootScripts();
     StoneForge.MslHost.CodeOrdering.Normalize(DataLoader.data.Code);
     Console.WriteLine("MSL: Saving patched game data...");
     using (var stream = File.Create(output)) UndertaleIO.Write(stream, DataLoader.data);

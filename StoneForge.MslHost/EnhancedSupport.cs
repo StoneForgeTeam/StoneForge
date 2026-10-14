@@ -72,7 +72,7 @@ internal static class EnhancedSupport
 
     // Mirrors the pinned fork's VM patch sequence, replacing the two AppData writers with staged imports.
     // Mod files and resource lists remain intact while mod code runs.
-    internal static void PatchMods(ModInfos mods, string output, EnhancedFailures failures)
+    internal static void PatchMods(ModInfos mods, string output, EnhancedFailures failures, bool continuation = false)
     {
         const BindingFlags flags = BindingFlags.Static | BindingFlags.NonPublic;
         foreach (string name in new[] { "Credits", "Disclaimers", "Menus" })
@@ -101,10 +101,19 @@ internal static class EnhancedSupport
         }
         ResetDecompileContext();
         var credits = (List<(string, string[])>)typeof(ModLoader).GetField("Credits", flags)!.GetValue(null)!;
-        InvokeMsl("AddDisclaimerRoom", credits.Select(c => c.Item1).ToArray(), credits.SelectMany(c => c.Item2).Distinct().ToArray());
-        InvokeMsl("ChainDisclaimerRooms", typeof(ModLoader).GetField("Disclaimers", flags)!.GetValue(null)!);
-        InvokeMsl("CreateMenu", typeof(ModLoader).GetField("Menus", flags)!.GetValue(null)!);
+        Once(continuation, "disclaimer room", () => InvokeMsl("AddDisclaimerRoom", credits.Select(c => c.Item1).ToArray(), credits.SelectMany(c => c.Item2).Distinct().ToArray()));
+        Once(continuation, "disclaimer chain", () => InvokeMsl("ChainDisclaimerRooms", typeof(ModLoader).GetField("Disclaimers", flags)!.GetValue(null)!));
+        Once(continuation, "mods menu", () => InvokeMsl("CreateMenu", typeof(ModLoader).GetField("Menus", flags)!.GetValue(null)!));
         EnhancedResources.ApplyPendingTextures();
+    }
+
+    // One of MSL's one-time additions. On a later pass the earlier one's is there already: MSL refuses to add it again
+    // ("... already exists") - kept as it is, and the pass goes on.
+    private static void Once(bool continuation, string what, Action add)
+    {
+        try { add(); }
+        catch (TargetInvocationException error) when (continuation && error.InnerException is ArgumentException inner && inner.Message.Contains("already exists"))
+        { Console.WriteLine($"MSL: The {what} was already added by the earlier pass ({inner.Message})."); }
     }
 
     private static void ResetDecompileContext() => typeof(Msl).GetMethod("ResetDecompileContext", BindingFlags.NonPublic | BindingFlags.Static)!.Invoke(null, null);

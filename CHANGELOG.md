@@ -1,5 +1,12 @@
 # StoneForge changes
 
+## Unreleased
+
+- **Fixed: mixing standard and MSL Enhanced mods failed in the second pass** ("Cannot add the event Create_0 in
+  o_msl_timer since it already exists"). MSL's one-time additions - its log objects, loot scripts, disclaimer room and
+  mods menu - were added again on data the first pass had patched. A later pass now keeps the earlier one's and goes
+  on; only the mods themselves are applied again. (A later pass's own loot tables aren't added: the log says so.)
+
 ## 0.9.10 — Standard and Enhanced MSL mods together
 
 - **Fixed: a standard MSL mod failed beside one needing MSL Enhanced** ("Could not load type
