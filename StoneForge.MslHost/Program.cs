@@ -81,7 +81,7 @@ try
     if (enhanced) StoneForge.MslHost.EnhancedSupport.CheckConflicts(modList);
     if (enhanced && failures.Count > 0) throw new InvalidOperationException("MSL Enhanced dependency/resource checks reported errors. See the preceding log.");
     if (enhanced) StoneForge.MslHost.EnhancedSupport.PatchMods(modList, output, failures, continuation);
-    else ModLoader.PatchMods();
+    else StoneForge.MslHost.StandardSupport.PatchMods(modList, continuation);
     if (enhanced && failures.Count > 0)
         throw new InvalidOperationException("MSL Enhanced reported patch/resource errors. See the preceding log; game files were not replaced.");
     Console.WriteLine("MSL: Finalizing loot and script ordering...");

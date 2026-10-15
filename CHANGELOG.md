@@ -1,5 +1,13 @@
 # StoneForge changes
 
+## Unreleased
+
+- **Fixed: RogueShard (and other MSL Enhanced mods) failed beside standard MSL mods** ("GML Compile Error ...
+  scr_contattack"). Run second, they read game data standard MSL had written, which decompiles differently from the
+  game's own - their edits, written against the game's, no longer compiled. MSL Enhanced's packages now run first, on
+  the game's own data, and standard MSL's after; the standard pass keeps MSL's one-time additions from the first
+  (its own mods menu entries and credits aren't added).
+
 ## 0.9.11 — Mixed MSL passes fixed
 
 - **Fixed: mixing standard and MSL Enhanced mods failed in the second pass** ("Cannot add the event Create_0 in

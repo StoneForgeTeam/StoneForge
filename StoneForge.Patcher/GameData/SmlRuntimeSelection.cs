@@ -54,8 +54,8 @@ internal sealed record SmlRuntimeSelection(bool Enhanced, string? Directory, Dic
         return new(true, directory, files, settings.PackageOrder, needs, Forced: mode == "enhanced");
     }
 
-    /// <summary>The runs of the MSL helper, in order, each with its runtime and its packages (enabled, in order): standard
-    /// MSL's first, on the game's own data, then MSL Enhanced's on that output. One run if one runtime does for all.</summary>
+    /// <summary>The runs of the MSL helper, in order, each with its runtime and its packages (enabled, in order): MSL
+    /// Enhanced's first, on the game's own data, then standard MSL's on that output. One run if one runtime does for all.</summary>
     internal List<SmlPass> Passes(IEnumerable<SmlPackage> ordered)
     {
         var enabled = ordered.Where(p => p.Enabled).ToList();
@@ -64,10 +64,13 @@ internal sealed record SmlRuntimeSelection(bool Enhanced, string? Directory, Dic
         if (Forced || NeedsEnhanced == null || enabled.All(p => NeedsEnhanced.Contains(p.Path)))
             return new() { new(this, enabled) };
         var standard = this with { Enhanced = false, Directory = null, Files = new() };
+        // (MSL Enhanced's first, on the game's own data: its packages - the big ones, RogueShard - were written against
+        // what MSL Enhanced reads there. Second, on data standard MSL had written, they read it otherwise, and their own
+        // edits no longer compiled: RogueShard's scr_contattack.)
         return new()
         {
-            new(standard, enabled.Where(p => !NeedsEnhanced.Contains(p.Path)).ToList()),
             new(this, enabled.Where(p => NeedsEnhanced.Contains(p.Path)).ToList()),
+            new(standard, enabled.Where(p => !NeedsEnhanced.Contains(p.Path)).ToList()),
         };
     }
 

@@ -109,7 +109,7 @@ internal static class EnhancedSupport
 
     // One of MSL's one-time additions. On a later pass the earlier one's is there already: MSL refuses to add it again
     // ("... already exists") - kept as it is, and the pass goes on.
-    private static void Once(bool continuation, string what, Action add)
+    internal static void Once(bool continuation, string what, Action add)
     {
         try { add(); }
         catch (TargetInvocationException error) when (continuation && error.InnerException is ArgumentException inner && inner.Message.Contains("already exists"))
@@ -117,7 +117,7 @@ internal static class EnhancedSupport
     }
 
     private static void ResetDecompileContext() => typeof(Msl).GetMethod("ResetDecompileContext", BindingFlags.NonPublic | BindingFlags.Static)!.Invoke(null, null);
-    private static void InvokeMsl(string name, params object[] args) => typeof(Msl).GetMethod(name, BindingFlags.NonPublic | BindingFlags.Public | BindingFlags.Static)!.Invoke(null, args);
+    internal static void InvokeMsl(string name, params object[] args) => typeof(Msl).GetMethod(name, BindingFlags.NonPublic | BindingFlags.Public | BindingFlags.Static)!.Invoke(null, args);
     private static void InvokeLoader(string type, string method, ModFile mod) => typeof(Main).Assembly.GetType("ModShardLauncher." + type, true)!
         .GetMethod(method)!.Invoke(null, new object[] { mod });
 }

@@ -1,14 +1,14 @@
 using StoneForge;
 using StoneForge.Patcher;
 
-// MSL patching in passes: packages that run on standard MSL first, then those needing MSL Enhanced, on its output - a
+// MSL patching in passes: packages needing MSL Enhanced first, then those standard MSL runs, on its output - a
 // mix no longer puts every package on MSL Enhanced, where a standard package's types don't exist.
 public sealed class SmlPassTests
 {
     private static SmlPackage Package(string name, bool enabled = true) => new(name, name, @"C:\mods\" + name + ".sml", "hash", enabled);
 
     [Fact]
-    public void A_mix_runs_standard_packages_first_then_enhanced_ones()
+    public void A_mix_runs_enhanced_packages_first_then_standard_ones()
     {
         var katana = Package("katana");
         var other = Package("chinese");
@@ -18,10 +18,10 @@ public sealed class SmlPassTests
         var passes = selection.Passes(new[] { katana, other, off });
 
         Assert.Equal(2, passes.Count);
-        Assert.False(passes[0].Runtime.Enhanced);
-        Assert.Equal(new[] { katana }, passes[0].Packages);
-        Assert.True(passes[1].Runtime.Enhanced);
-        Assert.Equal(new[] { other }, passes[1].Packages);
+        Assert.True(passes[0].Runtime.Enhanced);
+        Assert.Equal(new[] { other }, passes[0].Packages);
+        Assert.False(passes[1].Runtime.Enhanced);
+        Assert.Equal(new[] { katana }, passes[1].Packages);
     }
 
     [Fact]
