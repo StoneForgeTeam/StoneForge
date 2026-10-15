@@ -29,5 +29,7 @@ internal static class InstallCommand
         PatcherConsole.Log("it's installed again. To have it put back automatically, set Stoneshard's launch options in Steam");
         PatcherConsole.Log("(Properties > General > Launch options) to:");
         PatcherConsole.Log($"    \"{patcher}\" run %command%");
+        PatcherConsole.Log("Or, to also update StoneForge to its latest release (0.9.x to a later 0.9.x) as the game starts:");
+        PatcherConsole.Log($"    \"{patcher}\" run --update %command%");
     }
 }

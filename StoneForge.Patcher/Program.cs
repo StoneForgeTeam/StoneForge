@@ -12,7 +12,7 @@
 //   run        - Steam's launch option (run %command%): the exe patched again if Steam put the game's own back,
 //              then the game started.
 //
-// usage: StoneForge.Patcher [install|uninstall|prepare] [game folder]   |   StoneForge.Patcher run <game exe> [args]
+// usage: StoneForge.Patcher [install|uninstall|prepare] [game folder]   |   StoneForge.Patcher run [--update] <game exe> [args]
 using System.IO;
 using StoneForge.Patcher;
 
@@ -42,7 +42,7 @@ try
             GameDataBuilder.Prepare(game);
             break;
         default:
-            PatcherConsole.Log("usage: StoneForge.Patcher [install|uninstall|prepare] [game folder]  |  StoneForge.Patcher run <game exe> [args]");
+            PatcherConsole.Log("usage: StoneForge.Patcher [install|uninstall|prepare] [game folder]  |  StoneForge.Patcher run [--update] <game exe> [args]");
             return 1;
     }
     return 0;

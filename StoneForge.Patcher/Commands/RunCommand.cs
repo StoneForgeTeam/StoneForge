@@ -6,14 +6,20 @@ namespace StoneForge.Patcher;
 /// <summary>run: the game started through us - Steam's launch option <c>"...\StoneForge.Patcher.exe" run %command%</c>
 /// (Steam puts the game's own command after "run"). If a game update or 'Verify integrity' has put the game's
 /// own exe back, it's patched again first; then the game runs, and we wait for it, so Steam still sees it
-/// playing.</summary>
+/// playing. With <c>run --update %command%</c>, a newer StoneForge release is installed first (<see cref="Updater"/>).</summary>
 internal static class RunCommand
 {
     public static int Run(string[] command)
     {
+        bool update = command.Length > 0 && string.Equals(command[0], "--update", StringComparison.OrdinalIgnoreCase);
+        if (update)
+            command = command[1..];
         if (command.Length == 0)
-            throw new ArgumentException("usage: StoneForge.Patcher run <the game's exe> [its arguments] (as Steam's launch option: run %command%)");
+            throw new ArgumentException("usage: StoneForge.Patcher run [--update] <the game's exe> [its arguments] (as Steam's launch option: run %command%)");
         var game = new GameFolder(Path.GetDirectoryName(Path.GetFullPath(command[0]))!);
+        Updater.RemoveLeftovers(game);
+        if (update && File.Exists(game.AurieCore))
+            Updater.Run(game);
         if (File.Exists(game.AurieCore) && File.Exists(game.Exe) && !ExePatcher.IsPatched(game))
         {
             PatcherConsole.Show();

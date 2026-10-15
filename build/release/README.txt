@@ -70,6 +70,14 @@ Steam (right-click Stoneshard > Properties > General > Launch options) to:
 
 (The installer prints this line with your game's folder filled in.)
 
+To also keep StoneForge up to date, add --update before %command%:
+
+    "<Stoneshard>\dotnet\patcher\StoneForge.Patcher.exe" run --update %command%
+
+As the game starts, it checks GitHub for a newer release (at most once an hour) and installs it if it's the same
+minor version (0.9.12 to 0.9.13). A new minor version (0.10.0) can need mods updated, so it's only announced. If
+the check or the install fails, the game starts with what's installed.
+
 
 Uninstalling
 ------------

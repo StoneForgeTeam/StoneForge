@@ -1,5 +1,14 @@
 # StoneForge changes
 
+## Unreleased
+
+## 0.9.14 — Auto update
+
+- **StoneForge can update itself.** Add `--update` to Steam's launch option (`... StoneForge.Patcher.exe" run --update
+  %command%`). As the game starts, it checks GitHub for a newer release, at most once an hour, and installs it if it's
+  the same minor version (0.9.x to a later 0.9.x). A new minor version can need mods updated, so it's only announced.
+  If anything fails, the game starts with what's installed.
+
 ## 0.9.13 — Dialogue hooks without recompiling
 
 - **Fixed: dialogue broke with StoneForge installed** (#21). To make a script hookable, the patcher recompiled the

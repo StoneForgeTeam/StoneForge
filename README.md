@@ -25,6 +25,15 @@ automatically, set Stoneshard's launch options in Steam (right-click Stoneshard 
 "<your Stoneshard folder>\dotnet\patcher\StoneForge.Patcher.exe" run %command%
 ```
 
+To also keep StoneForge up to date, add `--update` before `%command%`. As the game starts, it checks GitHub for a newer
+release (at most once an hour) and installs it if it's the same minor version, such as 0.9.12 to 0.9.13. A new minor
+version, such as 0.10.0, can need mods updated, so it's only announced. If the check or the install fails, the game
+starts with what's installed.
+
+```
+"<your Stoneshard folder>\dotnet\patcher\StoneForge.Patcher.exe" run --update %command%
+```
+
 ## Mods
 
 Each mod is a folder in `<Stoneshard>\mods`. Open **Mods** on the main menu to enable or disable them. A mod that
