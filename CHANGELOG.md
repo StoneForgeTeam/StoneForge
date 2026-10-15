@@ -1,6 +1,6 @@
 # StoneForge changes
 
-## Unreleased
+## 0.9.12 — MSL Enhanced mods first
 
 - **Fixed: RogueShard (and other MSL Enhanced mods) failed beside standard MSL mods** ("GML Compile Error ...
   scr_contattack"). Run second, they read game data standard MSL had written, which decompiles differently from the
