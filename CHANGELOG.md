@@ -1,6 +1,6 @@
 # StoneForge changes
 
-## Unreleased
+## 0.9.13 — Dialogue hooks without recompiling
 
 - **Fixed: dialogue broke with StoneForge installed** (#21). To make a script hookable, the patcher recompiled the
   whole file the script is in. The game's DialogueFlow file holds dozens of functions, and recompiling it bound its
