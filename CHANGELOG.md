@@ -1,5 +1,12 @@
 # StoneForge changes
 
+## Unreleased
+
+- **Fixed: dialogue broke with StoneForge installed** (#21). To make a script hookable, the patcher recompiled the
+  whole file the script is in. The game's DialogueFlow file holds dozens of functions, and recompiling it bound its
+  calls between them differently. The hook's few instructions now go straight into the function as bytecode, and
+  the rest of the file stays exactly as the game shipped it. The hotkey guard goes in the same way.
+
 ## 0.9.12 — MSL Enhanced mods first
 
 - **Fixed: RogueShard (and other MSL Enhanced mods) failed beside standard MSL mods** ("GML Compile Error ...

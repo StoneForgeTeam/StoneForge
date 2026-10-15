@@ -7,9 +7,9 @@ namespace StoneForge.Patcher;
 ///     if (global.__smh_&lt;name&gt;)
 ///     {
 ///         (its arguments into an array)
-///         var __smr = string_concat("__stonemod_script__", "&lt;name&gt;", &lt;the array&gt;)
-///         if is_array(__smr)
-///             return __smr[0];
+///         global.__smr = string_concat("__stonemod_script__", "&lt;name&gt;", &lt;the array&gt;)
+///         if is_array(global.__smr)
+///             return global.__smr[0];
 ///     }
 /// string_concat is a built-in Stoneshard never calls; the native bridge intercepts it and hands marked calls to
 /// C#. A script nobody subscribes to (its flag unset) only pays the one check.</summary>
@@ -52,7 +52,7 @@ internal static class ScriptHooks
         {
             try
             {
-                ScriptEditor.InsertAtBodyStart(editor, name, Stub(name));
+                ScriptEditor.InsertBytecodeAtFunctionStart(editor, name, Stub(name));
                 made++;
                 hooked?.Add(name);
                 PatcherConsole.Log($"  {name}: hookable");
@@ -70,11 +70,13 @@ internal static class ScriptHooks
         "    if (variable_global_exists(\"__smh_" + name + "\"))\n" +
         "    if (global.__smh_" + name + ")\n" +
         "    {\n" +
-        "        var __sma = array_create(argument_count)\n" +
-        "        for (var __smi = 0; __smi < argument_count; __smi++)\n" +
-        "            __sma[__smi] = argument[__smi]\n" +
-        "        var __smr = string_concat(\"__stonemod_script__\", \"" + name + "\", __sma)\n" +
-        "        if is_array(__smr)\n" +
-        "            return __smr[0];\n" +
+        // Globals, not locals: this goes into the function as bytecode, which can't add locals to it. Each is read
+        // straight after it's set, so a hooked call made from inside the hook can't change it underneath.
+        "        global.__sma = array_create(argument_count)\n" +
+        "        for (global.__smi = 0; global.__smi < argument_count; global.__smi++)\n" +
+        "            global.__sma[global.__smi] = argument[global.__smi]\n" +
+        "        global.__smr = string_concat(\"__stonemod_script__\", \"" + name + "\", global.__sma)\n" +
+        "        if is_array(global.__smr)\n" +
+        "            return global.__smr[0];\n" +
         "    }";
 }

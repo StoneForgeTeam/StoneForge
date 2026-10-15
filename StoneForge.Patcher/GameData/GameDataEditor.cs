@@ -86,8 +86,42 @@ internal sealed class GameDataEditor
         Import($"gml_Object_{obj.Name.Content}_{type}_{subtype}", source);
     }
 
-    private UndertaleCode GetCode(string name) => Data.Code.ByName(name)
+    internal UndertaleCode GetCode(string name) => Data.Code.ByName(name)
         ?? throw new InvalidOperationException($"Game code '{name}' was not found.");
+
+    /// <summary>Code compiled on its own, as top-level code (no function, no local variables - it's put into another
+    /// entry's instructions, which has its own), for splicing in: its instructions, without the closing exit.</summary>
+    public List<UndertaleInstruction> CompileFragment(string source)
+    {
+        const string scratch = "stoneforge_fragment";
+        var code = UndertaleCode.CreateEmptyEntry(Data, scratch);
+        try
+        {
+            bool shortCircuit = Data.ShortCircuit;
+            try
+            {
+                Data.ShortCircuit = true;
+                var group = new CodeImportGroup(Data) { AutoCreateAssets = true };
+                group.QueueReplace(code, source);
+                var result = group.Import(throwOnFailedCompile: false);
+                if (!result.Successful)
+                    throw new InvalidOperationException("GML compilation failed for a fragment: " + result.PrintAllErrors(false));
+            }
+            finally { Data.ShortCircuit = shortCircuit; }
+            if (code.LocalsCount > 0 && code.FindReferencedLocalVars().Count > 0)
+                throw new InvalidOperationException("A fragment to splice in can't use local variables.");
+            var instructions = code.Instructions.ToList();
+            if (instructions.Count > 0 && instructions[^1].Kind == UndertaleInstruction.Opcode.Exit)
+                instructions.RemoveAt(instructions.Count - 1);
+            return instructions;
+        }
+        finally
+        {
+            Data.Code.Remove(code);
+            if (Data.CodeLocals?.ByName(scratch) is { } locals)
+                Data.CodeLocals.Remove(locals);
+        }
+    }
 
     // The code entry replaced with this GML (made, and linked to its script or object event, if new).
     private void Import(string entry, string source)
