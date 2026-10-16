@@ -54,7 +54,7 @@ public class UITab : UIElement
             var previous = Game.CallBuiltin("draw_get_font");
             try
             {
-                Game.CallBuiltin("draw_set_font", Game.Global["f_digits"]);
+                Game.CallBuiltin("draw_set_font", Game.Global[Draw.TitleFont(Text)]);
                 _textWidth = Game.CallBuiltin("string_width", Text).AsReal * 0.5;
             }
             finally { Game.CallBuiltin("draw_set_font", previous); }

@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Render Chinese, Japanese and Korean mod titles with the description font so their names remain visible in tabs, headings and buttons.
+
 ## 0.9.14 — Auto update
 
 - **StoneForge can update itself.** Add `--update` to Steam's launch option (`... StoneForge.Patcher.exe" run --update

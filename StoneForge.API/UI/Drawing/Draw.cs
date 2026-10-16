@@ -220,7 +220,19 @@ public static class Draw
 
     // The game's text in one of its fonts (a global's name: "f_digits" for its buttons and titles) at a size.
     internal static void GameText(double x, double y, string text, int colour, int halign, int valign, string font, double scale, double alpha = 1)
-        => Scripts.scr_drawText.Call(null, x, y, text, colour, halign, valign, Game.Global[font], scale, alpha);
+        => Scripts.scr_drawText.Call(null, x, y, text, colour, halign, valign, Game.Global[font == "f_digits" ? TitleFont(text) : font], scale, alpha);
+
+    // The title font lacks CJK glyphs in English mode. Use the same font as descriptions
+    // for the whole label so mixed names keep consistent spacing and alignment.
+    internal static string TitleFont(string text)
+    {
+        foreach (var rune in text.EnumerateRunes())
+            if (rune.Value is >= 0x2E80 and <= 0xA4CF or >= 0xAC00 and <= 0xD7AF
+                or >= 0xF900 and <= 0xFAFF or >= 0xFE30 and <= 0xFE4F
+                or >= 0xFF00 and <= 0xFFEF or >= 0x20000 and <= 0x323AF)
+                return "f_dmg";
+        return "f_digits";
+    }
 
     /// <summary>Text as the game draws it in one of its fonts (<see cref="GameFont"/>), at its usual half size, with its
     /// shadow.</summary>
