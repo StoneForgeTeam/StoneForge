@@ -8,15 +8,16 @@ namespace StoneForge;
 internal static class SteamLibrary
 {
     /// <summary>Stoneshard's folder in any Steam library, or null.</summary>
-    public static string? FindStoneshard()
+    public static string? FindStoneshard() => FindAllStoneshard().FirstOrDefault();
+
+    internal static IEnumerable<string> FindAllStoneshard(IEnumerable<string>? libraries = null)
     {
-        foreach (string library in Libraries())
+        foreach (string library in libraries ?? Libraries())
         {
             string dir = Path.Combine(library, "steamapps", "common", "Stoneshard");
             if (File.Exists(Path.Combine(dir, "StoneShard.exe")))
-                return dir;
+                yield return dir;
         }
-        return null;
     }
 
     // Steam's own folder (from the registry, else its default place) and every library its libraryfolders.vdf

@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Offer a numbered installation selector with storefronts and full paths when several game copies are discovered. Merge duplicate folders and require an explicit target for ambiguous automated installs and API builds.
+
+- Discover GOG installations through Windows registry entries from Galaxy and offline installers, in both the installer and API data generator. GOG runner compatibility remains unverified.
+
 - Discover Epic Games installations through local launcher manifests in the installer and API data generator. Epic runner compatibility still requires verification against its executable. Make launch failures and automatic re-patching messages independent of Steam.
 
 - Render Chinese, Japanese and Korean mod titles with the description font so their names remain visible in tabs, headings and buttons.

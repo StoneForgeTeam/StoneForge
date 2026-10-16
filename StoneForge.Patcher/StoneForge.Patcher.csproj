@@ -29,6 +29,8 @@
     <Compile Include="..\Shared\ModIdentity.cs" Link="Mods\ModIdentity.cs" />
     <Compile Include="..\Shared\SteamLibrary.cs" Link="Steam\SteamLibrary.cs" />
     <Compile Include="..\Shared\EpicLibrary.cs" Link="Steam\EpicLibrary.cs" />
+    <Compile Include="..\Shared\GogLibrary.cs" Link="Steam\GogLibrary.cs" />
+    <Compile Include="..\Shared\GameInstallations.cs" Link="Steam\GameInstallations.cs" />
   </ItemGroup>
 
   <ItemGroup>

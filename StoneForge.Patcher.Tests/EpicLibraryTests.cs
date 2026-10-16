@@ -54,6 +54,35 @@ public sealed class EpicLibraryTests : IDisposable
     }
 
     [Fact]
+    public void Discovers_all_copies_across_both_manifest_formats()
+    {
+        string first = Game("first"), second = Game("second"), third = Game("third");
+        File.WriteAllText(Path.Combine(Manifests, "1.item"), JsonSerializer.Serialize(new { InstallLocation = first }));
+        File.WriteAllText(Path.Combine(Manifests, "2.item"), JsonSerializer.Serialize(new { InstallLocation = second }));
+        string directory = Path.Combine(_root, "Epic", "UnrealEngineLauncher");
+        Directory.CreateDirectory(directory);
+        File.WriteAllText(Path.Combine(directory, "LauncherInstalled.dat"), JsonSerializer.Serialize(new
+        {
+            InstallationList = new[] { new { InstallLocation = third } }
+        }));
+        Assert.Equal(new[] { first, second, third }, EpicLibrary.FindAllStoneshard(_root));
+    }
+
+    [Fact]
+    public void Discovers_every_steam_library_copy()
+    {
+        string first = Path.Combine(_root, "steam1"), second = Path.Combine(_root, "steam2");
+        foreach (string library in new[] { first, second })
+        {
+            string game = Path.Combine(library, "steamapps", "common", "Stoneshard");
+            Directory.CreateDirectory(game);
+            File.WriteAllText(Path.Combine(game, "StoneShard.exe"), "fixture");
+        }
+        Assert.Equal(new[] { first, second }.Select(path => Path.Combine(path, "steamapps", "common", "Stoneshard")),
+            SteamLibrary.FindAllStoneshard(new[] { first, second }));
+    }
+
+    [Fact]
     public void Missing_or_corrupt_launcher_files_do_not_block_manual_installation()
     {
         Assert.Null(EpicLibrary.FindStoneshard(_root));

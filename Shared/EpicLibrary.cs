@@ -7,13 +7,14 @@ namespace StoneForge;
 internal static class EpicLibrary
 {
     public static string? FindStoneshard(string? programData = null)
+        => FindAllStoneshard(programData).FirstOrDefault();
+
+    internal static IEnumerable<string> FindAllStoneshard(string? programData = null)
     {
         string root = Path.Combine(programData ?? Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "Epic");
         string manifests = Path.Combine(root, "EpicGamesLauncher", "Data", "Manifests");
-        foreach (string file in Files(manifests))
-            if (Read(file, list: false) is string installed)
-                return installed;
-        return Read(Path.Combine(root, "UnrealEngineLauncher", "LauncherInstalled.dat"), list: true);
+        return Files(manifests).SelectMany(file => Read(file, list: false))
+            .Concat(Read(Path.Combine(root, "UnrealEngineLauncher", "LauncherInstalled.dat"), list: true));
     }
 
     private static string[] Files(string directory)
@@ -22,21 +23,25 @@ internal static class EpicLibrary
         catch (Exception e) when (e is IOException or UnauthorizedAccessException) { return Array.Empty<string>(); }
     }
 
-    private static string? Read(string file, bool list)
+    private static IEnumerable<string> Read(string file, bool list)
     {
+        var locations = new List<string>();
         try
         {
             using var document = JsonDocument.Parse(File.ReadAllText(file));
             if (!list)
-                return Location(document.RootElement);
-            if (document.RootElement.ValueKind == JsonValueKind.Object
+            {
+                if (Location(document.RootElement) is string location)
+                    locations.Add(location);
+            }
+            else if (document.RootElement.ValueKind == JsonValueKind.Object
                 && document.RootElement.TryGetProperty("InstallationList", out var entries) && entries.ValueKind == JsonValueKind.Array)
                 foreach (var entry in entries.EnumerateArray())
                     if (Location(entry) is string location)
-                        return location;
+                        locations.Add(location);
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException or JsonException or ArgumentException or NotSupportedException) { }
-        return null;
+        return locations;
     }
 
     private static string? Location(JsonElement entry)

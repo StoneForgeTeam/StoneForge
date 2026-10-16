@@ -18,16 +18,21 @@ Requirements
 Installing
 ----------
 1. Close Stoneshard.
-2. Run "Install StoneForge.cmd". It finds Stoneshard through Steam or Epic (or asks for its folder), copies StoneForge in,
+2. Run "Install StoneForge.cmd". It finds Stoneshard through Steam, Epic or GOG (or asks for its folder), copies StoneForge in,
    and sets the game up. Your game's own files are kept, so it can all be undone.
 3. Start Stoneshard as usual. The main menu has a Mods button.
 
 Installing a newer StoneForge the same way updates it.
 
-Epic installation discovery is available, but its runner compatibility is not yet verified. Install into that
-copy's folder and start it through Epic normally, keeping the game's own exe, data.win and extension DLLs together.
-The Steam %command% launch options below do not apply to Epic. After a game update or file verification, reinstall
-StoneForge if the launcher has restored the original executable.
+If several copies are found, choose from a numbered list showing each storefront and full folder path. Enter M for
+another folder, or 0 to cancel. A folder supplied on the command line, or running the patcher installed inside a game,
+selects that copy directly. Automated installs must specify a folder if multiple copies are found.
+
+Epic and GOG installation discovery is available, but their runner compatibility is not yet verified. GOG discovery
+reads Windows registry entries from Galaxy or offline installers. Install into the correct copy and start it through
+its usual launcher or shortcut, keeping the game's own exe, data.win and extension DLLs together. The Steam %command%
+launch options below do not apply to Epic or GOG. After a game update or file verification, reinstall StoneForge if
+the launcher has restored the original executable.
 
 
 Mods

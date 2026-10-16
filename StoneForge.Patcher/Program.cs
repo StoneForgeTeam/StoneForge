@@ -47,6 +47,11 @@ try
     }
     return 0;
 }
+catch (OperationCanceledException e)
+{
+    PatcherConsole.Log(e.Message);
+    return 0;
+}
 catch (Exception e)
 {
     PatcherConsole.Show();

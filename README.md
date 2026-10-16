@@ -8,11 +8,12 @@ on and off in game from the **Mods** button on the main menu. It also runs MSL (
 - Windows, and Stoneshard on Steam. StoneForge works on both the default branch and the modbranch.
 - The **.NET 10 Windows Desktop Runtime (x64)**. The installer tells you if it's missing.
 
-The installer also discovers Epic Games installations from the launcher's local manifests, or accepts a game folder
-explicitly. Epic runner compatibility is not yet verified; discovery does not guarantee that YYToolkit supports that
-store's executable. Install into the Epic copy itself and keep its executable, `data.win`, and extension DLLs together.
-After installation, start it through Epic normally so the launcher supplies its own arguments. Steam's `%command%`
-launch-option syntax is for Steam only. Game updates or file verification can require reinstalling StoneForge.
+The installer also discovers Epic Games installations from the launcher's local manifests and GOG installations
+from their Windows registry entries (Galaxy or offline installers), or accepts a game folder explicitly. Epic and
+GOG runner compatibility is not yet verified; discovery does not guarantee that YYToolkit supports those executables.
+Install into the correct copy and keep its executable, `data.win`, and extension DLLs together. Start through Epic
+or Galaxy normally; offline GOG copies can use their usual game shortcut. Steam's `%command%` launch-option syntax
+is for Steam only. Game updates or file verification can require reinstalling StoneForge.
 
 ## Install
 
@@ -20,6 +21,11 @@ launch-option syntax is for Steam only. Game updates or file verification can re
    extract it.
 2. Close Stoneshard and run **Install StoneForge.cmd**.
 3. Start the game as usual. The main menu now has a **Mods** button.
+
+If multiple installations are found, the installer lists their storefronts and full folder paths. Enter a number to
+choose one, `M` to enter another folder, or `0` to cancel. An explicit game-folder argument or a patcher already
+installed inside a game selects that copy directly. Automated installs must supply a folder when discovery is ambiguous;
+API builds likewise require `STONESHARD_DIR`, `StoneshardDir`, or `--game` when more than one copy is found.
 
 To update, install a newer release the same way. **Uninstall StoneForge.cmd** restores the game's own files and keeps
 your mods.
