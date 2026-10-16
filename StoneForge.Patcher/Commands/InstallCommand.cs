@@ -23,10 +23,10 @@ internal static class InstallCommand
 
         string patcher = Path.Combine(game.PatcherDir, "StoneForge.Patcher.exe");
         PatcherConsole.Log("");
-        PatcherConsole.Log("Done - start Stoneshard as usual (Steam or the exe). Mods go in " + game.Mods);
+        PatcherConsole.Log("Done - start Stoneshard through its usual launcher. Mods go in " + game.Mods);
         PatcherConsole.Log("");
-        PatcherConsole.Log("Steam's updates and 'Verify integrity' put the game's own exe back, which turns StoneForge off until");
-        PatcherConsole.Log("it's installed again. To have it put back automatically, set Stoneshard's launch options in Steam");
+        PatcherConsole.Log("Game updates and file verification can restore the game's own exe, which turns StoneForge off until");
+        PatcherConsole.Log("it's installed again. For Steam installations only, set Stoneshard's launch options in Steam");
         PatcherConsole.Log("(Properties > General > Launch options) to:");
         PatcherConsole.Log($"    \"{patcher}\" run %command%");
         PatcherConsole.Log("Or, to also update StoneForge to its latest release (0.9.x to a later 0.9.x) as the game starts:");

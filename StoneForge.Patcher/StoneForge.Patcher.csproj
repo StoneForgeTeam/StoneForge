@@ -28,6 +28,7 @@
     <Compile Include="..\Shared\SmlCatalog.cs" Link="Mods\SmlCatalog.cs" />
     <Compile Include="..\Shared\ModIdentity.cs" Link="Mods\ModIdentity.cs" />
     <Compile Include="..\Shared\SteamLibrary.cs" Link="Steam\SteamLibrary.cs" />
+    <Compile Include="..\Shared\EpicLibrary.cs" Link="Steam\EpicLibrary.cs" />
   </ItemGroup>
 
   <ItemGroup>

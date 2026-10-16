@@ -23,7 +23,7 @@ internal static class RunCommand
         if (File.Exists(game.AurieCore) && File.Exists(game.Exe) && !ExePatcher.IsPatched(game))
         {
             PatcherConsole.Show();
-            PatcherConsole.Log("Steam put the game's own StoneShard.exe back (an update, or 'Verify integrity'): patching it again...");
+            PatcherConsole.Log("The game's own StoneShard.exe was restored (an update or file verification): patching it again...");
             // (Failing that, the game still starts - just without the mods.)
             try { ExePatcher.Patch(game); }
             catch (Exception e)

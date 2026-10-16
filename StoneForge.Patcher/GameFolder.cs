@@ -45,7 +45,7 @@ internal sealed class GameFolder
     public bool HasThisPatcher => string.Equals(Path.GetFullPath(PatcherDir).TrimEnd('\\'), Path.GetFullPath(AppContext.BaseDirectory).TrimEnd('\\'), StringComparison.OrdinalIgnoreCase);
 
     /// <summary>Stoneshard's folder: the one given, else the one we're installed in (&lt;game&gt;\dotnet\patcher\),
-    /// else found in the Steam libraries, else asked for (when someone's there to answer). Null if none.</summary>
+    /// else found in Steam or Epic libraries, else asked for (when someone's there to answer). Null if none.</summary>
     public static GameFolder? Locate(string? given)
     {
         if (!string.IsNullOrWhiteSpace(given))
@@ -55,10 +55,12 @@ internal sealed class GameFolder
             return new GameFolder(installed);
         if (SteamLibrary.FindStoneshard() is string steam)
             return new GameFolder(steam);
+        if (EpicLibrary.FindStoneshard() is string epic)
+            return new GameFolder(epic);
         if (Console.IsInputRedirected)
             return null;
         PatcherConsole.Show();
-        PatcherConsole.Log("Stoneshard wasn't found in your Steam libraries. Its folder (the one with StoneShard.exe):");
+        PatcherConsole.Log("Stoneshard wasn't found in your Steam or Epic libraries. Its folder (the one with StoneShard.exe):");
         string? typed = Console.ReadLine();
         return string.IsNullOrWhiteSpace(typed) ? null : new GameFolder(typed.Trim().Trim('"'));
     }

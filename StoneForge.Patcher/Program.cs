@@ -53,7 +53,7 @@ catch (Exception e)
     PatcherConsole.Log("Failed: " + e.Message);
     if (!interactive)
     {
-        PatcherConsole.Log("The game starts without the changes. (Press a key.)");
+        PatcherConsole.Log("The operation failed. If the game hasn't started, launch it again after resolving the error. (Press a key.)");
         PatcherConsole.WaitForKey();
     }
     return 2;

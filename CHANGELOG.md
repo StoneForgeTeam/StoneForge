@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Discover Epic Games installations through local launcher manifests in the installer and API data generator. Epic runner compatibility still requires verification against its executable. Make launch failures and automatic re-patching messages independent of Steam.
+
 - Render Chinese, Japanese and Korean mod titles with the description font so their names remain visible in tabs, headings and buttons.
 
 ## 0.9.14 — Auto update

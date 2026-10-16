@@ -8,6 +8,12 @@ on and off in game from the **Mods** button on the main menu. It also runs MSL (
 - Windows, and Stoneshard on Steam. StoneForge works on both the default branch and the modbranch.
 - The **.NET 10 Windows Desktop Runtime (x64)**. The installer tells you if it's missing.
 
+The installer also discovers Epic Games installations from the launcher's local manifests, or accepts a game folder
+explicitly. Epic runner compatibility is not yet verified; discovery does not guarantee that YYToolkit supports that
+store's executable. Install into the Epic copy itself and keep its executable, `data.win`, and extension DLLs together.
+After installation, start it through Epic normally so the launcher supplies its own arguments. Steam's `%command%`
+launch-option syntax is for Steam only. Game updates or file verification can require reinstalling StoneForge.
+
 ## Install
 
 1. Download `StoneForge-<version>.zip` from [Releases](https://github.com/StoneForgeTeam/StoneForge/releases) and

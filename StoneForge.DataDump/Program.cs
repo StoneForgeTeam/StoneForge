@@ -42,10 +42,10 @@ catch (Exception e) when (e is FileNotFoundException or DirectoryNotFoundExcepti
 
 static string GameDataFile(string? game)
 {
-    game ??= Environment.GetEnvironmentVariable("STONESHARD_DIR") is { Length: > 0 } fromEnv ? fromEnv : SteamLibrary.FindStoneshard();
+    game ??= Environment.GetEnvironmentVariable("STONESHARD_DIR") is { Length: > 0 } fromEnv ? fromEnv : SteamLibrary.FindStoneshard() ?? EpicLibrary.FindStoneshard();
     if (game == null)
         throw new DirectoryNotFoundException("StoneForge's typed API is generated from Stoneshard's own game data, and Stoneshard wasn't found "
-            + "in Steam's libraries. Set STONESHARD_DIR (or the StoneshardDir MSBuild property) to the game's folder.");
+            + "in Steam or Epic libraries. Set STONESHARD_DIR (or the StoneshardDir MSBuild property) to the game's folder.");
     string preserved = Path.Combine(game, "dotnet", "data_base.win");
     if (File.Exists(preserved))
         return preserved;

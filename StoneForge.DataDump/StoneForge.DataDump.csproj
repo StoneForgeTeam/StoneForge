@@ -16,5 +16,6 @@
     <Reference Include="UndertaleModLib"><HintPath>..\lib\UndertaleModLib\UndertaleModLib.dll</HintPath></Reference>
     <Reference Include="Underanalyzer"><HintPath>..\lib\UndertaleModLib\Underanalyzer.dll</HintPath></Reference>
     <Compile Include="..\Shared\SteamLibrary.cs" Link="SteamLibrary.cs" />
+    <Compile Include="..\Shared\EpicLibrary.cs" Link="EpicLibrary.cs" />
   </ItemGroup>
 </Project>
