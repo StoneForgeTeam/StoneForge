@@ -2,21 +2,25 @@
 
 ## Unreleased
 
-- Fix the log window freezing after Ctrl+C > Close log window (#22). Hide the window while keeping the console connection alive until game exit, so active logging continues safely.
+## 0.9.15 — Installation selection and fixes
 
-- Clear both the physical and reserved cells when snapping or removing a walking unit, and update snapped grid
-  coordinates. Avoid clearing another live unit's physical cell. Fixes a path that left invisible blocked tiles
-  when multiplayer moved an NPC aside (StoneshardMP #37).
+- **Fixed: the log window froze after Ctrl+C > Close log window** (#22). The window now hides while its console
+  connection stays alive until the game exits, so logging continues safely.
 
-## Unreleased
+- **Fixed: snapping or removing a walking unit could leave invisible blocked tiles** (StoneshardMP #37). Clear its
+  physical and reserved cells and update snapped grid coordinates, without clearing another live unit's cell.
 
-- Offer a numbered installation selector with storefronts and full paths when several game copies are discovered. Merge duplicate folders and require an explicit target for ambiguous automated installs and API builds.
+- **Choose which installation to use.** When several game copies are found, the installer lists their storefronts
+  and full paths. Duplicate folders appear once. Automated installs and API builds require an explicit folder when
+  discovery is ambiguous.
 
-- Discover GOG installations through Windows registry entries from Galaxy and offline installers, in both the installer and API data generator. GOG runner compatibility remains unverified.
+- **Discover Epic and GOG installations.** The installer and API data generator read Epic launcher manifests and
+  GOG registry entries from Galaxy or offline installers. **Epic and GOG runner compatibility remains unverified**;
+  finding an installation does not guarantee that YYToolkit supports its executable. Launch and re-patching messages
+  no longer assume Steam.
 
-- Discover Epic Games installations through local launcher manifests in the installer and API data generator. Epic runner compatibility still requires verification against its executable. Make launch failures and automatic re-patching messages independent of Steam.
-
-- Render Chinese, Japanese and Korean mod titles with the description font so their names remain visible in tabs, headings and buttons.
+- **Fixed: Chinese, Japanese and Korean mod titles were missing characters.** Use the description font for those
+  names in tabs, headings and buttons.
 
 ## 0.9.14 — Auto update
 
