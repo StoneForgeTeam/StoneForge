@@ -90,12 +90,20 @@ public static class Units
         var (cellX, cellY) = cell;
         var (x, y) = cell.Center;
         double oldXx = unit.Get("xx").AsReal, oldYy = unit.Get("yy").AsReal;
-        if (oldXx == x && oldYy == y)
+        Cell physical = Cell.At(unit.Get("x").AsReal, unit.Get("y").AsReal);
+        if (oldXx == x && oldYy == y && (!snap || physical == cell))
             return;
         Cell old = Cell.At(oldXx, oldYy);
         var (oldX, oldY) = old;
         var (controller, collisions, positions) = grids;
         bool isPoly = poly ?? unit.Get("is_poly_cell").AsBool;
+        bool snapping = snap || cell.DistanceTo(old) > 2;
+        // xx/yy may already be the next reserved cell while x/y is the tile
+        // physically occupied during a walk. A snap bypasses the native Step
+        // that normally clears x/y: clear that tile too, or leave an invisible
+        // obstacle behind (especially when moving an NPC off a remote player).
+        if (snapping && physical != old)
+            ClearCell(unit, grids, physical, isPoly);
         Game.CallScript("scr_collision_clear", controller, collisions, oldX, oldY, true);
         if (isPoly)
         {
@@ -111,7 +119,7 @@ public static class Units
         }
         unit["xx"] = x;
         unit["yy"] = y;
-        if (snap || cell.DistanceTo(old) > 2)
+        if (snapping)
         {
             unit["x"] = x;
             unit["y"] = y;
@@ -119,10 +127,28 @@ public static class Units
             unit["draw_y"] = y;
             unit["diff_x"] = 0;
             unit["diff_y"] = 0;
+            unit["grid_x"] = cellX;
+            unit["grid_y"] = cellY;
         }
         if (isPoly)
             Game.CallScript("scr_enemy_poly_cell_fill", unit, cellX, cellY);
         Game.CallScript("scr_collision_add_enemy", controller, collisions, cellX, cellY);
+    }
+
+    // Clear only this unit's reservation: never free another live unit's cell.
+    private static void ClearCell(Instance unit, Grids grids, Cell cell, bool poly)
+    {
+        Instance occupant = At(grids, cell);
+        if (!occupant.IsNone && occupant.Exists && !occupant.Equals(unit))
+            return;
+        Game.CallScript("scr_collision_clear", grids.Controller, grids.Collisions, cell.X, cell.Y, true);
+        if (occupant.Equals(unit))
+            Game.CallScript("ds_grid_set_ext", grids.Controller, grids.Positions, cell.X, cell.Y, -4);
+        if (poly)
+        {
+            Game.CallScript("scr_enemy_poly_cell_clear", unit, cell.X, cell.Y);
+            Game.CallScript("scr_enemy_poly_cell_posgrid_clear", unit, cell.X, cell.Y);
+        }
     }
 
     /// <summary>The free cell nearest one, for <paramref name="unit"/> to stand on, as the game finds one (its collision
@@ -148,6 +174,9 @@ public static class Units
         var (x, y) = cell;
         if (Current() is { } grids)
         {
+            Cell physical = Cell.At(unit.Get("x").AsReal, unit.Get("y").AsReal);
+            if (physical != cell)
+                ClearCell(unit, grids, physical, unit.Get("is_poly_cell").AsBool);
             Game.CallScript("scr_collision_clear", grids.Controller, grids.Collisions, x, y, true);
             if (At(grids, cell).Equals(unit))
                 Game.CallScript("ds_grid_set_ext", grids.Controller, grids.Positions, x, y, -4);

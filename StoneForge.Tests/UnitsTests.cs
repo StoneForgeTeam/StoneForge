@@ -7,6 +7,76 @@ public class UnitsTests : FakeGame
     public UnitsTests() => Units.ResetForTests();
 
     [Fact]
+    public void Removing_a_walking_unit_clears_both_occupied_and_reserved_cells()
+    {
+        const int Unit = 100_001;
+        World = new FakeWorld { LendsIds = true, ExistsByObject = true };
+        World.Add(Unit, (int)GameObjectId.o_unit);
+        World.Add(901, (int)GameObjectId.o_controller);
+        World.Vars[901] = new() { ["newgrid"] = 77, ["posgrid"] = 88 };
+        World.Vars[Unit] = new()
+        {
+            ["x"] = 13, ["y"] = 13, ["xx"] = 39, ["yy"] = 13,
+            ["is_poly_cell"] = false,
+        };
+        var cleared = new List<Cell>();
+        var scripts = new FakeScripts();
+        scripts.Add("ds_grid_get_ext", _ => -4);
+        scripts.Add("scr_collision_clear", args =>
+        {
+            cleared.Add(new Cell(args[1].AsInt, args[2].AsInt));
+            return GmValue.Undefined;
+        });
+        scripts.Add("scr_enemy_poly_cell_clear", _ => GmValue.Undefined);
+        scripts.Add("scr_enemy_poly_cell_posgrid_clear", _ => GmValue.Undefined);
+        GameScripts = scripts;
+
+        Assert.NotNull(Units.Current());
+        Units.Remove(Instance.FromId(Unit));
+
+        Assert.Contains(new Cell(0, 0), cleared);
+        Assert.Contains(new Cell(1, 0), cleared);
+        Assert.Contains(Unit, World.Destroyed);
+    }
+
+    [Theory]
+    [InlineData(2, false)]
+    [InlineData(1, false)]
+    [InlineData(2, true)]
+    public void Snapping_a_walking_unit_clears_its_physical_tile_unless_someone_else_occupies_it(int destination, bool occupied)
+    {
+        const int Unit = 100_001, Other = 100_002;
+        World = new FakeWorld { LendsIds = true };
+        World.Add(Unit, (int)GameObjectId.o_unit);
+        World.Add(Other, (int)GameObjectId.o_unit);
+        World.Vars[Unit] = new()
+        {
+            ["x"] = 13, ["y"] = 13, ["xx"] = 39, ["yy"] = 13,
+            ["is_poly_cell"] = false,
+        };
+        var cleared = new List<Cell>();
+        var scripts = new FakeScripts();
+        scripts.Add("ds_grid_get_ext", args => args[1].AsInt == 0 && occupied ? Other : -4);
+        scripts.Add("ds_grid_set_ext", _ => GmValue.Undefined);
+        scripts.Add("scr_collision_clear", args =>
+        {
+            cleared.Add(new Cell(args[1].AsInt, args[2].AsInt));
+            return GmValue.Undefined;
+        });
+        scripts.Add("scr_collision_add_enemy", _ => GmValue.Undefined);
+        GameScripts = scripts;
+        var grids = new Units.Grids(Instance.FromId(FakeWorld.ControllerId), 77, 88);
+
+        Units.Move(Instance.FromId(Unit), new Cell(destination, 0), grids, poly: false, snap: true);
+
+        Assert.Equal(!occupied, cleared.Contains(new Cell(0, 0)));
+        Assert.Contains(new Cell(1, 0), cleared);
+        Assert.Equal(destination * 26 + 13, World.Vars[Unit]["x"].AsInt);
+        Assert.Equal(destination, World.Vars[Unit]["grid_x"].AsInt);
+        Assert.Equal(0, World.Vars[Unit]["grid_y"].AsInt);
+    }
+
+    [Fact]
     public void A_cell_its_position_and_its_neighbours()
     {
         Assert.Equal(new Cell(0, 1), Cell.At(25.9, 26));

@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Clear both the physical and reserved cells when snapping or removing a walking unit, and update snapped grid
+  coordinates. Avoid clearing another live unit's physical cell. Fixes a path that left invisible blocked tiles
+  when multiplayer moved an NPC aside (StoneshardMP #37).
+
+## Unreleased
+
 - Offer a numbered installation selector with storefronts and full paths when several game copies are discovered. Merge duplicate folders and require an explicit target for ambiguous automated installs and API builds.
 
 - Discover GOG installations through Windows registry entries from Galaxy and offline installers, in both the installer and API data generator. GOG runner compatibility remains unverified.
