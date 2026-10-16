@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Fix the log window freezing after Ctrl+C > Close log window (#22). Hide the window while keeping the console connection alive until game exit, so active logging continues safely.
+
 - Clear both the physical and reserved cells when snapping or removing a walking unit, and update snapped grid
   coordinates. Avoid clearing another live unit's physical cell. Fixes a path that left invisible blocked tiles
   when multiplayer moved an NPC aside (StoneshardMP #37).

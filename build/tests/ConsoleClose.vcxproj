@@ -1,0 +1,33 @@
+<Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Release|x64"><Configuration>Release</Configuration><Platform>x64</Platform></ProjectConfiguration>
+  </ItemGroup>
+  <PropertyGroup Label="Globals">
+    <ProjectGuid>{A867E6AD-06D5-4929-AB74-0992445B39DF}</ProjectGuid>
+    <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <PropertyGroup Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType><PlatformToolset>v145</PlatformToolset><UseDebugLibraries>false</UseDebugLibraries>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <PropertyGroup>
+    <AurieRoot>$(ProjectDir)..\.thirdparty\Aurie\Aurie\</AurieRoot>
+    <OutDir>$(ProjectDir)..\..\artifacts\console-close-test\bin\</OutDir>
+    <IntDir>$(ProjectDir)..\..\artifacts\console-close-test\obj\</IntDir>
+  </PropertyGroup>
+  <ItemDefinitionGroup>
+    <ClCompile>
+      <LanguageStandard>stdcpplatest</LanguageStandard>
+      <AdditionalIncludeDirectories>$(AurieRoot)source\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>AURIE_INCLUDE_PRIVATE;ZYDIS_STATIC_BUILD;NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
+    </ClCompile>
+    <Link>
+      <SubSystem>Console</SubSystem>
+      <AdditionalDependencies>$(AurieRoot)x64\Release\allocator.obj;$(AurieRoot)x64\Release\inline_hook.obj;$(AurieRoot)x64\Release\rp_inline_hook.obj;$(AurieRoot)x64\Release\os.windows.obj;$(AurieRoot)x64\Release\utility.obj;$(AurieRoot)x64\Release\Zydis.obj;$(AurieRoot)x64\Release\mid_hook.obj;$(AurieRoot)x64\Release\vmt_hook.obj;$(AurieRoot)x64\Release\easy.obj;comctl32.lib;ntdll.lib;%(AdditionalDependencies)</AdditionalDependencies>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemGroup><ClCompile Include="ConsoleClose.cpp" /></ItemGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+</Project>

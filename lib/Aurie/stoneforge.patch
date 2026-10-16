@@ -52,3 +52,23 @@ index dbddf56..bf35670 100644
  	Internal::MdpMapFolder(
  		game_folder,
  		true,
+diff --git a/Aurie/source/framework/Debugging/debug.cpp b/Aurie/source/framework/Debugging/debug.cpp
+index 468fcbd..d025058 100644
+--- a/Aurie/source/framework/Debugging/debug.cpp
++++ b/Aurie/source/framework/Debugging/debug.cpp
+@@ -185,11 +185,13 @@ namespace Aurie
+ 				case IDNO:
+ 					// Close log window button
+ 					DbgPrintEx(LOG_SEVERITY_INFO, "Log window is closing due to CTRL+C event.");
+-					DbgpDestroyConsole();
++					// Keep the console connection alive until the game exits. FreeConsole
++					// can hang here and invalidate live writers' handles. Dismiss only the UI.
++					ShowWindow(GetConsoleWindow(), SW_HIDE);
+ 					return TRUE;
+ 				case IDABORT:
+ 					DbgPrintEx(LOG_SEVERITY_INFO, "Unloading due to CTRL+C event.");
+-					DbgpDestroyConsole();
++					// Framework cleanup detaches outside this control handler.
+ 					g_RequestedUnload = true;
+ 					return TRUE;
+ 				default:
