@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- **Fixed: `Units.At` never found anyone** (StoneshardMP #48). It checked the position grid was a grid with
+  GameMaker's type number for a stack, so it always answered that nobody stood on the cell. A Planar Exchange swap
+  the host should have traded was refused, and a host's units were never moved off a cell another player stood on.
+
 ## 0.9.15 — Installation selection and fixes
 
 - **Fixed: the log window froze after Ctrl+C > Close log window** (#22). The window now hides while its console

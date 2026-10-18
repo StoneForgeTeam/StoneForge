@@ -43,7 +43,8 @@ public static class Units
         return !standing.IsNone && Game.CallBuiltin("instance_exists", standing.Id).AsBool ? standing : default;
     }
 
-    private const int DsGrid = 3;
+    // (GameMaker's ds_type_grid - 3 is ds_type_stack: asked about that, a grid was never there, and no one stood anywhere.)
+    private const int DsGrid = 5;
     private static int _controller = -2;
 
     // (Tests: the game's objects looked up again.)

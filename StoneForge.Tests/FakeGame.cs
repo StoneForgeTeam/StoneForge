@@ -639,7 +639,7 @@ public abstract unsafe class FakeGame : IDisposable
                     Bool(id == Controller ? Positions != null : Units.Contains(id));
                     return true;
                 }
-                case "ds_exists" when Arg(0).AsInt == Grid: Bool(Positions != null); return true;
+                case "ds_exists" when Arg(0).AsInt == Grid: Bool(Positions != null && Arg(1).AsInt == 5); return true;
                 case "ds_grid_width": Real(Positions!.GetLength(0)); return true;
                 case "ds_grid_height": Real(Positions!.GetLength(1)); return true;
                 case "ds_grid_get": Real(Positions![Arg(1).AsInt, Arg(2).AsInt]); return true;
