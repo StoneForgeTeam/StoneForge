@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.9.16 — Units.At fixed
+
 - **Fixed: `Units.At` never found anyone** (StoneshardMP #48). It checked the position grid was a grid with
   GameMaker's type number for a stack, so it always answered that nobody stood on the cell. A Planar Exchange swap
   the host should have traded was refused, and a host's units were never moved off a cell another player stood on.
